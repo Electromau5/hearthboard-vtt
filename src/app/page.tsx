@@ -99,6 +99,7 @@ export default function HearthboardPage() {
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.4);
+  const [butlerOpen, setButlerOpen] = useState(false);
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string } | { kind: 'compendium'; idx: number } | null>(null);
@@ -112,6 +113,7 @@ export default function HearthboardPage() {
   const currentSceneIdRef = useRef(currentSceneId);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const butlerAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
 
@@ -183,6 +185,23 @@ export default function HearthboardPage() {
 
   const backToDashboard = () => {
     setView('dashboard');
+  };
+
+  const openButler = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setButlerOpen(true);
+    if (butlerAudioRef.current) {
+      butlerAudioRef.current.currentTime = 0;
+      butlerAudioRef.current.play().catch(() => {});
+    }
+  };
+
+  const closeButler = () => {
+    setButlerOpen(false);
+    if (butlerAudioRef.current) {
+      butlerAudioRef.current.pause();
+      butlerAudioRef.current.currentTime = 0;
+    }
   };
 
   const addToken = (t: { label: string; color: string; x: number; y: number; hp: number; maxHp: number; fullName?: string }) => {
@@ -350,6 +369,30 @@ export default function HearthboardPage() {
             <div className="stat-card"><div className="stat-num">7</div><div className="stat-label">Investigators</div></div>
             <div className="stat-card"><div className="stat-num">3</div><div className="stat-label">Active scenes</div></div>
             <div className="stat-card"><div className="stat-num">{rollCount}</div><div className="stat-label">Dice rolled</div></div>
+          </div>
+
+          {/* Briefing card — visible to all */}
+          <div className="section-label">Briefing</div>
+          <div
+            style={butlerCard}
+            onClick={() => openButler()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && openButler()}
+          >
+            <div style={butlerCardImg}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/arthur-butler.jpeg" alt="Arthur Butler" style={butlerThumb} />
+              <div style={butlerPlayHint}>▶ Click to receive your briefing</div>
+            </div>
+            <div style={butlerCardBody}>
+              <div style={butlerEyebrow}>CONFIDENTIAL · MISSION BRIEFING</div>
+              <div style={butlerName}>Arthur Butler</div>
+              <div style={butlerRole}>Legal Representative · Unnamed Benefactor</div>
+              <p style={butlerPreview}>
+                "You have all been summoned here to continue an excavation that was started 17 years ago…"
+              </p>
+            </div>
           </div>
 
           <div className="section-label">Campaign</div>
@@ -708,6 +751,65 @@ export default function HearthboardPage() {
       {/* Toast */}
       <div className={`toast${toastVisible ? ' show' : ''}`}>{toastMsg}</div>
 
+      {/* Butler audio — always mounted so it can be preloaded */}
+      <audio ref={butlerAudioRef} src="/butler-intro-1.mp3" preload="metadata" />
+
+      {/* Butler briefing overlay */}
+      {butlerOpen && (
+        <div style={butlerBackdrop} onClick={closeButler}>
+          <div style={butlerOverlay} onClick={e => e.stopPropagation()}>
+            {/* Left: photograph */}
+            <div style={butlerPhotoCol}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/arthur-butler.jpeg"
+                alt="Arthur Butler"
+                style={butlerPhoto}
+                onClick={e => openButler(e)}
+                title="Click to replay"
+              />
+              <div style={butlerPhotoCaption}>Click photograph to replay</div>
+            </div>
+
+            {/* Right: briefing text */}
+            <div style={butlerTextCol}>
+              <div style={butlerStamp}>CONFIDENTIAL</div>
+              <h2 style={butlerHeading}>Mission Briefing</h2>
+              <div style={butlerDivider} />
+              <div style={butlerScroll}>
+                <p style={butlerPara}>Welcome everyone. Let us begin.</p>
+                <p style={butlerPara}>
+                  My name is Arthur Butler and I am the legal representative of a benefactor who shall be unnamed.
+                </p>
+                <p style={butlerPara}>
+                  You have all been summoned here to continue an excavation that was started 17 years ago.
+                  My benefactor has spent a substantial amount of resources to find a subterranean chamber
+                  that for better or for worse — contains an object that is of importance to them.
+                  Alas, we have not made enough progress to even locate this chamber.
+                </p>
+                <p style={butlerPara}>
+                  You will all be given one year to locate this chamber. You will be provided with adequate
+                  resources to help you on your quest, but please be warned.
+                </p>
+                <p style={{ ...butlerPara, ...butlerWarning }}>
+                  This is an operation that is not allowed to have any eyes apart from yours.
+                  If this gains unnecessary visibility, we will pull all of our support and resources.
+                </p>
+                <p style={butlerPara}>
+                  You all have agreed to join this mission for your individual motives and my benefactor
+                  will fulfill all of them on completion.
+                </p>
+              </div>
+              <div style={butlerClose}>
+                <button className="btn btn-ghost btn-sm" onClick={closeButler} style={{ color: 'var(--ink-text-2)', marginTop: 8 }}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Music Player — Admin only */}
       {isAdmin && (
         <>
@@ -748,6 +850,101 @@ export default function HearthboardPage() {
     </div>
   );
 }
+
+// ── Butler card (dashboard) ───────────────────────────────────────────
+const butlerCard: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', background: 'var(--surface)',
+  border: '1px solid var(--brass-dim)', borderRadius: 'var(--r-lg)',
+  marginBottom: 28, cursor: 'pointer', overflow: 'hidden',
+  transition: 'border-color .2s, box-shadow .2s',
+  boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
+};
+const butlerCardImg: React.CSSProperties = {
+  position: 'relative', width: 200, flexShrink: 0, overflow: 'hidden',
+};
+const butlerThumb: React.CSSProperties = {
+  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+  filter: 'sepia(0.3) brightness(0.85)',
+};
+const butlerPlayHint: React.CSSProperties = {
+  position: 'absolute', bottom: 0, left: 0, right: 0,
+  background: 'linear-gradient(transparent, rgba(0,0,0,0.75))',
+  color: 'var(--brass)', fontFamily: 'var(--font-mono)', fontSize: 10,
+  letterSpacing: '0.8px', padding: '16px 10px 8px', textAlign: 'center',
+};
+const butlerCardBody: React.CSSProperties = {
+  padding: '20px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+};
+const butlerEyebrow: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '2px',
+  color: 'var(--blood)', marginBottom: 8,
+};
+const butlerName: React.CSSProperties = {
+  fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700,
+  color: 'var(--parchment)', marginBottom: 4,
+};
+const butlerRole: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--brass)', marginBottom: 12,
+};
+const butlerPreview: React.CSSProperties = {
+  fontSize: 14, color: 'var(--ink-text)', fontStyle: 'italic', margin: 0, lineHeight: 1.6,
+};
+
+// ── Butler overlay ────────────────────────────────────────────────────
+const butlerBackdrop: React.CSSProperties = {
+  position: 'fixed', inset: 0, zIndex: 300,
+  background: 'rgba(4,5,8,0.94)', backdropFilter: 'blur(6px)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  cursor: 'pointer',
+};
+const butlerOverlay: React.CSSProperties = {
+  display: 'flex', maxWidth: 960, width: '92vw', maxHeight: '88vh',
+  background: 'var(--surface)', border: '1px solid var(--brass-dim)',
+  borderRadius: 'var(--r-lg)', overflow: 'hidden',
+  boxShadow: '0 24px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(201,148,79,0.15)',
+  cursor: 'default',
+};
+const butlerPhotoCol: React.CSSProperties = {
+  width: 320, flexShrink: 0, position: 'relative', display: 'flex', flexDirection: 'column',
+};
+const butlerPhoto: React.CSSProperties = {
+  width: '100%', flex: 1, objectFit: 'cover', display: 'block',
+  filter: 'sepia(0.25) brightness(0.9)', cursor: 'pointer',
+};
+const butlerPhotoCaption: React.CSSProperties = {
+  padding: '8px 12px', background: 'var(--surface-2)',
+  fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brass)',
+  textAlign: 'center', letterSpacing: '0.6px',
+};
+const butlerTextCol: React.CSSProperties = {
+  flex: 1, padding: '32px 36px', display: 'flex', flexDirection: 'column',
+  overflowY: 'auto', background: 'var(--ink)',
+};
+const butlerStamp: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '3px',
+  color: 'var(--blood)', border: '1px solid var(--blood)',
+  display: 'inline-block', padding: '3px 10px', marginBottom: 14,
+  opacity: 0.85,
+};
+const butlerHeading: React.CSSProperties = {
+  fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
+  color: 'var(--parchment)', margin: '0 0 12px',
+};
+const butlerDivider: React.CSSProperties = {
+  height: 1, background: 'var(--brass-dim)', marginBottom: 20, opacity: 0.5,
+};
+const butlerScroll: React.CSSProperties = { flex: 1, overflowY: 'auto' };
+const butlerPara: React.CSSProperties = {
+  fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.75,
+  color: 'var(--parchment)', marginBottom: 16,
+};
+const butlerWarning: React.CSSProperties = {
+  color: '#e8c98a', borderLeft: '3px solid var(--brass-dim)',
+  paddingLeft: 14, fontStyle: 'italic',
+};
+const butlerClose: React.CSSProperties = {
+  display: 'flex', justifyContent: 'flex-end', paddingTop: 8,
+};
 
 // ── Music player styles ───────────────────────────────────────────────
 const musicBarStyle: React.CSSProperties = {
