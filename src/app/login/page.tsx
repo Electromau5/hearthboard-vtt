@@ -3,10 +3,9 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,10 +15,10 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const res = await signIn("credentials", { email, password, redirect: false });
+    const res = await signIn("credentials", { username, password, redirect: false });
     setLoading(false);
     if (res?.error) {
-      setError("Invalid email or password.");
+      setError("Invalid username or password.");
     } else {
       router.push("/");
       router.refresh();
@@ -41,15 +40,15 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div className="field">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="username">Username</label>
             <input
-              id="email"
-              type="email"
-              autoComplete="email"
+              id="username"
+              type="text"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="your username"
             />
           </div>
           <div className="field">
@@ -76,13 +75,6 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
-
-        <p style={styles.footer}>
-          New player?{" "}
-          <Link href="/register" style={{ color: "var(--brass)" }}>
-            Create an account
-          </Link>
-        </p>
       </div>
     </div>
   );
@@ -152,11 +144,5 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     margin: "0 0 10px",
     fontFamily: "var(--font-mono)",
-  },
-  footer: {
-    marginTop: 20,
-    textAlign: "center",
-    fontSize: 13,
-    color: "var(--ink-text-2)",
   },
 };

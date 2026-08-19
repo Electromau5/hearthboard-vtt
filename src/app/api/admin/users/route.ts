@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Session } from "next-auth";
 import { auth } from "@/auth";
-import { getAllUsers, setRole, deleteUser } from "@/lib/users";
+import { getAllUsers, setRole } from "@/lib/users";
 
 function adminOnly(session: Session | null) {
   if (!session || session.user?.role !== "admin") {
@@ -26,24 +26,12 @@ export async function PATCH(req: NextRequest) {
   if (!id || !["admin", "user"].includes(role)) {
     return NextResponse.json({ error: "Invalid payload." }, { status: 400 });
   }
-  // Prevent the acting admin from demoting themselves.
   if (id === session!.user.id && role === "user") {
-    return NextResponse.json({ error: "You cannot remove your own admin privileges." }, { status: 400 });
+    return NextResponse.json(
+      { error: "You cannot remove your own admin privileges." },
+      { status: 400 }
+    );
   }
   setRole(id, role);
-  return NextResponse.json({ ok: true });
-}
-
-export async function DELETE(req: NextRequest) {
-  const session = await auth();
-  const denied = adminOnly(session);
-  if (denied) return denied;
-
-  const { id } = await req.json();
-  if (!id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
-  if (id === session!.user.id) {
-    return NextResponse.json({ error: "You cannot delete your own account." }, { status: 400 });
-  }
-  deleteUser(id);
   return NextResponse.json({ ok: true });
 }

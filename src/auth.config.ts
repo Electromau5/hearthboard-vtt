@@ -9,12 +9,15 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         token.id = user.id!;
         token.role = (user as { role: "admin" | "user" }).role;
+        token.username = (user as { username: string }).username;
       }
       return token;
     },
     session({ session, token }) {
       session.user.id = token.id as string;
       session.user.role = token.role as "admin" | "user";
+      session.user.username = token.username as string;
+      session.user.name = token.username as string;
       return session;
     },
   },

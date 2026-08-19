@@ -6,10 +6,9 @@ import Link from "next/link";
 
 interface UserRow {
   id: string;
-  email: string;
-  name: string;
+  username: string;
   role: "admin" | "user";
-  createdAt: string;
+  protected: boolean;
 }
 
 export default function AdminUsersPage() {
@@ -40,23 +39,7 @@ export default function AdminUsersPage() {
     });
     if (res.ok) {
       setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, role: newRole } : u));
-      notify(`${user.name} is now ${newRole === "admin" ? "an Admin" : "a Player"}.`);
-    } else {
-      const data = await res.json();
-      notify(data.error ?? "Failed.");
-    }
-  };
-
-  const removeUser = async (user: UserRow) => {
-    if (!confirm(`Remove ${user.name} (${user.email})? This cannot be undone.`)) return;
-    const res = await fetch("/api/admin/users", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: user.id }),
-    });
-    if (res.ok) {
-      setUsers((prev) => prev.filter((u) => u.id !== user.id));
-      notify(`${user.name} removed.`);
+      notify(`${user.username} is now ${newRole === "admin" ? "an Admin" : "a Player"}.`);
     } else {
       const data = await res.json();
       notify(data.error ?? "Failed.");
@@ -89,7 +72,7 @@ export default function AdminUsersPage() {
             <table style={table}>
               <thead>
                 <tr>
-                  {["Name", "Email", "Role", "Joined", "Actions"].map((h) => (
+                  {["Username", "Role", "Actions"].map((h) => (
                     <th key={h} style={th}>{h}</th>
                   ))}
                 </tr>
@@ -97,43 +80,34 @@ export default function AdminUsersPage() {
               <tbody>
                 {users.map((user) => {
                   const isSelf = user.id === session?.user?.id;
+                  const locked = user.protected || isSelf;
                   return (
                     <tr key={user.id} style={tr}>
                       <td style={td}>
-                        <span style={{ fontWeight: 600 }}>{user.name}</span>
-                        {isSelf && (
-                          <span style={selfBadge}>you</span>
-                        )}
-                      </td>
-                      <td style={{ ...td, color: "var(--ink-text-2)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                        {user.email}
+                        <span style={{ fontWeight: 600 }}>{user.username}</span>
+                        {isSelf && <span style={selfBadge}>you</span>}
+                        {user.protected && <span style={lockedBadge}>fixed</span>}
                       </td>
                       <td style={td}>
                         <span style={user.role === "admin" ? adminBadge : playerBadge}>
                           {user.role === "admin" ? "Admin" : "Player"}
                         </span>
                       </td>
-                      <td style={{ ...td, color: "var(--ink-text-2)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
                       <td style={{ ...td, display: "flex", gap: 8 }}>
                         <button
                           className="btn btn-sm btn-ghost"
                           onClick={() => toggleRole(user)}
-                          disabled={isSelf}
-                          title={isSelf ? "Cannot change your own role" : undefined}
-                          style={isSelf ? { opacity: 0.4 } : {}}
+                          disabled={locked}
+                          title={
+                            user.protected
+                              ? "This account's role cannot be changed"
+                              : isSelf
+                              ? "Cannot change your own role"
+                              : undefined
+                          }
+                          style={locked ? { opacity: 0.4 } : {}}
                         >
                           {user.role === "admin" ? "Make Player" : "Make Admin"}
-                        </button>
-                        <button
-                          className="btn btn-sm btn-ghost btn-danger"
-                          onClick={() => removeUser(user)}
-                          disabled={isSelf}
-                          style={isSelf ? { opacity: 0.4 } : {}}
-                          title={isSelf ? "Cannot delete your own account" : undefined}
-                        >
-                          Remove
                         </button>
                       </td>
                     </tr>
@@ -186,7 +160,7 @@ const brandMark: React.CSSProperties = {
 };
 const body: React.CSSProperties = {
   padding: "40px",
-  maxWidth: 900,
+  maxWidth: 700,
   width: "100%",
   margin: "0 auto",
 };
@@ -261,6 +235,15 @@ const selfBadge: React.CSSProperties = {
   borderRadius: 20,
   border: "1px solid var(--arcane-dim)",
   color: "var(--arcane)",
+};
+const lockedBadge: React.CSSProperties = {
+  marginLeft: 8,
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  padding: "2px 6px",
+  borderRadius: 20,
+  border: "1px solid var(--line)",
+  color: "var(--ink-text-2)",
 };
 const toastStyle: React.CSSProperties = {
   position: "fixed",

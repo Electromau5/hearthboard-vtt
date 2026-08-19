@@ -341,6 +341,7 @@ export default function HearthboardPage() {
             <div className="brand-name">Hearth<em>board</em></div>
           </div>
           <div className="dash-actions">
+            <Link href="/characters" className="btn btn-ghost btn-sm">Characters</Link>
             {isAdmin && (
               <Link href="/admin/users" className="btn btn-ghost btn-sm">Admin</Link>
             )}
