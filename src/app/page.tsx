@@ -45,14 +45,18 @@ const CHARACTERS = [
 ];
 
 // ── Briefing entries ─────────────────────────────────────────────────
+type BriefingSection = {
+  audio: string;
+  paragraphs: string[];
+};
+
 type Briefing = {
   id: string;
   image: string;
-  audio: string;
   badge: string;
   title: string;
   subtitle: string;
-  paragraphs: string[];
+  sections: BriefingSection[];
   cardHint?: string;
 };
 
@@ -60,46 +64,76 @@ const BRIEFINGS: Briefing[] = [
   {
     id: 'butler',
     image: '/arthur-butler.jpeg',
-    audio: '/butler-intro-1.mp3',
     badge: 'CONFIDENTIAL',
     title: 'Mission Briefing',
     subtitle: 'Arthur Butler · Legal Representative',
     cardHint: 'Arthur Butler · Legal Rep.',
-    paragraphs: [
-      'Welcome everyone. Let us begin.',
-      'My name is Arthur Butler and I am the legal representative of a benefactor who shall be unnamed.',
-      'You have all been summoned here to continue an excavation that was started 17 years ago. My benefactor has spent a substantial amount of resources to find a subterranean chamber that for better or for worse — contains an object that is of importance to them. Alas, we have not made enough progress to even locate this chamber.',
-      'You will all be given one year to locate this chamber. You will be provided with adequate resources to help you on your quest, but please be warned.',
-      'This is an operation that is not allowed to have any eyes apart from yours. If this gains unnecessary visibility, we will pull all of our support and resources.',
-      'You all have agreed to join this mission for your individual motives and my benefactor will fulfill all of them on completion.',
+    sections: [
+      {
+        audio: '/butler-intro-1.mp3',
+        paragraphs: [
+          'Welcome everyone. Let us begin.',
+          'My name is Arthur Butler and I am the legal representative of a benefactor who shall be unnamed.',
+          'You have all been summoned here to continue an excavation that was started 17 years ago. My benefactor has spent a substantial amount of resources to find a subterranean chamber that for better or for worse — contains an object that is of importance to them. Alas, we have not made enough progress to even locate this chamber.',
+          'You will all be given one year to locate this chamber. You will be provided with adequate resources to help you on your quest, but please be warned.',
+          'This is an operation that is not allowed to have any eyes apart from yours. If this gains unnecessary visibility, we will pull all of our support and resources.',
+          'You all have agreed to join this mission for your individual motives and my benefactor will fulfill all of them on completion.',
+        ],
+      },
+      {
+        audio: '/butler-intro-2.mp3',
+        paragraphs: [
+          '[Section 2 — replace with transcript for butler-intro-2.mp3]',
+        ],
+      },
+      {
+        audio: '/butler-intro-3.mp3',
+        paragraphs: [
+          '[Section 3 — replace with transcript for butler-intro-3.mp3]',
+        ],
+      },
+      {
+        audio: '/butler-intro-4.mp3',
+        paragraphs: [
+          '[Section 4 — replace with transcript for butler-intro-4.mp3]',
+        ],
+      },
     ],
   },
   {
     id: 'old-man',
     image: '/old-man-1.jpeg',
-    audio: '/old-man-1.mp3',
     badge: 'WITNESS ACCOUNT',
     title: "A Warning from the Docks",
     subtitle: 'Anonymous · Innsmouth Harbour',
     cardHint: 'Anonymous · Innsmouth Harbour',
-    paragraphs: [
-      "That poor bastard. He was asking too many questions and in this town, everyone knows that'll get ya in deep trouble.",
-      "The last I heard of him was that he went insane and drowned himself in the waters of Innsmouth, but I know that's complete horseshit.",
-      "There's something down there. Something that was calling him and he answered the call.",
+    sections: [
+      {
+        audio: '/old-man-1.mp3',
+        paragraphs: [
+          "That poor bastard. He was asking too many questions and in this town, everyone knows that'll get ya in deep trouble.",
+          "The last I heard of him was that he went insane and drowned himself in the waters of Innsmouth, but I know that's complete horseshit.",
+          "There's something down there. Something that was calling him and he answered the call.",
+        ],
+      },
     ],
   },
   {
     id: 'mobster',
     image: '/mobster-1.jpeg',
-    audio: '/mobster-1.mp3',
     badge: 'INTERCEPTED',
     title: 'A Business Arrangement',
     subtitle: 'Unknown Subject · Surveillance Recording',
     cardHint: 'Unknown Subject · Surveillance',
-    paragraphs: [
-      "Yeah. My father has been behind that guy for a couple of years now.",
-      "He knows he's a fraud, but he's also quite useful. He's not stupid, that one. He knows things — things that could very well be helpful for both of us.",
-      "So we made a deal — I take the old man out of the equation and he and I form… a business partnership. Whatever he finds in that tomb is gonna make him very famous and me very rich.",
+    sections: [
+      {
+        audio: '/mobster-1.mp3',
+        paragraphs: [
+          "Yeah. My father has been behind that guy for a couple of years now.",
+          "He knows he's a fraud, but he's also quite useful. He's not stupid, that one. He knows things — things that could very well be helpful for both of us.",
+          "So we made a deal — I take the old man out of the equation and he and I form… a business partnership. Whatever he finds in that tomb is gonna make him very famous and me very rich.",
+        ],
+      },
     ],
   },
 ];
@@ -160,6 +194,7 @@ export default function HearthboardPage() {
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.4);
   const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
+  const [activeSectionIdx, setActiveSectionIdx] = useState(0);
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string } | { kind: 'compendium'; idx: number } | null>(null);
@@ -177,19 +212,19 @@ export default function HearthboardPage() {
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
 
-  // Load and play briefing audio when active briefing changes
+  // Load and play briefing audio when active briefing or section changes
   useEffect(() => {
     const audio = briefingAudioRef.current;
     if (!audio) return;
     if (activeBriefing) {
-      audio.src = activeBriefing.audio;
+      audio.src = activeBriefing.sections[activeSectionIdx].audio;
       audio.load();
       audio.play().catch(() => {});
     } else {
       audio.pause();
       audio.currentTime = 0;
     }
-  }, [activeBriefing]);
+  }, [activeBriefing, activeSectionIdx]);
 
   // Sync audio with music controls
   useEffect(() => {
@@ -264,6 +299,7 @@ export default function HearthboardPage() {
   const openBriefing = (briefing: Briefing, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setActiveBriefing(briefing);
+    setActiveSectionIdx(0);
   };
 
   const replayBriefing = (e: React.MouseEvent) => {
@@ -840,42 +876,82 @@ export default function HearthboardPage() {
       <audio ref={briefingAudioRef} preload="none" />
 
       {/* Briefing overlay */}
-      {activeBriefing && (
-        <div style={butlerBackdrop} onClick={closeBriefing}>
-          <div style={butlerOverlay} onClick={e => e.stopPropagation()}>
-            {/* Left: photograph */}
-            <div style={butlerPhotoCol}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={activeBriefing.image}
-                alt={activeBriefing.title}
-                style={butlerPhoto}
-                onClick={replayBriefing}
-                title="Click to replay"
-              />
-              <div style={butlerPhotoCaption}>Click photograph to replay</div>
-            </div>
-
-            {/* Right: briefing text */}
-            <div style={butlerTextCol}>
-              <div style={butlerStamp}>{activeBriefing.badge}</div>
-              <h2 style={butlerHeading}>{activeBriefing.title}</h2>
-              <div style={butlerSubtitleLine}>{activeBriefing.subtitle}</div>
-              <div style={butlerDivider} />
-              <div style={butlerScroll}>
-                {activeBriefing.paragraphs.map((p, i) => (
-                  <p key={i} style={butlerPara}>{p}</p>
-                ))}
+      {activeBriefing && (() => {
+        const totalSections = activeBriefing.sections.length;
+        const currentSection = activeBriefing.sections[activeSectionIdx];
+        const isMulti = totalSections > 1;
+        return (
+          <div style={butlerBackdrop} onClick={closeBriefing}>
+            <div style={butlerOverlay} onClick={e => e.stopPropagation()}>
+              {/* Left: photograph */}
+              <div style={butlerPhotoCol}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={activeBriefing.image}
+                  alt={activeBriefing.title}
+                  style={butlerPhoto}
+                  onClick={replayBriefing}
+                  title="Click to replay"
+                />
+                <div style={butlerPhotoCaption}>Click photograph to replay</div>
               </div>
-              <div style={butlerClose}>
-                <button className="btn btn-ghost btn-sm" onClick={closeBriefing} style={{ color: 'var(--ink-text-2)', marginTop: 8 }}>
-                  Dismiss
-                </button>
+
+              {/* Right: briefing text */}
+              <div style={butlerTextCol}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={butlerStamp}>{activeBriefing.badge}</div>
+                  {isMulti && (
+                    <div style={sectionCounter}>Part {activeSectionIdx + 1} of {totalSections}</div>
+                  )}
+                </div>
+                <h2 style={butlerHeading}>{activeBriefing.title}</h2>
+                <div style={butlerSubtitleLine}>{activeBriefing.subtitle}</div>
+                <div style={butlerDivider} />
+                <div style={butlerScroll}>
+                  {currentSection.paragraphs.map((p, i) => (
+                    <p key={i} style={butlerPara}>{p}</p>
+                  ))}
+                </div>
+                <div style={butlerClose}>
+                  {isMulti && (
+                    <div style={briefingNav}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setActiveSectionIdx(idx => idx - 1)}
+                        disabled={activeSectionIdx === 0}
+                        style={{ opacity: activeSectionIdx === 0 ? 0.35 : 1 }}
+                      >
+                        ← Previous
+                      </button>
+                      <div style={navDots}>
+                        {activeBriefing.sections.map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setActiveSectionIdx(i)}
+                            style={{ ...navDot, background: i === activeSectionIdx ? 'var(--brass)' : 'var(--line)', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title={`Part ${i + 1}`}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setActiveSectionIdx(idx => idx + 1)}
+                        disabled={activeSectionIdx === totalSections - 1}
+                        style={{ opacity: activeSectionIdx === totalSections - 1 ? 0.35 : 1 }}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
+                  <button className="btn btn-ghost btn-sm" onClick={closeBriefing} style={{ color: 'var(--ink-text-2)', marginTop: 8 }}>
+                    Dismiss
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Music Player — Admin only */}
       {isAdmin && (
@@ -1005,7 +1081,20 @@ const butlerWarning: React.CSSProperties = {
   paddingLeft: 14, fontStyle: 'italic',
 };
 const butlerClose: React.CSSProperties = {
-  display: 'flex', justifyContent: 'flex-end', paddingTop: 8,
+  display: 'flex', flexDirection: 'column', alignItems: 'flex-end', paddingTop: 8,
+};
+const sectionCounter: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1px',
+  color: 'var(--brass)', textTransform: 'uppercase',
+};
+const briefingNav: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 12,
+};
+const navDots: React.CSSProperties = {
+  display: 'flex', gap: 6, alignItems: 'center',
+};
+const navDot: React.CSSProperties = {
+  width: 7, height: 7, borderRadius: '50%', transition: 'background 0.2s',
 };
 
 // ── Music player styles ───────────────────────────────────────────────
