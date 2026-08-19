@@ -88,6 +88,20 @@ const BRIEFINGS: Briefing[] = [
       "There's something down there. Something that was calling him and he answered the call.",
     ],
   },
+  {
+    id: 'mobster',
+    image: '/mobster-1.jpeg',
+    audio: '/mobster-1.mp3',
+    badge: 'INTERCEPTED',
+    title: 'A Business Arrangement',
+    subtitle: 'Unknown Subject · Surveillance Recording',
+    cardHint: 'Unknown Subject · Surveillance',
+    paragraphs: [
+      "Yeah. My father has been behind that guy for a couple of years now.",
+      "He knows he's a fraud, but he's also quite useful. He's not stupid, that one. He knows things — things that could very well be helpful for both of us.",
+      "So we made a deal — I take the old man out of the equation and he and I form… a business partnership. Whatever he finds in that tomb is gonna make him very famous and me very rich.",
+    ],
+  },
 ];
 
 // ── Types ────────────────────────────────────────────────────────────
