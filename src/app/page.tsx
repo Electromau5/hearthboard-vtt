@@ -126,6 +126,15 @@ const BRIEFINGS: Briefing[] = [
           "There's something down there. Something that was calling him and he answered the call.",
         ],
       },
+      {
+        audio: '/old-man-2.mp3',
+        paragraphs: [
+          "I'm probably not going to be here tomorrow when I tell you what I'm about to tell you, but if that means bringing some peace to that poor soul, so be it.",
+          "The name 'Obed Marsh' would probably ring a bell. He's the primary reason why this town survived a 100 years longer than it should've have.",
+          "You need to find the last remaining family member of the Marsh family. That will get you closer to what you were asking about — a lot closer.",
+          "All I know is that the Marshes abandoned Innsmouth a long time back. God knows where they live now.",
+        ],
+      },
     ],
   },
   {
