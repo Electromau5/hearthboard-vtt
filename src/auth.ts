@@ -2,11 +2,13 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { ensureAdminExists, getUserByEmail } from "@/lib/users";
+import { authConfig } from "./auth.config";
 
-// Seed admin on first import (server-side only).
+// Seed admin account on first server startup (Node.js runtime only).
 ensureAdminExists().catch(console.error);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -28,22 +30,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.id = user.id!;
-        token.role = (user as { role: "admin" | "user" }).role;
-      }
-      return token;
-    },
-    session({ session, token }) {
-      session.user.id = token.id;
-      session.user.role = token.role;
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-  },
-  session: { strategy: "jwt" },
 });
