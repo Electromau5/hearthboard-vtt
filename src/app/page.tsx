@@ -44,6 +44,52 @@ const CHARACTERS = [
   { id: 'c7', name: 'Percival Winthrop', cls: 'The Ruined Tycoon', hp: 11, maxHp: 11, ac: 0, abilities: { STR: 50, CON: 55, DEX: 55, INT: 80, POW: 75, EDU: 85 }, inventory: [{ name: 'Savile Row suit', qty: 1 }, { name: 'Gold pocket watch', qty: 1 }, { name: '.32 ACP revolver', qty: 1 }, { name: 'Bankrupt ledger', qty: 1 }] },
 ];
 
+// ── Briefing entries ─────────────────────────────────────────────────
+type Briefing = {
+  id: string;
+  image: string;
+  audio: string;
+  badge: string;
+  title: string;
+  subtitle: string;
+  paragraphs: string[];
+  cardHint?: string;
+};
+
+const BRIEFINGS: Briefing[] = [
+  {
+    id: 'butler',
+    image: '/arthur-butler.jpeg',
+    audio: '/butler-intro-1.mp3',
+    badge: 'CONFIDENTIAL',
+    title: 'Mission Briefing',
+    subtitle: 'Arthur Butler · Legal Representative',
+    cardHint: 'Arthur Butler · Legal Rep.',
+    paragraphs: [
+      'Welcome everyone. Let us begin.',
+      'My name is Arthur Butler and I am the legal representative of a benefactor who shall be unnamed.',
+      'You have all been summoned here to continue an excavation that was started 17 years ago. My benefactor has spent a substantial amount of resources to find a subterranean chamber that for better or for worse — contains an object that is of importance to them. Alas, we have not made enough progress to even locate this chamber.',
+      'You will all be given one year to locate this chamber. You will be provided with adequate resources to help you on your quest, but please be warned.',
+      'This is an operation that is not allowed to have any eyes apart from yours. If this gains unnecessary visibility, we will pull all of our support and resources.',
+      'You all have agreed to join this mission for your individual motives and my benefactor will fulfill all of them on completion.',
+    ],
+  },
+  {
+    id: 'old-man',
+    image: '/old-man-1.jpeg',
+    audio: '/old-man-1.mp3',
+    badge: 'WITNESS ACCOUNT',
+    title: "A Warning from the Docks",
+    subtitle: 'Anonymous · Innsmouth Harbour',
+    cardHint: 'Anonymous · Innsmouth Harbour',
+    paragraphs: [
+      "That poor bastard. He was asking too many questions and in this town, everyone knows that'll get ya in deep trouble.",
+      "The last I heard of him was that he went insane and drowned himself in the waters of Innsmouth, but I know that's complete horseshit.",
+      "There's something down there. Something that was calling him and he answered the call.",
+    ],
+  },
+];
+
 // ── Types ────────────────────────────────────────────────────────────
 interface Game { id: string; name: string; system: string; description: string; art: string; lastPlayed: string; }
 
@@ -99,7 +145,7 @@ export default function HearthboardPage() {
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.4);
-  const [butlerOpen, setButlerOpen] = useState(false);
+  const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string } | { kind: 'compendium'; idx: number } | null>(null);
@@ -113,9 +159,23 @@ export default function HearthboardPage() {
   const currentSceneIdRef = useRef(currentSceneId);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const butlerAudioRef = useRef<HTMLAudioElement | null>(null);
+  const briefingAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
+
+  // Load and play briefing audio when active briefing changes
+  useEffect(() => {
+    const audio = briefingAudioRef.current;
+    if (!audio) return;
+    if (activeBriefing) {
+      audio.src = activeBriefing.audio;
+      audio.load();
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, [activeBriefing]);
 
   // Sync audio with music controls
   useEffect(() => {
@@ -187,21 +247,23 @@ export default function HearthboardPage() {
     setView('dashboard');
   };
 
-  const openButler = (e?: React.MouseEvent) => {
+  const openBriefing = (briefing: Briefing, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setButlerOpen(true);
-    if (butlerAudioRef.current) {
-      butlerAudioRef.current.currentTime = 0;
-      butlerAudioRef.current.play().catch(() => {});
-    }
+    setActiveBriefing(briefing);
   };
 
-  const closeButler = () => {
-    setButlerOpen(false);
-    if (butlerAudioRef.current) {
-      butlerAudioRef.current.pause();
-      butlerAudioRef.current.currentTime = 0;
-    }
+  const replayBriefing = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const audio = briefingAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  };
+
+  const closeBriefing = () => {
+    setActiveBriefing(null);
+    const audio = briefingAudioRef.current;
+    if (audio) { audio.pause(); audio.currentTime = 0; }
   };
 
   const addToken = (t: { label: string; color: string; x: number; y: number; hp: number; maxHp: number; fullName?: string }) => {
@@ -733,23 +795,25 @@ export default function HearthboardPage() {
                 Mission Details
               </div>
 
-              {/* Arthur Butler briefing card */}
-              <div
-                style={missionCard}
-                onClick={() => openButler()}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && openButler()}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/arthur-butler.jpeg" alt="Arthur Butler" style={missionCardImg} />
-                <div style={missionCardOverlay}>
-                  <div style={missionCardBadge}>CONFIDENTIAL</div>
-                  <div style={missionCardTitle}>Mission Briefing</div>
-                  <div style={missionCardSub}>Arthur Butler · Legal Rep.</div>
-                  <div style={missionCardHint}>▶ Click to open</div>
+              {BRIEFINGS.map(b => (
+                <div
+                  key={b.id}
+                  style={{ ...missionCard, marginBottom: 10 }}
+                  onClick={() => openBriefing(b)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && openBriefing(b)}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={b.image} alt={b.title} style={missionCardImg} />
+                  <div style={missionCardOverlay}>
+                    <div style={missionCardBadge}>{b.badge}</div>
+                    <div style={missionCardTitle}>{b.title}</div>
+                    <div style={missionCardSub}>{b.cardHint ?? b.subtitle}</div>
+                    <div style={missionCardHint}>▶ Click to open</div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -758,21 +822,21 @@ export default function HearthboardPage() {
       {/* Toast */}
       <div className={`toast${toastVisible ? ' show' : ''}`}>{toastMsg}</div>
 
-      {/* Butler audio — always mounted so it can be preloaded */}
-      <audio ref={butlerAudioRef} src="/butler-intro-1.mp3" preload="metadata" />
+      {/* Briefing audio — single element, src swapped per entry */}
+      <audio ref={briefingAudioRef} preload="none" />
 
-      {/* Butler briefing overlay */}
-      {butlerOpen && (
-        <div style={butlerBackdrop} onClick={closeButler}>
+      {/* Briefing overlay */}
+      {activeBriefing && (
+        <div style={butlerBackdrop} onClick={closeBriefing}>
           <div style={butlerOverlay} onClick={e => e.stopPropagation()}>
             {/* Left: photograph */}
             <div style={butlerPhotoCol}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/arthur-butler.jpeg"
-                alt="Arthur Butler"
+                src={activeBriefing.image}
+                alt={activeBriefing.title}
                 style={butlerPhoto}
-                onClick={e => openButler(e)}
+                onClick={replayBriefing}
                 title="Click to replay"
               />
               <div style={butlerPhotoCaption}>Click photograph to replay</div>
@@ -780,35 +844,17 @@ export default function HearthboardPage() {
 
             {/* Right: briefing text */}
             <div style={butlerTextCol}>
-              <div style={butlerStamp}>CONFIDENTIAL</div>
-              <h2 style={butlerHeading}>Mission Briefing</h2>
+              <div style={butlerStamp}>{activeBriefing.badge}</div>
+              <h2 style={butlerHeading}>{activeBriefing.title}</h2>
+              <div style={butlerSubtitleLine}>{activeBriefing.subtitle}</div>
               <div style={butlerDivider} />
               <div style={butlerScroll}>
-                <p style={butlerPara}>Welcome everyone. Let us begin.</p>
-                <p style={butlerPara}>
-                  My name is Arthur Butler and I am the legal representative of a benefactor who shall be unnamed.
-                </p>
-                <p style={butlerPara}>
-                  You have all been summoned here to continue an excavation that was started 17 years ago.
-                  My benefactor has spent a substantial amount of resources to find a subterranean chamber
-                  that for better or for worse — contains an object that is of importance to them.
-                  Alas, we have not made enough progress to even locate this chamber.
-                </p>
-                <p style={butlerPara}>
-                  You will all be given one year to locate this chamber. You will be provided with adequate
-                  resources to help you on your quest, but please be warned.
-                </p>
-                <p style={{ ...butlerPara, ...butlerWarning }}>
-                  This is an operation that is not allowed to have any eyes apart from yours.
-                  If this gains unnecessary visibility, we will pull all of our support and resources.
-                </p>
-                <p style={butlerPara}>
-                  You all have agreed to join this mission for your individual motives and my benefactor
-                  will fulfill all of them on completion.
-                </p>
+                {activeBriefing.paragraphs.map((p, i) => (
+                  <p key={i} style={butlerPara}>{p}</p>
+                ))}
               </div>
               <div style={butlerClose}>
-                <button className="btn btn-ghost btn-sm" onClick={closeButler} style={{ color: 'var(--ink-text-2)', marginTop: 8 }}>
+                <button className="btn btn-ghost btn-sm" onClick={closeBriefing} style={{ color: 'var(--ink-text-2)', marginTop: 8 }}>
                   Dismiss
                 </button>
               </div>
@@ -926,7 +972,11 @@ const butlerStamp: React.CSSProperties = {
 };
 const butlerHeading: React.CSSProperties = {
   fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
-  color: 'var(--parchment)', margin: '0 0 12px',
+  color: 'var(--parchment)', margin: '0 0 4px',
+};
+const butlerSubtitleLine: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--brass)',
+  letterSpacing: '0.5px', marginBottom: 14,
 };
 const butlerDivider: React.CSSProperties = {
   height: 1, background: 'var(--brass-dim)', marginBottom: 20, opacity: 0.5,
