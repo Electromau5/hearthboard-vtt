@@ -28,7 +28,7 @@ body {
   background: var(--ink);
   color: var(--parchment);
   font-family: var(--font-body);
-  overflow: hidden;
+  overflow: auto;
   -webkit-font-smoothing: antialiased;
 }
 ::selection { background: var(--brass-dim); color: var(--parchment); }
@@ -40,7 +40,7 @@ button { font-family: inherit; cursor: pointer; }
 input, textarea, select { font-family: inherit; }
 :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 
-.app { height: 100vh; width: 100vw; position: relative; }
+.app { height: 100vh; width: 100vw; position: relative; overflow: hidden; }
 .view { position: absolute; inset: 0; display: none; }
 .view.active { display: flex; flex-direction: column; }
 

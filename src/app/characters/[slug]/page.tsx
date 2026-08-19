@@ -241,6 +241,7 @@ const page: React.CSSProperties = {
   background: "var(--ink)",
   display: "flex",
   flexDirection: "column",
+  overflow: "auto",
 };
 const topbar: React.CSSProperties = {
   display: "flex",
