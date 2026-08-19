@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import Link from 'next/link';
 
 // ── Constants ────────────────────────────────────────────────────────
 const TOKEN_COLORS = ['#c9944f', '#4f9b92', '#b1483f', '#8a72c9', '#5f8fc9', '#c9b04f'];
@@ -73,6 +75,9 @@ function rollFormula(formula: string): RollResult | null {
 
 // ── Component ────────────────────────────────────────────────────────
 export default function HearthboardPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'admin';
+
   const [games, setGames] = useState<Game[]>(INITIAL_GAMES);
   const [view, setView] = useState<'dashboard' | 'game'>('dashboard');
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
@@ -271,6 +276,11 @@ export default function HearthboardPage() {
     setChatItems(prev => [...prev, { type: 'roll', who, res, crit: isCrit, fumble: isFumble, ts: Date.now() }]);
   }, []);
 
+  const rollDie = (sides: number) => {
+    const res = rollFormula('1d' + sides);
+    if (res) pushRollToChat('You', res);
+  };
+
   const handleChatSubmit = () => {
     const input = chatInputRef.current;
     if (!input) return;
@@ -331,7 +341,11 @@ export default function HearthboardPage() {
             <div className="brand-name">Hearth<em>board</em></div>
           </div>
           <div className="dash-actions">
-            <button className="btn btn-ghost btn-sm">Docs</button>
+            {isAdmin && (
+              <Link href="/admin/users" className="btn btn-ghost btn-sm">Admin</Link>
+            )}
+            <span style={{ fontSize: 13, color: 'var(--ink-text-2)' }}>{session?.user?.name}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => signOut({ callbackUrl: '/login' })}>Sign out</button>
             <button className="btn btn-primary" onClick={openCreateModal}>＋ Create Game</button>
           </div>
         </div>
