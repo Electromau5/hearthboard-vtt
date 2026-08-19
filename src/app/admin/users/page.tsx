@@ -56,7 +56,12 @@ export default function AdminUsersPage() {
             Admin — Users
           </span>
         </div>
-        <Link href="/" className="btn btn-ghost btn-sm">← Back to app</Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href="/admin/characters" className="btn btn-ghost btn-sm">Characters</Link>
+          <Link href="/admin/locations" className="btn btn-ghost btn-sm">Locations</Link>
+          <Link href="/admin/assets" className="btn btn-ghost btn-sm">Assets</Link>
+          <Link href="/" className="btn btn-ghost btn-sm">← App</Link>
+        </div>
       </div>
 
       <div style={body}>

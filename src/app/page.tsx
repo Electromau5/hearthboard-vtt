@@ -315,8 +315,9 @@ export default function HearthboardPage() {
           </div>
           <div className="dash-actions">
             <Link href="/characters" className="btn btn-ghost btn-sm">Characters</Link>
+            <Link href="/locations" className="btn btn-ghost btn-sm">Locations</Link>
             {isAdmin && (
-              <Link href="/admin/users" className="btn btn-ghost btn-sm">Admin</Link>
+              <Link href="/admin/characters" className="btn btn-ghost btn-sm">Admin</Link>
             )}
             <span style={{ fontSize: 13, color: 'var(--ink-text-2)' }}>{session?.user?.name}</span>
             <button className="btn btn-ghost btn-sm" onClick={() => signOut({ callbackUrl: '/login' })}>Sign out</button>

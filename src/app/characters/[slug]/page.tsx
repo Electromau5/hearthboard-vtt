@@ -5,23 +5,30 @@ import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { getCharacter } from "@/lib/characters";
 import type { Character, Ability } from "@/lib/characters";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function CharacterSheetPage() {
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
   const slug = typeof params.slug === "string" ? params.slug : "";
-  const char = getCharacter(slug);
+  const base = getCharacter(slug);
+  const [char, setChar] = useState<Character | null>(base ?? null);
+  const isAdmin = session?.user?.role === "admin";
 
   useEffect(() => {
-    if (!char) router.replace("/characters");
-  }, [char, router]);
+    if (!base) { router.replace("/characters"); return; }
+    fetch(`/api/admin/characters/${slug}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setChar(data); });
+  }, [slug, base, router]);
 
   if (!char) return null;
 
   const sanPct = Math.round((char.vitals.sanity / char.vitals.maxSanity) * 100);
-  const buffPct = Math.round((char.vitals.bufferedSanity / char.vitals.bufferedSanityMax) * 100);
+  const buffPct = char.vitals.bufferedSanityMax > 0
+    ? Math.round((char.vitals.bufferedSanity / char.vitals.bufferedSanityMax) * 100)
+    : 0;
 
   return (
     <div style={page}>
@@ -37,6 +44,9 @@ export default function CharacterSheetPage() {
           <span style={classPill}>{char.className}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {isAdmin && (
+            <Link href={`/admin/characters/${slug}/edit`} className="btn btn-sm btn-primary">Edit Sheet</Link>
+          )}
           <span style={{ fontSize: 13, color: "var(--ink-text-2)" }}>{session?.user?.name}</span>
           <button className="btn btn-ghost btn-sm" onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
         </div>
@@ -65,7 +75,7 @@ export default function CharacterSheetPage() {
             <VitalBlock label="Willpower (MP)" current={char.vitals.willpower} max={char.vitals.willpower} color="var(--arcane)" />
             <VitalBlock label="Sanity" current={char.vitals.sanity} max={char.vitals.maxSanity} color="var(--brass)" showFraction />
             <VitalBlock label="Max Sanity" current={char.vitals.maxSanity} max={99} color="var(--ink-text-2)" noBar />
-            <VitalBlock label="Buffered SAN" current={char.vitals.bufferedSanity} max={char.vitals.bufferedSanityMax} color="var(--forest)" />
+            <VitalBlock label="Buffered SAN" current={char.vitals.bufferedSanity} max={char.vitals.bufferedSanityMax} color="var(--arcane)" />
             <VitalBlock label="Luck" current={char.vitals.luck} max={99} color="#5f8fc9" />
           </div>
           {/* Ancestral Resonance */}
