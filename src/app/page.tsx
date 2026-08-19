@@ -371,30 +371,6 @@ export default function HearthboardPage() {
             <div className="stat-card"><div className="stat-num">{rollCount}</div><div className="stat-label">Dice rolled</div></div>
           </div>
 
-          {/* Briefing card — visible to all */}
-          <div className="section-label">Briefing</div>
-          <div
-            style={butlerCard}
-            onClick={() => openButler()}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && openButler()}
-          >
-            <div style={butlerCardImg}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/arthur-butler.jpeg" alt="Arthur Butler" style={butlerThumb} />
-              <div style={butlerPlayHint}>▶ Click to receive your briefing</div>
-            </div>
-            <div style={butlerCardBody}>
-              <div style={butlerEyebrow}>CONFIDENTIAL · MISSION BRIEFING</div>
-              <div style={butlerName}>Arthur Butler</div>
-              <div style={butlerRole}>Legal Representative · Unnamed Benefactor</div>
-              <p style={butlerPreview}>
-                "You have all been summoned here to continue an excavation that was started 17 years ago…"
-              </p>
-            </div>
-          </div>
-
           <div className="section-label">Campaign</div>
           <div className="game-grid">
             <div className="game-card" onClick={openGame}>
@@ -579,13 +555,19 @@ export default function HearthboardPage() {
           {/* Right panel */}
           <div className="right-panel">
             <div className="rp-tabs">
-              {['chat', 'characters', 'compendium', 'journal'].map(pane => (
+              {[
+                { id: 'chat', label: 'Chat' },
+                { id: 'characters', label: 'Characters' },
+                { id: 'compendium', label: 'Compendium' },
+                { id: 'journal', label: 'Journal' },
+                { id: 'mission', label: 'Mission' },
+              ].map(({ id, label }) => (
                 <button
-                  key={pane}
-                  className={`rp-tab${activePane === pane ? ' active' : ''}`}
-                  onClick={() => setActivePane(pane)}
+                  key={id}
+                  className={`rp-tab${activePane === id ? ' active' : ''}`}
+                  onClick={() => setActivePane(id)}
                 >
-                  {pane.charAt(0).toUpperCase() + pane.slice(1)}
+                  {label}
                 </button>
               ))}
             </div>
@@ -744,6 +726,31 @@ export default function HearthboardPage() {
                 <div className="journal-saved">{journalSaved}</div>
               </div>
             </div>
+
+            {/* Mission Details pane */}
+            <div className={`rp-pane${activePane === 'mission' ? ' active' : ''}`} style={{ overflowY: 'auto', padding: '14px 12px', gap: 10 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)', marginBottom: 10 }}>
+                Mission Details
+              </div>
+
+              {/* Arthur Butler briefing card */}
+              <div
+                style={missionCard}
+                onClick={() => openButler()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && openButler()}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/arthur-butler.jpeg" alt="Arthur Butler" style={missionCardImg} />
+                <div style={missionCardOverlay}>
+                  <div style={missionCardBadge}>CONFIDENTIAL</div>
+                  <div style={missionCardTitle}>Mission Briefing</div>
+                  <div style={missionCardSub}>Arthur Butler · Legal Rep.</div>
+                  <div style={missionCardHint}>▶ Click to open</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -851,43 +858,34 @@ export default function HearthboardPage() {
   );
 }
 
-// ── Butler card (dashboard) ───────────────────────────────────────────
-const butlerCard: React.CSSProperties = {
-  display: 'flex', alignItems: 'stretch', background: 'var(--surface)',
-  border: '1px solid var(--brass-dim)', borderRadius: 'var(--r-lg)',
-  marginBottom: 28, cursor: 'pointer', overflow: 'hidden',
-  transition: 'border-color .2s, box-shadow .2s',
-  boxShadow: '0 2px 16px rgba(0,0,0,0.3)',
+// ── Mission pane card (right panel) ──────────────────────────────────
+const missionCard: React.CSSProperties = {
+  position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+  cursor: 'pointer', border: '1px solid var(--brass-dim)',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
 };
-const butlerCardImg: React.CSSProperties = {
-  position: 'relative', width: 200, flexShrink: 0, overflow: 'hidden',
+const missionCardImg: React.CSSProperties = {
+  width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover',
+  filter: 'sepia(0.3) brightness(0.75)',
 };
-const butlerThumb: React.CSSProperties = {
-  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
-  filter: 'sepia(0.3) brightness(0.85)',
+const missionCardOverlay: React.CSSProperties = {
+  position: 'absolute', inset: 0,
+  background: 'linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.3) 55%, transparent 100%)',
+  padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
 };
-const butlerPlayHint: React.CSSProperties = {
-  position: 'absolute', bottom: 0, left: 0, right: 0,
-  background: 'linear-gradient(transparent, rgba(0,0,0,0.75))',
-  color: 'var(--brass)', fontFamily: 'var(--font-mono)', fontSize: 10,
-  letterSpacing: '0.8px', padding: '16px 10px 8px', textAlign: 'center',
+const missionCardBadge: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '2px',
+  color: 'var(--blood)', border: '1px solid var(--blood)',
+  display: 'inline-block', padding: '2px 6px', marginBottom: 6, width: 'fit-content',
 };
-const butlerCardBody: React.CSSProperties = {
-  padding: '20px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+const missionCardTitle: React.CSSProperties = {
+  fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2,
 };
-const butlerEyebrow: React.CSSProperties = {
-  fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '2px',
-  color: 'var(--blood)', marginBottom: 8,
+const missionCardSub: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brass)', marginTop: 3,
 };
-const butlerName: React.CSSProperties = {
-  fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700,
-  color: 'var(--parchment)', marginBottom: 4,
-};
-const butlerRole: React.CSSProperties = {
-  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--brass)', marginBottom: 12,
-};
-const butlerPreview: React.CSSProperties = {
-  fontSize: 14, color: 'var(--ink-text)', fontStyle: 'italic', margin: 0, lineHeight: 1.6,
+const missionCardHint: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-text-2)', marginTop: 6, letterSpacing: '0.5px',
 };
 
 // ── Butler overlay ────────────────────────────────────────────────────
