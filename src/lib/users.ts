@@ -33,7 +33,10 @@ const ACCOUNTS = [
   },
 ] as const;
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// Vercel serverless runs in a read-only filesystem at /var/task; /tmp is writable.
+const DATA_DIR = process.env.VERCEL
+  ? "/tmp/data"
+  : path.join(process.cwd(), "data");
 const ROLES_FILE = path.join(DATA_DIR, "roles.json");
 
 function getRoleOverrides(): Record<string, "admin" | "user"> {

@@ -8,11 +8,14 @@ import Link from 'next/link';
 const TOKEN_COLORS = ['#c9944f', '#4f9b92', '#b1483f', '#8a72c9', '#5f8fc9', '#c9b04f'];
 const QUICK_DICE = [4, 6, 8, 10, 12, 20, 100];
 
-const INITIAL_GAMES = [
-  { id: 'g1', name: 'The Sunken Reliquary', system: 'D&D 5e', description: 'A drowned temple, a sea-mad cult, and a relic that breathes.', art: 'art-sea', lastPlayed: '3 days ago' },
-  { id: 'g2', name: 'Ashes of Blackmoor', system: 'Pathfinder 2e', description: 'A border war fought in the shadow of a dead god.', art: 'art-forest', lastPlayed: '1 week ago' },
-  { id: 'g3', name: 'The Hollow Choir', system: 'Call of Cthulhu', description: 'Something in the mine sings, and the town has started humming along.', art: 'art-void', lastPlayed: '2 weeks ago' },
-];
+const ECHOES_OF_DARKNESS = {
+  id: 'echoes',
+  name: 'Echoes of Darkness',
+  system: 'Call of Cthulhu',
+  description: 'Seven investigators descend into a 17-year subterranean excavation — and something ancient stirs below.',
+  art: 'art-void',
+  lastPlayed: 'Ongoing',
+};
 
 const SCENES = [
   { id: 's1', name: 'The Drowned Nave', bg: 'radial-gradient(circle at 30% 20%, #1c3a44, #0b1216 70%)' },
@@ -32,13 +35,18 @@ const COMPENDIUM = [
 ];
 
 const CHARACTERS = [
-  { id: 'c1', name: 'Fenwick Ashgrove', cls: 'Half-Elf Ranger, Lvl 5', hp: 38, maxHp: 44, ac: 15, abilities: { STR: 14, DEX: 18, CON: 13, INT: 10, WIS: 16, CHA: 8 }, inventory: [{ name: 'Longbow', qty: 1 }, { name: 'Arrows', qty: 20 }, { name: "Traveler's cloak", qty: 1 }, { name: 'Rations', qty: 6 }] },
-  { id: 'c2', name: 'Brother Ovid', cls: 'Human Cleric, Lvl 5', hp: 41, maxHp: 41, ac: 17, abilities: { STR: 12, DEX: 10, CON: 14, INT: 11, WIS: 18, CHA: 13 }, inventory: [{ name: 'Mace', qty: 1 }, { name: 'Holy symbol', qty: 1 }, { name: "Healer's kit", qty: 1 }, { name: 'Prayer book', qty: 1 }] },
-  { id: 'c3', name: 'Nix Quickfingers', cls: 'Tiefling Rogue, Lvl 5', hp: 29, maxHp: 35, ac: 16, abilities: { STR: 9, DEX: 19, CON: 12, INT: 14, WIS: 11, CHA: 15 }, inventory: [{ name: 'Daggers', qty: 2 }, { name: "Thieves' tools", qty: 1 }, { name: 'Smoke bomb', qty: 3 }] },
+  { id: 'c1', name: 'Dr. Alistair Finch', cls: 'The Disgraced Mortician', hp: 12, maxHp: 12, ac: 0, abilities: { STR: 50, CON: 65, DEX: 75, INT: 85, POW: 75, EDU: 85 }, inventory: [{ name: 'Dissection kit', qty: 1 }, { name: 'Formaldehyde jars', qty: 3 }, { name: 'Scalpel holster', qty: 1 }, { name: 'Mortuary credentials', qty: 1 }] },
+  { id: 'c2', name: 'Silas "The Great" Vance', cls: 'The Blackmailed Illusionist', hp: 11, maxHp: 11, ac: 0, abilities: { STR: 55, CON: 60, DEX: 85, INT: 75, POW: 70, EDU: 65 }, inventory: [{ name: 'Lockpick kit', qty: 1 }, { name: 'Flash pellets', qty: 4 }, { name: 'Defense cane', qty: 1 }, { name: 'Debt note', qty: 1 }] },
+  { id: 'c3', name: 'Julian Sterling', cls: 'The Desperate Auteur', hp: 10, maxHp: 10, ac: 0, abilities: { STR: 45, CON: 55, DEX: 70, INT: 80, POW: 65, EDU: 75 }, inventory: [{ name: '35mm Eyemo camera', qty: 1 }, { name: 'Nitrate film rolls', qty: 4 }, { name: 'Magnesium dish', qty: 1 }, { name: 'Dev kit', qty: 1 }] },
+  { id: 'c4', name: 'Thomas "Mack" Callahan', cls: 'The Amnesiac Detective', hp: 14, maxHp: 14, ac: 0, abilities: { STR: 75, CON: 70, DEX: 65, INT: 70, POW: 65, EDU: 60 }, inventory: [{ name: 'Colt M1911', qty: 1 }, { name: 'Spare magazines', qty: 3 }, { name: 'Trench knife', qty: 1 }, { name: 'PI badge', qty: 1 }] },
+  { id: 'c5', name: 'Richard Pickman Graves', cls: 'The Macabre Visionary', hp: 9, maxHp: 9, ac: 0, abilities: { STR: 40, CON: 45, DEX: 80, INT: 85, POW: 80, EDU: 70 }, inventory: [{ name: 'Charcoal sketchbook', qty: 1 }, { name: 'Bristle brushes', qty: 1 }, { name: 'Oil paint tubes', qty: 1 }, { name: 'Cemetery sketches', qty: 1 }] },
+  { id: 'c6', name: 'Arthur Wright', cls: 'The Non-Euclidean Architect', hp: 12, maxHp: 12, ac: 0, abilities: { STR: 55, CON: 65, DEX: 60, INT: 90, POW: 70, EDU: 85 }, inventory: [{ name: 'Brass compass', qty: 1 }, { name: 'Theodolite', qty: 1 }, { name: 'Dynamite sticks', qty: 2 }, { name: 'Blueprint parchment', qty: 1 }] },
+  { id: 'c7', name: 'Percival Winthrop', cls: 'The Ruined Tycoon', hp: 11, maxHp: 11, ac: 0, abilities: { STR: 50, CON: 55, DEX: 55, INT: 80, POW: 75, EDU: 85 }, inventory: [{ name: 'Savile Row suit', qty: 1 }, { name: 'Gold pocket watch', qty: 1 }, { name: '.32 ACP revolver', qty: 1 }, { name: 'Bankrupt ledger', qty: 1 }] },
 ];
 
 // ── Types ────────────────────────────────────────────────────────────
 interface Game { id: string; name: string; system: string; description: string; art: string; lastPlayed: string; }
+
 interface Token { id: string; label: string; fullName: string; color: string; x: number; y: number; hp: number; maxHp: number; }
 interface InitEntry { tokenId: string; name: string; color: string; value: number; }
 type RollResult = { formula: string; rolls: number[]; mod: number; sides: number; total: number; n: number; };
@@ -48,13 +56,6 @@ type ChatItem =
   | { type: 'roll'; who: string; res: RollResult; crit: boolean; fumble: boolean; ts: number };
 
 // ── Helpers ──────────────────────────────────────────────────────────
-function artForSystem(sys: string) {
-  if (sys === 'D&D 5e') return 'art-sea';
-  if (sys === 'Pathfinder 2e') return 'art-forest';
-  if (sys === 'Call of Cthulhu') return 'art-void';
-  return 'art-dungeon';
-}
-
 function abilityMod(score: number) {
   const m = Math.floor((score - 10) / 2);
   return (m >= 0 ? '+' : '') + m;
@@ -78,9 +79,7 @@ export default function HearthboardPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'admin';
 
-  const [games, setGames] = useState<Game[]>(INITIAL_GAMES);
   const [view, setView] = useState<'dashboard' | 'game'>('dashboard');
-  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [currentSceneId, setCurrentSceneId] = useState('s1');
   const [tool, setToolState] = useState('select');
   const [gridOn, setGridOn] = useState(true);
@@ -93,10 +92,6 @@ export default function HearthboardPage() {
   const [rollCount, setRollCount] = useState(238);
   const [chatItems, setChatItems] = useState<ChatItem[]>([{ type: 'system', text: 'Session opened.' }]);
   const [journals, setJournals] = useState<Record<string, string>>({});
-  const [pickedSystem, setPickedSystem] = useState('D&D 5e');
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [newGameName, setNewGameName] = useState('');
-  const [newGameDesc, setNewGameDesc] = useState('');
   const [toastMsg, setToastMsg] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
   const [compSearch, setCompSearch] = useState('');
@@ -113,7 +108,6 @@ export default function HearthboardPage() {
   const journalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatLogRef = useRef<HTMLDivElement>(null);
   const currentSceneIdRef = useRef(currentSceneId);
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
@@ -166,8 +160,7 @@ export default function HearthboardPage() {
     toastTimerRef.current = setTimeout(() => setToastVisible(false), 2200);
   }, []);
 
-  const openGame = (id: string) => {
-    setCurrentGameId(id);
+  const openGame = () => {
     setView('game');
     setActivePane('chat');
     setSelectedTokenId(null);
@@ -175,25 +168,6 @@ export default function HearthboardPage() {
 
   const backToDashboard = () => {
     setView('dashboard');
-    setCurrentGameId(null);
-  };
-
-  const openCreateModal = () => {
-    setNewGameName('');
-    setNewGameDesc('');
-    setPickedSystem('D&D 5e');
-    setCreateModalOpen(true);
-    setTimeout(() => nameInputRef.current?.focus(), 50);
-  };
-
-  const createGame = () => {
-    const name = newGameName.trim();
-    if (!name) { nameInputRef.current?.focus(); return; }
-    const g: Game = { id: 'g' + Date.now(), name, system: pickedSystem, description: newGameDesc.trim(), art: artForSystem(pickedSystem), lastPlayed: 'just now' };
-    setGames(prev => [g, ...prev]);
-    setCreateModalOpen(false);
-    showToast('Table created — welcome, GM');
-    openGame(g.id);
   };
 
   const addToken = (t: { label: string; color: string; x: number; y: number; hp: number; maxHp: number; fullName?: string }) => {
@@ -303,15 +277,14 @@ export default function HearthboardPage() {
   };
 
   const saveJournal = (value: string) => {
-    if (!currentGameId) return;
-    setJournals(prev => ({ ...prev, [currentGameId]: value }));
+    setJournals(prev => ({ ...prev, [ECHOES_OF_DARKNESS.id]: value }));
     setJournalSaved('Saved just now');
     if (journalTimerRef.current) clearTimeout(journalTimerRef.current);
     journalTimerRef.current = setTimeout(() => setJournalSaved('Autosaves as you type'), 1500);
   };
 
   // ── Derived ──────────────────────────────────────────────────────────
-  const currentGame = games.find(g => g.id === currentGameId) ?? null;
+  const currentGame = ECHOES_OF_DARKNESS;
   const currentTokens = tokensByScene[currentSceneId] ?? [];
   const currentScene = SCENES.find(s => s.id === currentSceneId)!;
   const selectedToken = currentTokens.find(t => t.id === selectedTokenId) ?? null;
@@ -347,112 +320,44 @@ export default function HearthboardPage() {
             )}
             <span style={{ fontSize: 13, color: 'var(--ink-text-2)' }}>{session?.user?.name}</span>
             <button className="btn btn-ghost btn-sm" onClick={() => signOut({ callbackUrl: '/login' })}>Sign out</button>
-            <button className="btn btn-primary" onClick={openCreateModal}>＋ Create Game</button>
           </div>
         </div>
 
         <div className="dash-body">
           <div className="dash-hero">
-            <span className="eyebrow">Session Zero</span>
-            <h1>Your tables, ready when you are.</h1>
-            <p>Jump back into a running campaign, or set a new one on the map.</p>
+            <span className="eyebrow">Echoes of Darkness · Call of Cthulhu</span>
+            <h1>The excavation awaits.</h1>
+            <p>Seven investigators. A 17-year dig. Something ancient below.</p>
           </div>
 
           <div className="stat-row">
-            <div className="stat-card"><div className="stat-num">{games.length}</div><div className="stat-label">Active campaigns</div></div>
-            <div className="stat-card"><div className="stat-num">14</div><div className="stat-label">Sessions logged</div></div>
-            <div className="stat-card"><div className="stat-num">{rollCount}</div><div className="stat-label">Dice rolled all-time</div></div>
+            <div className="stat-card"><div className="stat-num">7</div><div className="stat-label">Investigators</div></div>
+            <div className="stat-card"><div className="stat-num">3</div><div className="stat-label">Active scenes</div></div>
+            <div className="stat-card"><div className="stat-num">{rollCount}</div><div className="stat-label">Dice rolled</div></div>
           </div>
 
-          <div className="section-label">My Games</div>
+          <div className="section-label">Campaign</div>
           <div className="game-grid">
-            {games.length === 0 ? (
-              <div className="empty-slate" style={{ gridColumn: '1 / -1' }}>
-                <h3>No games yet</h3>
-                <p>Create your first table to get the party together.</p>
-                <button className="btn btn-primary" onClick={openCreateModal}>＋ Create Game</button>
+            <div className="game-card" onClick={openGame}>
+              <div className={`game-card-art ${ECHOES_OF_DARKNESS.art}`}><span className="sys-tag">{ECHOES_OF_DARKNESS.system}</span></div>
+              <div className="game-card-body">
+                <h3>{ECHOES_OF_DARKNESS.name}</h3>
+                <p>{ECHOES_OF_DARKNESS.description}</p>
+                <div className="game-card-meta"><span>{ECHOES_OF_DARKNESS.lastPlayed}</span><span>Enter →</span></div>
               </div>
-            ) : games.map(g => (
-              <div key={g.id} className="game-card" onClick={() => openGame(g.id)}>
-                <div className={`game-card-art ${g.art}`}><span className="sys-tag">{g.system}</span></div>
-                <div className="game-card-body">
-                  <h3>{g.name}</h3>
-                  <p>{g.description || 'No description yet.'}</p>
-                  <div className="game-card-meta"><span>Last played {g.lastPlayed}</span><span>Enter →</span></div>
-                </div>
-              </div>
-            ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ============ CREATE GAME MODAL ============ */}
-      <div
-        className={`modal-veil${createModalOpen ? ' active' : ''}`}
-        onClick={e => { if (e.target === e.currentTarget) setCreateModalOpen(false); }}
-      >
-        <div className="modal">
-          <div className="modal-head">
-            <h2>Set a new table</h2>
-            <p>Give the campaign a name and pick the rules you&apos;re playing under.</p>
-          </div>
-          <div className="modal-body">
-            <div className="field">
-              <label htmlFor="ng-name">Game name</label>
-              <input
-                ref={nameInputRef}
-                type="text"
-                id="ng-name"
-                placeholder="e.g. The Sunken Reliquary"
-                maxLength={60}
-                value={newGameName}
-                onChange={e => setNewGameName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') createGame(); }}
-              />
-            </div>
-            <div className="field">
-              <label>System</label>
-              <div className="system-pick">
-                {[
-                  { label: 'D&D 5th Edition', value: 'D&D 5e' },
-                  { label: 'Pathfinder 2e', value: 'Pathfinder 2e' },
-                  { label: 'Call of Cthulhu', value: 'Call of Cthulhu' },
-                  { label: 'Custom / Homebrew', value: 'Custom' },
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    className={`system-opt${pickedSystem === opt.value ? ' selected' : ''}`}
-                    onClick={() => setPickedSystem(opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="field">
-              <label htmlFor="ng-desc">
-                Description{' '}
-                <span style={{ color: 'var(--ink-text-2)', fontWeight: 400 }}>(optional)</span>
-              </label>
-              <textarea
-                id="ng-desc"
-                placeholder="What's the pitch for this campaign?"
-                value={newGameDesc}
-                onChange={e => setNewGameDesc(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="modal-foot">
-            <button className="btn btn-ghost" onClick={() => setCreateModalOpen(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={createGame}>Create game</button>
-          </div>
-        </div>
+      {/* (create game modal removed — single hardcoded campaign) */}
+      <div style={{ display: 'none' }}>
       </div>
 
       {/* ============ GAME / VTT VIEW ============ */}
       <div className={`view${view === 'game' ? ' active' : ''}`} id="view-game">
         <div className="game-topbar">
-          <button className="btn btn-ghost btn-sm" onClick={backToDashboard}>← Games</button>
+          <button className="btn btn-ghost btn-sm" onClick={backToDashboard}>← Dashboard</button>
           <span className="gt-title">{currentGame?.name ?? '—'}</span>
           <span className="gt-sys">{currentGame?.system ?? '—'}</span>
           <div className="scene-switch">
@@ -774,7 +679,7 @@ export default function HearthboardPage() {
               <div className="journal-pane">
                 <textarea
                   placeholder="Session notes, secrets, clues the party hasn't found yet…"
-                  value={currentGameId ? (journals[currentGameId] ?? '') : ''}
+                  value={journals[ECHOES_OF_DARKNESS.id] ?? ''}
                   onChange={e => saveJournal(e.target.value)}
                 />
                 <div className="journal-saved">{journalSaved}</div>
