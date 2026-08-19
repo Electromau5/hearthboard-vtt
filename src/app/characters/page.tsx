@@ -5,9 +5,20 @@ import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { CHARACTERS } from "@/lib/characters";
 import type { Character } from "@/lib/characters";
+import { useEffect, useState } from "react";
 
 export default function CharactersPage() {
   const { data: session } = useSession();
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetch("/api/characters/assignments")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then(setAssignments);
+  }, []);
+
+  const myId = session?.user?.id ?? "";
+  const mySlug = Object.entries(assignments).find(([, uid]) => uid === myId)?.[0] ?? null;
 
   return (
     <div style={page}>
@@ -39,30 +50,48 @@ export default function CharactersPage() {
           <span style={countBadge}>{CHARACTERS.length} investigators</span>
         </div>
 
+        {mySlug && (
+          <div style={myCharBanner}>
+            Your investigator: <strong style={{ color: "var(--brass)" }}>
+              {CHARACTERS.find(c => c.slug === mySlug)?.name}
+            </strong>
+          </div>
+        )}
+
         <div style={grid}>
-          {CHARACTERS.map((char) => (
-            <CharacterCard key={char.slug} char={char} />
-          ))}
+          {CHARACTERS.map((char) => {
+            const assignedTo = assignments[char.slug];
+            const status: "mine" | "available" | "taken" =
+              assignedTo === myId ? "mine" : assignedTo ? "taken" : "available";
+            return <CharacterCard key={char.slug} char={char} status={status} />;
+          })}
         </div>
       </div>
     </div>
   );
 }
 
-function CharacterCard({ char }: { char: Character }) {
+const STATUS_BADGE: Record<"mine" | "available" | "taken", React.CSSProperties> = {
+  mine:      { background: "rgba(201,148,79,0.15)", border: "1px solid var(--brass-dim)", color: "var(--brass)" },
+  available: { background: "rgba(79,155,146,0.12)", border: "1px solid var(--arcane-dim)", color: "var(--arcane)" },
+  taken:     { background: "rgba(177,72,63,0.12)",  border: "1px solid #7a3030",           color: "var(--blood)" },
+};
+const STATUS_LABEL = { mine: "★ Your Character", available: "Available", taken: "Claimed" };
+
+function CharacterCard({ char, status }: { char: Character; status: "mine" | "available" | "taken" }) {
   const sanPct = Math.round((char.vitals.sanity / char.vitals.maxSanity) * 100);
   const hpPct = 100; // full HP at start
 
   return (
     <Link href={`/characters/${char.slug}`} style={{ textDecoration: "none" }}>
-      <div style={card} className="char-card">
+      <div style={{ ...card, opacity: status === "taken" ? 0.65 : 1 }} className="char-card">
         <div style={cardHeader}>
           <div style={cardInitial}>{char.name.charAt(0)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={cardName}>{char.name}</div>
             <div style={cardClass}>{char.className}</div>
           </div>
-          <div style={ageBadge}>Age {char.age}</div>
+          <div style={{ ...statusBadge, ...STATUS_BADGE[status] }}>{STATUS_LABEL[status]}</div>
         </div>
 
         <div style={cardCover}>{char.cover}</div>
@@ -252,6 +281,23 @@ const ageBadge: React.CSSProperties = {
   border: "1px solid var(--line)",
   color: "var(--ink-text-2)",
   flexShrink: 0,
+};
+const statusBadge: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  padding: "2px 8px",
+  borderRadius: 20,
+  flexShrink: 0,
+  whiteSpace: "nowrap",
+};
+const myCharBanner: React.CSSProperties = {
+  marginBottom: 24,
+  padding: "10px 16px",
+  background: "rgba(201,148,79,0.08)",
+  border: "1px solid var(--brass-dim)",
+  borderRadius: "var(--r-md)",
+  fontSize: 13,
+  color: "var(--ink-text)",
 };
 const cardCover: React.CSSProperties = {
   fontSize: 12,

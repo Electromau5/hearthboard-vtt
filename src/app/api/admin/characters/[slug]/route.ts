@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getCharacter } from "@/lib/characters";
 import type { Character } from "@/lib/characters";
 import { readJSON, writeJSON } from "@/lib/blob-storage";
+import { getAssignments } from "@/app/api/characters/assignments/route";
 
 function blobPath(slug: string) {
   return `characters/${slug}.json`;
@@ -43,10 +44,17 @@ export async function PATCH(
 ) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { slug } = await params;
   const base = getCharacter(slug);
+
+  const isAdmin = session.user.role === "admin";
+  const assignments = await getAssignments();
+  const isAssignedPlayer = assignments[slug] === session.user.id;
+
+  if (!isAdmin && !isAssignedPlayer) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (!base) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json() as Partial<Character>;

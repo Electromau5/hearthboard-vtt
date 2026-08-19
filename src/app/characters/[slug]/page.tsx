@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { getCharacter } from "@/lib/characters";
 import type { Character, Ability } from "@/lib/characters";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 export default function CharacterSheetPage() {
   const params = useParams();
@@ -14,14 +14,49 @@ export default function CharacterSheetPage() {
   const slug = typeof params.slug === "string" ? params.slug : "";
   const base = getCharacter(slug);
   const [char, setChar] = useState<Character | null>(base ?? null);
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const [choosing, setChoosing] = useState(false);
+  const [toast, setToast] = useState("");
   const isAdmin = session?.user?.role === "admin";
+  const myId = session?.user?.id ?? "";
+
+  const assignedTo = assignments[slug];
+  const isMyCharacter = assignedTo === myId;
+  const isTaken = !!assignedTo && !isMyCharacter;
+  const isAvailable = !assignedTo;
+  const iAlreadyHaveOne = Object.values(assignments).includes(myId) && !isMyCharacter;
+
+  const notify = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  }, []);
 
   useEffect(() => {
     if (!base) { router.replace("/characters"); return; }
     fetch(`/api/admin/characters/${slug}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data) setChar(data); });
+    fetch("/api/characters/assignments")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then(setAssignments);
   }, [slug, base, router]);
+
+  const handleChoose = async () => {
+    setChoosing(true);
+    const res = await fetch("/api/characters/assignments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setAssignments((prev) => ({ ...prev, [slug]: myId }));
+      notify(`${char?.name} is now your investigator.`);
+    } else {
+      notify(data.error ?? "Could not claim character.");
+    }
+    setChoosing(false);
+  };
 
   if (!char) return null;
 
@@ -32,6 +67,9 @@ export default function CharacterSheetPage() {
 
   return (
     <div style={page}>
+      {toast && (
+        <div style={toastStyle}>{toast}</div>
+      )}
       {/* Topbar */}
       <div style={topbar}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -44,9 +82,17 @@ export default function CharacterSheetPage() {
           <span style={classPill}>{char.className}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {isAdmin && (
+          {isAdmin ? (
             <Link href={`/admin/characters/${slug}/edit`} className="btn btn-sm btn-primary">Edit Sheet</Link>
-          )}
+          ) : isMyCharacter ? (
+            <Link href={`/characters/${slug}/edit`} className="btn btn-sm btn-primary">Edit Character</Link>
+          ) : isTaken ? (
+            <span style={takenBadge}>Claimed</span>
+          ) : isAvailable && !iAlreadyHaveOne ? (
+            <button className="btn btn-sm btn-primary" onClick={handleChoose} disabled={choosing}>
+              {choosing ? "Claiming…" : "Choose Character"}
+            </button>
+          ) : null}
           <span style={{ fontSize: 13, color: "var(--ink-text-2)" }}>{session?.user?.name}</span>
           <button className="btn btn-ghost btn-sm" onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
         </div>
@@ -605,4 +651,27 @@ const equipDot: React.CSSProperties = {
   color: "var(--brass)",
   fontSize: 8,
   flexShrink: 0,
+};
+const takenBadge: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  padding: "4px 12px",
+  borderRadius: 20,
+  border: "1px solid #7a3030",
+  color: "var(--blood)",
+  background: "rgba(177,72,63,0.1)",
+};
+const toastStyle: React.CSSProperties = {
+  position: "fixed",
+  bottom: 24,
+  left: "50%",
+  transform: "translateX(-50%)",
+  background: "var(--surface-2)",
+  border: "1px solid var(--brass-dim)",
+  color: "var(--parchment)",
+  padding: "10px 20px",
+  borderRadius: "var(--r-md)",
+  fontSize: 13,
+  zIndex: 999,
+  boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
 };
