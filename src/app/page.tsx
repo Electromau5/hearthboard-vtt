@@ -97,6 +97,8 @@ export default function HearthboardPage() {
   const [compSearch, setCompSearch] = useState('');
   const [journalSaved, setJournalSaved] = useState('Autosaves as you type');
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [musicPlaying, setMusicPlaying] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(0.4);
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string } | { kind: 'compendium'; idx: number } | null>(null);
@@ -109,8 +111,21 @@ export default function HearthboardPage() {
   const chatLogRef = useRef<HTMLDivElement>(null);
   const currentSceneIdRef = useRef(currentSceneId);
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
+
+  // Sync audio with music controls
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = musicVolume;
+    if (musicPlaying) {
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [musicPlaying, musicVolume]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -692,6 +707,90 @@ export default function HearthboardPage() {
 
       {/* Toast */}
       <div className={`toast${toastVisible ? ' show' : ''}`}>{toastMsg}</div>
+
+      {/* Music Player — Admin only */}
+      {isAdmin && (
+        <>
+          <audio ref={audioRef} src="/soundtrack-1.mp3" loop preload="metadata" />
+          <div style={musicBarStyle}>
+            <div style={musicInfo}>
+              <span style={musicNote}>{musicPlaying ? '♫' : '♩'}</span>
+              <div>
+                <div style={musicTitle}>Echoes of Darkness</div>
+                <div style={musicSub}>Campaign Soundtrack</div>
+              </div>
+            </div>
+            <button
+              className="btn btn-sm"
+              style={musicPlaying ? playBtnActive : playBtn}
+              onClick={() => setMusicPlaying(p => !p)}
+              title={musicPlaying ? 'Pause music' : 'Play music'}
+            >
+              {musicPlaying ? '⏸ Pause' : '▶ Play'}
+            </button>
+            <div style={volRow}>
+              <span style={volIcon}>🔈</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={musicVolume}
+                onChange={e => setMusicVolume(Number(e.target.value))}
+                style={volSlider}
+                title={`Volume: ${Math.round(musicVolume * 100)}%`}
+              />
+              <span style={volIcon}>🔊</span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
+// ── Music player styles ───────────────────────────────────────────────
+const musicBarStyle: React.CSSProperties = {
+  position: 'fixed',
+  bottom: 20,
+  right: 24,
+  zIndex: 200,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 14,
+  padding: '10px 18px',
+  background: 'rgba(26,31,40,0.96)',
+  border: '1px solid var(--brass-dim)',
+  borderRadius: 'var(--r-lg)',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,148,79,0.1)',
+  backdropFilter: 'blur(10px)',
+};
+const musicInfo: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+};
+const musicNote: React.CSSProperties = {
+  fontSize: 22, color: 'var(--brass)', lineHeight: 1,
+};
+const musicTitle: React.CSSProperties = {
+  fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: 'var(--parchment)', lineHeight: 1.2,
+};
+const musicSub: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brass)', letterSpacing: '0.8px', marginTop: 2,
+};
+const playBtn: React.CSSProperties = {
+  background: 'var(--surface-2)', borderColor: 'var(--line)', color: 'var(--parchment)',
+  fontFamily: 'var(--font-mono)', fontSize: 12, minWidth: 76,
+};
+const playBtnActive: React.CSSProperties = {
+  background: 'rgba(201,148,79,0.15)', borderColor: 'var(--brass-dim)', color: 'var(--brass)',
+  fontFamily: 'var(--font-mono)', fontSize: 12, minWidth: 76,
+};
+const volRow: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6,
+};
+const volIcon: React.CSSProperties = {
+  fontSize: 13, opacity: 0.7,
+};
+const volSlider: React.CSSProperties = {
+  width: 90, accentColor: 'var(--brass)', cursor: 'pointer',
+};
