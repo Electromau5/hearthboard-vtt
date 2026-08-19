@@ -83,19 +83,29 @@ const BRIEFINGS: Briefing[] = [
       {
         audio: '/butler-intro-2.mp3',
         paragraphs: [
-          '[Section 2 — replace with transcript for butler-intro-2.mp3]',
+          'We operate under the code name Project Deep Bedrock. You will find that my benefactors\' resources are extensive, but they are not infinite, nor are they without rigorous control.',
+          'To facilitate your progress, we have established a sophisticated logistical framework. Depending on the complexity of your requirements, we can provide anything from standard heavy excavation equipment to sensitive, black budget military hardware.',
+          'However, understand this. Every item requisitioned increases the noise this mission creates. We monitor this exposure with clinical precision.',
+          'Should your activities draw the attention of federal task forces or local authorities, do not expect bail or legal intervention. We will trigger our standard severance protocol — liquidating all assets, dissolving your contacts and removing any trace of your existence.',
+          'You are on your own the moment you become a liability.',
         ],
       },
       {
         audio: '/butler-intro-3.mp3',
         paragraphs: [
-          '[Section 3 — replace with transcript for butler-intro-3.mp3]',
+          'For your research, you will be granted access to the Black Archive, located within a decommissioned municipal cold storage warehouse in Boston Harbour.',
+          'It contains a collection of artefacts curated over decades. Use them to decode the pre-human glyphs and structural enigmas you will undoubtedly face.',
+          'I must warn you, these items are not merely academic curiosities. They exact a toll — psychological, physiological and perhaps existential.',
+          'We provide the tools, but we do not guarantee your sanity in their handling.',
         ],
       },
       {
         audio: '/butler-intro-4.mp3',
         paragraphs: [
-          '[Section 4 — replace with transcript for butler-intro-4.mp3]',
+          'You have one year. The astronomical alignments are shifting and our window of opportunity is narrow. We have provided you with the necessary data to begin your sifting process in Boston.',
+          'Do not look for us. Do not seek to identify my benefactor. Focus on the tomb and ensure that when it is unsealed, the primary objective is delivered to our couriers without incident.',
+          'Everything else you find within — the relics, the gold, the artefacts — is yours to claim. That is the agreement.',
+          'Good day. We will be in touch when the first drop is ready.',
         ],
       },
     ],
