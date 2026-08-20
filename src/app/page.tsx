@@ -215,7 +215,10 @@ export default function HearthboardPage() {
   const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
-  const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number } | null>(null);
+  const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number; data?: Record<string, unknown> } | null>(null);
+  // Track triggeredAt values we've already displayed so one-shot effects (visions)
+  // don't replay on every poll while the blob entry is still live.
+  const shownEffectsRef = useRef<Set<number>>(new Set());
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string } | { kind: 'compendium'; idx: number } | null>(null);
@@ -336,6 +339,7 @@ export default function HearthboardPage() {
         const res = await fetch('/api/effects');
         if (!res.ok) return;
         const data = await res.json();
+        if (data && shownEffectsRef.current.has(data.triggeredAt)) return;
         setScreenEffect(data);
       } catch {}
     };
@@ -505,7 +509,15 @@ export default function HearthboardPage() {
     <div className="app">
 
       {/* Screen effect overlay (triggered by admin) */}
-      {screenEffect && <EffectLayer effect={screenEffect} onExpire={() => setScreenEffect(null)} />}
+      {screenEffect && (
+        <EffectLayer
+          effect={screenEffect}
+          onExpire={() => {
+            shownEffectsRef.current.add(screenEffect.triggeredAt);
+            setScreenEffect(null);
+          }}
+        />
+      )}
 
       {/* ============ DASHBOARD ============ */}
       <div className={`view${view === 'dashboard' ? ' active' : ''}`} id="view-dashboard">
