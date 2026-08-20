@@ -8,6 +8,7 @@ declare module "next-auth" {
       name: string;
       username: string;
       role: "admin" | "user";
+      assignedSlug?: string;
     };
   }
   interface User {
@@ -21,5 +22,6 @@ declare module "next-auth/jwt" {
     id: string;
     role: "admin" | "user";
     username: string;
+    assignedSlug?: string;
   }
 }

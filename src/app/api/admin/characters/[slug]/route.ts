@@ -49,8 +49,10 @@ export async function PATCH(
   const base = getCharacter(slug);
 
   const isAdmin = session.user.role === "admin";
-  const assignments = await getAssignments();
-  const isAssignedPlayer = assignments[slug] === session.user.id;
+  // Check JWT-stored assignment first (reliable across serverless invocations),
+  // then fall back to the file-based store as a secondary check.
+  const isAssignedInToken = session.user.assignedSlug === slug;
+  const isAssignedPlayer = isAssignedInToken || (await getAssignments())[slug] === session.user.id;
 
   if (!isAdmin && !isAssignedPlayer) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

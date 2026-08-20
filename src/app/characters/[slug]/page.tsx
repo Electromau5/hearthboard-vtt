@@ -10,7 +10,7 @@ import { useEffect, useState, useCallback } from "react";
 export default function CharacterSheetPage() {
   const params = useParams();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const slug = typeof params.slug === "string" ? params.slug : "";
   const base = getCharacter(slug);
   const [char, setChar] = useState<Character | null>(base ?? null);
@@ -54,6 +54,8 @@ export default function CharacterSheetPage() {
       if (res.ok) {
         setAssignments((prev) => ({ ...prev, [slug]: myId }));
         notify(`${char?.name} is now your investigator.`);
+        // Bake the assignment into the signed JWT so PATCH checks never need the filesystem
+        await updateSession({ assignedSlug: slug });
       } else {
         notify(data.error ?? "Could not claim character.");
       }
