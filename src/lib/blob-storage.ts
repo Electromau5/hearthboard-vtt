@@ -2,7 +2,10 @@ import { put, list, del } from "@vercel/blob";
 import fs from "fs";
 import path from "path";
 
-const LOCAL_DATA = path.join(process.cwd(), "data");
+// On Vercel without a blob token, fall back to /tmp (the only writable path)
+const LOCAL_DATA = process.env.VERCEL
+  ? "/tmp/data"
+  : path.join(process.cwd(), "data");
 const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
 
 // ── JSON helpers ─────────────────────────────────────────────────────

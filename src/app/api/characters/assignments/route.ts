@@ -20,31 +20,37 @@ export async function GET() {
 
 // POST — authenticated user claims a character for themselves
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await auth();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { slug } = await req.json();
-  if (!slug) return NextResponse.json({ error: "slug required" }, { status: 400 });
-  if (!getCharacter(slug)) return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    const body = await req.json().catch(() => ({}));
+    const { slug } = body as { slug?: string };
+    if (!slug) return NextResponse.json({ error: "slug required" }, { status: 400 });
+    if (!getCharacter(slug)) return NextResponse.json({ error: "Character not found" }, { status: 404 });
 
-  const assignments = await getAssignments();
+    const assignments = await getAssignments();
 
-  if (assignments[slug]) {
-    return NextResponse.json({ error: "This character has already been claimed." }, { status: 409 });
+    if (assignments[slug]) {
+      return NextResponse.json({ error: "This character has already been claimed." }, { status: 409 });
+    }
+
+    const userId = session.user.id;
+    const alreadyOwns = Object.values(assignments).includes(userId);
+    if (alreadyOwns) {
+      return NextResponse.json(
+        { error: "You have already chosen a character for this campaign." },
+        { status: 409 }
+      );
+    }
+
+    assignments[slug] = userId;
+    await writeJSON(BLOB_PATH, assignments);
+    return NextResponse.json({ ok: true, slug, userId });
+  } catch (err) {
+    console.error("[assignments POST]", err);
+    return NextResponse.json({ error: "Internal server error. Please try again." }, { status: 500 });
   }
-
-  const userId = session.user.id;
-  const alreadyOwns = Object.values(assignments).includes(userId);
-  if (alreadyOwns) {
-    return NextResponse.json(
-      { error: "You have already chosen a character for this campaign." },
-      { status: 409 }
-    );
-  }
-
-  assignments[slug] = userId;
-  await writeJSON(BLOB_PATH, assignments);
-  return NextResponse.json({ ok: true, slug, userId });
 }
 
 // DELETE — admin unassigns a character

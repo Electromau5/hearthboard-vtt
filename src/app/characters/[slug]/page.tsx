@@ -43,19 +43,25 @@ export default function CharacterSheetPage() {
 
   const handleChoose = async () => {
     setChoosing(true);
-    const res = await fetch("/api/characters/assignments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setAssignments((prev) => ({ ...prev, [slug]: myId }));
-      notify(`${char?.name} is now your investigator.`);
-    } else {
-      notify(data.error ?? "Could not claim character.");
+    try {
+      const res = await fetch("/api/characters/assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      });
+      let data: { error?: string } = {};
+      try { data = await res.json(); } catch {}
+      if (res.ok) {
+        setAssignments((prev) => ({ ...prev, [slug]: myId }));
+        notify(`${char?.name} is now your investigator.`);
+      } else {
+        notify(data.error ?? "Could not claim character.");
+      }
+    } catch {
+      notify("Network error. Please try again.");
+    } finally {
+      setChoosing(false);
     }
-    setChoosing(false);
   };
 
   if (!char) return null;
