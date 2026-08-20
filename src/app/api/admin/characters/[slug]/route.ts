@@ -78,6 +78,14 @@ export async function PATCH(
   if (body.hooks !== undefined) merged.hooks = body.hooks;
   if (body.equipment !== undefined) merged.equipment = body.equipment;
 
-  await writeJSON(blobPath(slug), merged);
+  try {
+    await writeJSON(blobPath(slug), merged);
+  } catch (err) {
+    console.error("[character PATCH] writeJSON failed:", err);
+    return NextResponse.json(
+      { error: "Could not persist changes — storage unavailable. Configure BLOB_READ_WRITE_TOKEN on Vercel." },
+      { status: 503 }
+    );
+  }
   return NextResponse.json(mergeCharacter(base, merged));
 }
