@@ -333,7 +333,7 @@ export default function HearthboardPage() {
     if (session?.user?.role === 'admin') return;
     const poll = async () => {
       try {
-        const res = await fetch('/api/effects/current');
+        const res = await fetch('/api/effects');
         if (!res.ok) return;
         const data = await res.json();
         setScreenEffect(data);
