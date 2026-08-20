@@ -14,8 +14,8 @@ export function LoadingOverlay() {
         src="/loading.gif"
         alt="Loading…"
         style={{
-          width: 400,
-          height: 300,
+          width: 200,
+          height: 150,
           filter: 'invert(1)',
           opacity: 0.9,
         }}
