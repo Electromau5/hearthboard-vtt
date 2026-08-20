@@ -10,6 +10,12 @@ const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
 
 // ── JSON helpers ─────────────────────────────────────────────────────
 
+// Strip file extension to use as list() prefix so it matches addRandomSuffix filenames.
+// e.g. "effects/current.json" -> "effects/current" matches "effects/current-abc123.json"
+function blobPrefix(blobPath: string): string {
+  return blobPath.replace(/\.[^./]+$/, "");
+}
+
 export async function readJSON<T>(blobPath: string, fallback: T): Promise<T> {
   if (!useBlob) {
     const localPath = path.join(LOCAL_DATA, blobPath);
@@ -21,7 +27,7 @@ export async function readJSON<T>(blobPath: string, fallback: T): Promise<T> {
     return fallback;
   }
   try {
-    const { blobs } = await list({ prefix: blobPath, limit: 1 });
+    const { blobs } = await list({ prefix: blobPrefix(blobPath), limit: 1 });
     if (blobs.length === 0) return fallback;
     const res = await fetch(blobs[0].url, { cache: "no-store" });
     if (!res.ok) return fallback;
@@ -38,13 +44,16 @@ export async function writeJSON(blobPath: string, data: unknown): Promise<void> 
     fs.writeFileSync(localPath, JSON.stringify(data, null, 2));
     return;
   }
-  // Delete any existing blob at this path before writing the new one
-  const { blobs } = await list({ prefix: blobPath, limit: 5 });
+  // Delete any existing blobs at this path before writing so reads always
+  // get the latest version via list(). addRandomSuffix:true gives each write
+  // a unique CDN URL, preventing stale CDN cache from masking updates.
+  const { blobs } = await list({ prefix: blobPrefix(blobPath), limit: 5 });
   if (blobs.length > 0) await del(blobs.map((b) => b.url));
   await put(blobPath, JSON.stringify(data), {
     access: "public",
     contentType: "application/json",
-    addRandomSuffix: false,
+    addRandomSuffix: true,
+    cacheControlMaxAge: 0,
   });
 }
 
