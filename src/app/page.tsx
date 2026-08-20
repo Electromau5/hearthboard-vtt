@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import { DiceRollerPane } from './components/DiceRollerPane';
 
 // ── Constants ────────────────────────────────────────────────────────
 const TOKEN_COLORS = ['#c9944f', '#4f9b92', '#b1483f', '#8a72c9', '#5f8fc9', '#c9b04f'];
@@ -818,6 +819,7 @@ export default function HearthboardPage() {
                 { id: 'compendium', label: 'Compendium' },
                 { id: 'journal', label: 'Journal' },
                 { id: 'mission', label: 'Mission' },
+                { id: 'roll', label: 'Roll' },
               ].map(({ id, label }) => (
                 <button
                   key={id}
@@ -999,6 +1001,16 @@ export default function HearthboardPage() {
                 />
                 <div className="journal-saved">{journalSaved}</div>
               </div>
+            </div>
+
+            {/* Roll pane */}
+            <div className={`rp-pane${activePane === 'roll' ? ' active' : ''}`} style={{ overflow: 'hidden' }}>
+              {activePane === 'roll' && (
+                <DiceRollerPane
+                  pushRollToChat={pushRollToChat}
+                  who={session?.user?.name ?? 'You'}
+                />
+              )}
             </div>
 
             {/* Mission Details pane */}
