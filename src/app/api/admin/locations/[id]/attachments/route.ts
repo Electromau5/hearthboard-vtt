@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON, writeJSON, uploadFile, deleteFile } from "@/lib/blob-storage";
-import type { Location, Attachment, AttachmentType } from "@/lib/vtt-types";
+import { writeJSON, uploadFile, deleteFile } from "@/lib/blob-storage";
+import type { Attachment, AttachmentType } from "@/lib/vtt-types";
+import { CAMPAIGN_LOCATIONS } from "@/lib/campaign-defaults";
+import { getStoredLocations } from "@/app/api/admin/locations/route";
 import { randomUUID } from "crypto";
 
 const BLOB_PATH = "locations/index.json";
-
-async function getLocations(): Promise<Location[]> {
-  return readJSON<Location[]>(BLOB_PATH, []);
-}
 
 export async function POST(
   req: NextRequest,
@@ -19,9 +17,14 @@ export async function POST(
   if (session.user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
-  const locations = await getLocations();
-  const idx = locations.findIndex((l) => l.id === id);
-  if (idx === -1) return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  const locations = await getStoredLocations();
+  let idx = locations.findIndex((l) => l.id === id);
+  if (idx === -1) {
+    const def = CAMPAIGN_LOCATIONS.find((l) => l.id === id);
+    if (!def) return NextResponse.json({ error: "Location not found" }, { status: 404 });
+    locations.push({ ...def });
+    idx = locations.length - 1;
+  }
 
   const form = await req.formData();
   const file = form.get("file") as File | null;
@@ -54,7 +57,7 @@ export async function DELETE(
   const { attachmentId } = await req.json();
   if (!attachmentId) return NextResponse.json({ error: "attachmentId required" }, { status: 400 });
 
-  const locations = await getLocations();
+  const locations = await getStoredLocations();
   const idx = locations.findIndex((l) => l.id === id);
   if (idx === -1) return NextResponse.json({ error: "Location not found" }, { status: 404 });
 

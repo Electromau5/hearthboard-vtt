@@ -18,6 +18,9 @@ export default function AdminLocationsPage() {
   const [attName, setAttName] = useState("");
   const [attType, setAttType] = useState<AttachmentType>("photograph");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [primaryImgLocId, setPrimaryImgLocId] = useState<string | null>(null);
+  const [uploadingPrimary, setUploadingPrimary] = useState<string | null>(null);
+  const primaryImgRef = useRef<HTMLInputElement>(null);
 
   const notify = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2800); };
 
@@ -84,6 +87,36 @@ export default function AdminLocationsPage() {
       notify("Attachment uploaded.");
     } else {
       notify("Upload failed.");
+    }
+  };
+
+  const uploadPrimaryImage = async (locId: string) => {
+    const file = primaryImgRef.current?.files?.[0];
+    if (!file) { notify("Select an image file first."); return; }
+    setUploadingPrimary(locId);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("name", "Primary Image");
+      form.append("type", "photograph");
+      const uploadRes = await fetch(`/api/admin/locations/${locId}/attachments`, { method: "POST", body: form });
+      if (!uploadRes.ok) { notify("Upload failed."); return; }
+      const att = await uploadRes.json();
+      const patchRes = await fetch(`/api/admin/locations/${locId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryImage: att.url }),
+      });
+      if (!patchRes.ok) { notify("Failed to set primary image."); return; }
+      const updated = await patchRes.json();
+      setLocations((prev) => prev.map((l) => l.id === locId
+        ? { ...l, primaryImage: updated.primaryImage, attachments: [...l.attachments, att] }
+        : l));
+      setPrimaryImgLocId(null);
+      if (primaryImgRef.current) primaryImgRef.current.value = "";
+      notify("Primary image updated.");
+    } finally {
+      setUploadingPrimary(null);
     }
   };
 
@@ -187,6 +220,38 @@ export default function AdminLocationsPage() {
                         <button className="btn btn-ghost btn-sm" onClick={() => startEdit(loc)}>Edit</button>
                         <button className="btn btn-ghost btn-sm btn-danger" onClick={() => deleteLocation(loc.id, loc.name)}>Delete</button>
                       </div>
+                    </div>
+
+                    {/* Primary Image */}
+                    <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                        <span style={sectionLabel}>Primary Image</span>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setPrimaryImgLocId(primaryImgLocId === loc.id ? null : loc.id)}>
+                          {primaryImgLocId === loc.id ? "Cancel" : "Change Image"}
+                        </button>
+                      </div>
+                      {loc.primaryImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={loc.primaryImage} alt={loc.name} style={{ width: "100%", maxWidth: 320, height: 160, objectFit: "cover", borderRadius: "var(--r-md)", border: "1px solid var(--line)", display: "block" }} />
+                      ) : (
+                        <div style={{ color: "var(--ink-text-2)", fontSize: 12, fontStyle: "italic" }}>No primary image set.</div>
+                      )}
+                      {primaryImgLocId === loc.id && (
+                        <div style={{ marginTop: 10, background: "var(--surface-3)", borderRadius: "var(--r-md)", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                          <Field label="Image File">
+                            <input ref={primaryImgRef} type="file" accept="image/*" style={{ ...input, padding: "6px 10px" }} />
+                          </Field>
+                          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => uploadPrimaryImage(loc.id)}
+                              disabled={uploadingPrimary === loc.id}
+                            >
+                              {uploadingPrimary === loc.id ? "Uploading…" : "Set as Primary Image"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Attachments */}

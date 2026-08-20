@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON, writeJSON, deleteFile } from "@/lib/blob-storage";
+import { writeJSON, deleteFile } from "@/lib/blob-storage";
 import type { Location } from "@/lib/vtt-types";
+import { CAMPAIGN_LOCATIONS } from "@/lib/campaign-defaults";
+import { getStoredLocations } from "@/app/api/admin/locations/route";
 
 const BLOB_PATH = "locations/index.json";
-
-async function getLocations(): Promise<Location[]> {
-  return readJSON<Location[]>(BLOB_PATH, []);
-}
 
 export async function PATCH(
   req: NextRequest,
@@ -18,16 +16,24 @@ export async function PATCH(
   if (session.user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
-  const body = await req.json() as { name?: string; description?: string };
+  const body = await req.json() as { name?: string; description?: string; primaryImage?: string };
 
-  const locations = await getLocations();
-  const idx = locations.findIndex((l) => l.id === id);
-  if (idx === -1) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const stored = await getStoredLocations();
+  let idx = stored.findIndex((l) => l.id === id);
 
-  if (body.name !== undefined) locations[idx].name = body.name.trim();
-  if (body.description !== undefined) locations[idx].description = body.description;
-  await writeJSON(BLOB_PATH, locations);
-  return NextResponse.json(locations[idx]);
+  if (idx === -1) {
+    // Not in storage yet — seed from campaign defaults so we can apply the patch
+    const def = CAMPAIGN_LOCATIONS.find((l) => l.id === id);
+    if (!def) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    stored.push({ ...def });
+    idx = stored.length - 1;
+  }
+
+  if (body.name !== undefined) stored[idx].name = body.name.trim();
+  if (body.description !== undefined) stored[idx].description = body.description;
+  if (body.primaryImage !== undefined) stored[idx].primaryImage = body.primaryImage;
+  await writeJSON(BLOB_PATH, stored);
+  return NextResponse.json(stored[idx]);
 }
 
 export async function DELETE(
@@ -39,16 +45,21 @@ export async function DELETE(
   if (session.user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
-  const locations = await getLocations();
-  const loc = locations.find((l) => l.id === id);
+
+  // Campaign default locations cannot be deleted
+  if (CAMPAIGN_LOCATIONS.some((l) => l.id === id)) {
+    return NextResponse.json({ error: "Campaign locations cannot be deleted." }, { status: 400 });
+  }
+
+  const stored = await getStoredLocations();
+  const loc = stored.find((l) => l.id === id);
   if (!loc) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Delete all attached files
   for (const att of loc.attachments) {
     await deleteFile(att.url);
   }
 
-  const updated = locations.filter((l) => l.id !== id);
+  const updated = stored.filter((l) => l.id !== id);
   await writeJSON(BLOB_PATH, updated);
   return NextResponse.json({ ok: true });
 }

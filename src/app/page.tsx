@@ -18,9 +18,11 @@ const ECHOES_OF_DARKNESS = {
 };
 
 const SCENES = [
-  { id: 's1', name: 'The Drowned Nave', bg: 'radial-gradient(circle at 30% 20%, #1c3a44, #0b1216 70%)' },
-  { id: 's2', name: 'Blackmoor Ridge', bg: 'radial-gradient(circle at 60% 30%, #1e3b2f, #0c1210 70%)' },
-  { id: 's3', name: 'The Tavern Cellar', bg: 'radial-gradient(circle at 40% 60%, #3a2a1f, #100b08 70%)' },
+  { id: 's1', locationId: 'loc-miskatonic', name: 'Miskatonic University & Orne Library', short: 'Miskatonic', mapX: 47, mapY: 22 },
+  { id: 's2', locationId: 'loc-bellevue',   name: 'Bellevue Psychiatric Isolation Ward',  short: 'Bellevue',   mapX: 14, mapY: 67 },
+  { id: 's3', locationId: 'loc-underworld', name: 'Underworld Abattoir & Speakeasy',      short: 'Abattoir',   mapX: 49, mapY: 52 },
+  { id: 's4', locationId: 'loc-blackarchive', name: 'Black Archives',                     short: 'Black Archives', mapX: 65, mapY: 47 },
+  { id: 's5', locationId: 'loc-docks',      name: 'Federal Quarantine Docks',             short: 'Fed. Docks', mapX: 70, mapY: 18 },
 ];
 
 const COMPENDIUM = [
@@ -196,7 +198,9 @@ export default function HearthboardPage() {
   const [currentSceneId, setCurrentSceneId] = useState('s1');
   const [tool, setToolState] = useState('select');
   const [gridOn, setGridOn] = useState(true);
-  const [tokensByScene, setTokensByScene] = useState<Record<string, Token[]>>({ s1: [], s2: [], s3: [] });
+  const [tokensByScene, setTokensByScene] = useState<Record<string, Token[]>>({ s1: [], s2: [], s3: [], s4: [], s5: [] });
+  const [mapZoomedTo, setMapZoomedTo] = useState<string | null>(null);
+  const [locationImages, setLocationImages] = useState<Record<string, string>>({});
   const [initiative, setInitiative] = useState<InitEntry[]>([]);
   const [currentTurnIdx, setCurrentTurnIdx] = useState(0);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
@@ -250,6 +254,20 @@ export default function HearthboardPage() {
         }
       });
   }, [session]);
+
+  // Fetch location primary images for the map info panel
+  useEffect(() => {
+    fetch('/api/admin/locations', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then((locs: { id: string; primaryImage?: string }[]) => {
+        const imgs: Record<string, string> = {};
+        for (const loc of locs) {
+          if (loc.primaryImage) imgs[loc.id] = loc.primaryImage;
+        }
+        setLocationImages(imgs);
+      })
+      .catch(() => {});
+  }, []);
 
   // Load and play briefing audio when active briefing or section changes
   useEffect(() => {
@@ -488,7 +506,6 @@ export default function HearthboardPage() {
   // ── Derived ──────────────────────────────────────────────────────────
   const currentGame = ECHOES_OF_DARKNESS;
   const currentTokens = tokensByScene[currentSceneId] ?? [];
-  const currentScene = SCENES.find(s => s.id === currentSceneId)!;
   const selectedToken = currentTokens.find(t => t.id === selectedTokenId) ?? null;
   const filteredCompendium = COMPENDIUM.filter(c => {
     const q = compSearch.toLowerCase();
@@ -582,9 +599,13 @@ export default function HearthboardPage() {
               <button
                 key={s.id}
                 className={`scene-chip${s.id === currentSceneId ? ' active' : ''}`}
-                onClick={() => { setCurrentSceneId(s.id); setSelectedTokenId(null); }}
+                onClick={() => {
+                  setCurrentSceneId(s.id);
+                  setMapZoomedTo(prev => prev === s.id ? null : s.id);
+                  setSelectedTokenId(null);
+                }}
               >
-                {s.name}
+                {s.short}
               </button>
             ))}
           </div>
@@ -649,14 +670,68 @@ export default function HearthboardPage() {
             onDrop={handleMapDrop}
             onMouseDown={e => {
               const t = e.target as HTMLElement;
-              if (t.id === 'map-canvas' || t.id === 'map-grid-overlay' || t === mapWrapRef.current) {
+              const isBg = t.id === 'map-canvas' || t.id === 'map-grid-overlay' || t === mapWrapRef.current
+                || t.classList.contains('map-bg-img') || t.classList.contains('map-zoom-inner');
+              if (isBg) {
                 setSelectedTokenId(null);
+                if (mapZoomedTo) setMapZoomedTo(null);
               }
             }}
           >
-            <div className="map-canvas" id="map-canvas" style={{ background: currentScene.bg }} />
+            <div className="map-canvas" id="map-canvas">
+              <div
+                className="map-zoom-inner"
+                style={{
+                  transformOrigin: mapZoomedTo
+                    ? `${SCENES.find(s => s.id === mapZoomedTo)?.mapX ?? 50}% ${SCENES.find(s => s.id === mapZoomedTo)?.mapY ?? 50}%`
+                    : '50% 50%',
+                  transform: mapZoomedTo ? 'scale(2.5)' : 'scale(1)',
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/map-v1.jpeg"
+                  alt="Campaign map"
+                  className="map-bg-img"
+                  draggable={false}
+                />
+                {SCENES.map(s => (
+                  <button
+                    key={s.id}
+                    className={`loc-marker-btn${s.id === currentSceneId ? ' active' : ''}`}
+                    style={{ left: `${s.mapX}%`, top: `${s.mapY}%` }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setCurrentSceneId(s.id);
+                      setMapZoomedTo(prev => prev === s.id ? null : s.id);
+                      setSelectedTokenId(null);
+                    }}
+                    title={s.name}
+                  >
+                    <div className="loc-pin" />
+                    <div className="loc-pin-label">{s.short}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className={`map-grid-overlay${gridOn ? '' : ' hidden'}`} id="map-grid-overlay" />
             <div className="map-vignette" />
+            {mapZoomedTo && (() => {
+              const scene = SCENES.find(s => s.id === mapZoomedTo);
+              const img = scene ? locationImages[scene.locationId] : undefined;
+              return (
+                <div className="loc-info-panel">
+                  <button className="loc-close-btn" onClick={() => setMapZoomedTo(null)}>✕</button>
+                  {scene && <div className="loc-info-name">{scene.name}</div>}
+                  {img ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={img} alt={scene?.name} className="loc-info-img" />
+                  ) : (
+                    <div className="loc-info-placeholder">No image set — upload one in Admin → Locations</div>
+                  )}
+                </div>
+              );
+            })()}
             {currentTokens.length === 0 && (
               <div className="map-empty-hint">Drag a token from the left tray onto the map to begin</div>
             )}
