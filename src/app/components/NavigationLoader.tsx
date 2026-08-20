@@ -22,25 +22,25 @@ export function NavigationLoader() {
     hideTimer.current = setTimeout(() => setVisible(false), wait);
   }, []);
 
-  // Initial mount — hide after one full cycle
+  // Initial mount — only show on the homepage
   useEffect(() => {
+    if (pathname !== '/') {
+      setVisible(false);
+      return;
+    }
     shownAt.current = Date.now();
     scheduleHide();
     return () => clearTimeout(hideTimer.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Intercept internal link clicks — show overlay immediately
+  // Intercept link clicks — only show overlay when navigating to the homepage
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       const anchor = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
       if (!anchor) return;
       const href = anchor.getAttribute('href') ?? '';
-      if (
-        href.startsWith('http') || href.startsWith('//') ||
-        href.startsWith('#') || href.startsWith('mailto') ||
-        anchor.hasAttribute('download')
-      ) return;
+      if (href !== '/') return;
       clearTimeout(hideTimer.current);
       shownAt.current = Date.now();
       setVisible(true);
@@ -49,13 +49,18 @@ export function NavigationLoader() {
     return () => document.removeEventListener('click', onClick, true);
   }, []);
 
-  // Once the pathname settles (page loaded), wait out the remaining cycle time
+  // Once pathname settles on '/', wait out the remaining cycle time; otherwise hide immediately
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    scheduleHide();
+    if (pathname === '/') {
+      scheduleHide();
+    } else {
+      clearTimeout(hideTimer.current);
+      setVisible(false);
+    }
   }, [pathname, scheduleHide]);
 
   if (!visible) return null;
