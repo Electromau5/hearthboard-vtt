@@ -9,6 +9,7 @@ const ACCOUNTS = [
     passwordHash: "$2b$12$BGbkQ4SuB3zwXqgoP46oYuq3RWKeDaGKKDX9/mbJrjfLRW9B9RSVu",
     defaultRole: "admin" as const,
     protected: true,
+    assignedSlug: undefined as string | undefined,
   },
   {
     id: "shay",
@@ -16,6 +17,7 @@ const ACCOUNTS = [
     passwordHash: "$2b$12$BOyGDQFfeJwwjAomCqB4qee7t4oroKWE5lTc8mSwSmdnVknvuuiFW",
     defaultRole: "user" as const,
     protected: false,
+    assignedSlug: "arthur-wright" as string | undefined,
   },
   {
     id: "greg",
@@ -23,6 +25,7 @@ const ACCOUNTS = [
     passwordHash: "$2b$12$yD299ZH9BO2pkIJiwVeLOeHoiza8wTQay6uf2U01zqpTzagJUDWR.",
     defaultRole: "user" as const,
     protected: false,
+    assignedSlug: "dr-alistair-finch" as string | undefined,
   },
   {
     id: "sanch",
@@ -30,8 +33,18 @@ const ACCOUNTS = [
     passwordHash: "$2b$12$fPHVaC91VWNxWdWhHJA6ru3wAMYNgK.fV1DUVg1pUrghkAMSjtzkG",
     defaultRole: "user" as const,
     protected: false,
+    assignedSlug: "thomas-callahan" as string | undefined,
   },
-] as const;
+];
+
+// Returns the hardcoded slug→userId assignment map (always authoritative)
+export function getHardcodedAssignments(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const a of ACCOUNTS) {
+    if (a.assignedSlug) out[a.assignedSlug] = a.id;
+  }
+  return out;
+}
 
 // Vercel serverless runs in a read-only filesystem at /var/task; /tmp is writable.
 const DATA_DIR = process.env.VERCEL
@@ -58,6 +71,7 @@ export type PublicUser = {
   username: string;
   role: "admin" | "user";
   protected: boolean;
+  assignedSlug?: string;
 };
 
 export function getAllUsers(): PublicUser[] {
@@ -67,6 +81,7 @@ export function getAllUsers(): PublicUser[] {
     username: a.username,
     role: overrides[a.id] ?? a.defaultRole,
     protected: a.protected,
+    assignedSlug: a.assignedSlug,
   }));
 }
 
@@ -77,7 +92,7 @@ export function getUserById(id: string): PublicUser | undefined {
 export async function verifyCredentials(
   username: string,
   password: string
-): Promise<{ id: string; name: string; username: string; role: "admin" | "user" } | null> {
+): Promise<{ id: string; name: string; username: string; role: "admin" | "user"; assignedSlug?: string } | null> {
   const account = ACCOUNTS.find(
     (a) => a.username === username.toLowerCase().trim()
   );
@@ -86,7 +101,13 @@ export async function verifyCredentials(
   if (!valid) return null;
   const overrides = getRoleOverrides();
   const role = overrides[account.id] ?? account.defaultRole;
-  return { id: account.id, name: account.username, username: account.username, role };
+  return {
+    id: account.id,
+    name: account.username,
+    username: account.username,
+    role,
+    assignedSlug: account.assignedSlug,
+  };
 }
 
 export function setRole(id: string, role: "admin" | "user"): void {

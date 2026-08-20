@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { readJSON, writeJSON } from "@/lib/blob-storage";
 import { getCharacter } from "@/lib/characters";
+import { getHardcodedAssignments } from "@/lib/users";
 
 export type Assignments = Record<string, string>; // slug → userId
 
 const BLOB_PATH = "assignments.json";
 
 export async function getAssignments(): Promise<Assignments> {
-  return readJSON<Assignments>(BLOB_PATH, {});
+  // Hardcoded assignments always win; file-based overrides fill in the rest
+  const file = await readJSON<Assignments>(BLOB_PATH, {});
+  return { ...file, ...getHardcodedAssignments() };
 }
 
 // GET — any authenticated user can see assignments

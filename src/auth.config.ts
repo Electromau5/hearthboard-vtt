@@ -10,6 +10,9 @@ export const authConfig: NextAuthConfig = {
         token.id = user.id!;
         token.role = (user as { role: "admin" | "user" }).role;
         token.username = (user as { username: string }).username;
+        // Bake the hardcoded assignment into the token at login
+        const slug = (user as { assignedSlug?: string }).assignedSlug;
+        if (slug) token.assignedSlug = slug;
       }
       // Allow client update() to write assignedSlug into the token
       if (trigger === "update" && (session as { assignedSlug?: string })?.assignedSlug !== undefined) {
