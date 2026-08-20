@@ -157,6 +157,15 @@ const BRIEFINGS: Briefing[] = [
     cardHint: 'Unknown Subject · Surveillance',
     sections: [
       {
+        audio: '/mobster-2.mp3',
+        paragraphs: [
+          "The guy you're looking for goes by the name 'Amazo the Amazing'. I know. Stupid name right?",
+          "Anyway, he's built a reputation as the primary magic act in these parts, but the guy — he's really ambitious. So he asks my old man for a loan.",
+          "However, in return the old man doesn't ask him for the money back. He instead gets him to give away his secrets. Shrewd bastard.",
+          "Now he knows everything about this guy's secrets and is blackmailing him for a larger cut of the profits.",
+        ],
+      },
+      {
         audio: '/mobster-1.mp3',
         paragraphs: [
           "Yeah. My father has been behind that guy for a couple of years now.",
@@ -729,7 +738,9 @@ export default function HearthboardPage() {
               const scene = SCENES.find(s => s.id === mapZoomedTo);
               const img = scene ? locationImages[scene.locationId] : undefined;
               const isDocks = scene?.locationId === 'loc-docks';
+              const isSpeakeasy = scene?.locationId === 'loc-underworld';
               const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
+              const mobsterBriefing = BRIEFINGS.find(b => b.id === 'mobster');
               return (
                 <div className="loc-info-panel">
                   <button className="loc-close-btn" onClick={() => setMapZoomedTo(null)}>✕</button>
@@ -779,6 +790,53 @@ export default function HearthboardPage() {
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
                             Anonymous · Innsmouth Harbour
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                            ▶ Click to open
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Business Arrangement — only shown on the Speakeasy */}
+                  {isSpeakeasy && mobsterBriefing && (
+                    <>
+                      <div style={{ height: 1, background: 'var(--brass-dim)', opacity: 0.5 }} />
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+                        Intercepted Recording
+                      </div>
+                      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                      <div
+                        style={{
+                          position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                          cursor: 'pointer', border: '1px solid var(--brass-dim)',
+                          boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        }}
+                        onClick={() => openBriefing(mobsterBriefing)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => e.key === 'Enter' && openBriefing(mobsterBriefing)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={mobsterBriefing.image}
+                          alt={mobsterBriefing.title}
+                          style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', filter: 'sepia(0.35) brightness(0.7)' }}
+                        />
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          background: 'linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.25) 60%, transparent 100%)',
+                          padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                            {mobsterBriefing.badge}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                            {mobsterBriefing.title}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
+                            Unknown Subject · Surveillance
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
                             ▶ Click to open
@@ -1076,7 +1134,7 @@ export default function HearthboardPage() {
                 Mission Details
               </div>
 
-              {BRIEFINGS.filter(b => b.id !== 'old-man').map(b => (
+              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster').map(b => (
                 <div
                   key={b.id}
                   style={{ ...missionCard, marginBottom: 10 }}
