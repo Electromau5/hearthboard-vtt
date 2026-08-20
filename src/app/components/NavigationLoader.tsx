@@ -22,12 +22,8 @@ export function NavigationLoader() {
     hideTimer.current = setTimeout(() => setVisible(false), wait);
   }, []);
 
-  // Initial mount — only show on the homepage
+  // Initial mount — always show before the first page renders (/ or /login)
   useEffect(() => {
-    if (pathname !== '/') {
-      setVisible(false);
-      return;
-    }
     shownAt.current = Date.now();
     scheduleHide();
     return () => clearTimeout(hideTimer.current);
