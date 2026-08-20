@@ -1000,7 +1000,7 @@ export default function HearthboardPage() {
               {[
                 { id: 'chat', label: 'Chat' },
                 { id: 'characters', label: 'Characters' },
-                { id: 'compendium', label: 'Compendium' },
+                { id: 'compendium', label: 'Resources' },
                 { id: 'journal', label: 'Journal' },
                 { id: 'mission', label: 'Mission' },
                 { id: 'roll', label: 'Roll' },
@@ -1173,6 +1173,28 @@ export default function HearthboardPage() {
                 })}
               </div>
               <div className="comp-hint">Drag an entry onto the map to spawn it as a token.</div>
+
+              {/* Journal entry image */}
+              <div style={{ padding: '12px 10px 10px' }}>
+                <div style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px',
+                  textTransform: 'uppercase', color: 'var(--ink-text-2)',
+                  marginBottom: 8,
+                }}>
+                  Field Documents
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/journal-1.jpeg"
+                  alt="Patient journal — Bellevue Psychiatric Isolation Ward"
+                  style={{
+                    width: '100%', display: 'block',
+                    borderRadius: 'var(--r-md)',
+                    border: '1px solid var(--line)',
+                    boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                  }}
+                />
+              </div>
             </div>
 
             {/* Journal pane */}
