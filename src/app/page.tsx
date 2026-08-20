@@ -257,6 +257,7 @@ export default function HearthboardPage() {
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.4);
   const [briefingBgActive, setBriefingBgActive] = useState(false);
+  const [briefingBgVolume, setBriefingBgVolume] = useState(0.75);
   const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
@@ -345,7 +346,7 @@ export default function HearthboardPage() {
     if (activeBriefing?.bgSong) {
       setBriefingBgActive(true);
       bgAudio.src = activeBriefing.bgSong;
-      bgAudio.volume = 0.75;
+      bgAudio.volume = briefingBgVolume;
       bgAudio.loop = true;
       bgAudio.load();
       bgAudio.play().catch(() => {});
@@ -354,7 +355,14 @@ export default function HearthboardPage() {
       bgAudio.pause();
       bgAudio.currentTime = 0;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBriefing]);
+
+  // Sync briefing bg volume in real time
+  useEffect(() => {
+    const bgAudio = speakeasyBgRef.current;
+    if (bgAudio) bgAudio.volume = briefingBgVolume;
+  }, [briefingBgVolume]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -1362,6 +1370,24 @@ export default function HearthboardPage() {
                       >
                         Next →
                       </button>
+                    </div>
+                  )}
+                  {activeBriefing.bgSong && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', color: 'var(--ink-text-2)', textTransform: 'uppercase' }}>♫ Music</span>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '2px 8px', minWidth: 28 }}
+                        onClick={() => setBriefingBgVolume(v => Math.max(0, Math.round((v - 0.1) * 10) / 10))}
+                      >−</button>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brass)', minWidth: 32, textAlign: 'center' }}>
+                        {Math.round(briefingBgVolume * 100)}%
+                      </span>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '2px 8px', minWidth: 28 }}
+                        onClick={() => setBriefingBgVolume(v => Math.min(1, Math.round((v + 0.1) * 10) / 10))}
+                      >+</button>
                     </div>
                   )}
                   <button className="btn btn-ghost btn-sm" onClick={closeBriefing} style={{ color: 'var(--ink-text-2)', marginTop: 8 }}>
