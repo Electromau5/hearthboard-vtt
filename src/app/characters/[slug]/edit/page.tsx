@@ -20,7 +20,7 @@ export default function PlayerEditCharacterPage() {
   const notify = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2800); };
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/admin/characters/${slug}`);
+    const res = await fetch(`/api/admin/characters/${slug}`, { cache: "no-store" });
     if (res.ok) setChar(await res.json());
     else router.replace(`/characters/${slug}`);
   }, [slug, router]);
@@ -48,14 +48,26 @@ export default function PlayerEditCharacterPage() {
   const save = async () => {
     if (!char) return;
     setSaving(true);
-    const res = await fetch(`/api/admin/characters/${slug}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(char),
-    });
-    setSaving(false);
-    if (res.ok) notify("Saved.");
-    else notify("Save failed.");
+    try {
+      const res = await fetch(`/api/admin/characters/${slug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(char),
+      });
+      if (res.ok) {
+        const saved = await res.json() as Character;
+        setChar(saved);
+        notify("Changes saved.");
+      } else {
+        let msg = `Save failed (${res.status}).`;
+        try { const e = await res.json() as { error?: string }; if (e.error) msg = e.error; } catch {}
+        notify(msg);
+      }
+    } catch {
+      notify("Network error — could not save.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const setVital = (k: keyof Character["vitals"], v: number) =>

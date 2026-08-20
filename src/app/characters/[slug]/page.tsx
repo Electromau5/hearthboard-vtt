@@ -33,10 +33,10 @@ export default function CharacterSheetPage() {
 
   useEffect(() => {
     if (!base) { router.replace("/characters"); return; }
-    fetch(`/api/admin/characters/${slug}`)
+    fetch(`/api/admin/characters/${slug}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data) setChar(data); });
-    fetch("/api/characters/assignments")
+    fetch("/api/characters/assignments", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : {}))
       .then(setAssignments);
   }, [slug, base, router]);
