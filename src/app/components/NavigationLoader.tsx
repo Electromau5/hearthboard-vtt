@@ -1,45 +1,62 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { LoadingOverlay } from './LoadingOverlay';
+
+// One full GIF cycle = 46 frames × 70 ms = 3 220 ms. Add a small buffer.
+const CYCLE_MS = 3300;
 
 export function NavigationLoader() {
   const pathname = usePathname();
   const isFirstRender = useRef(true);
-  const [visible, setVisible] = useState(true); // show on initial mount
+  const [visible, setVisible] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const shownAt = useRef<number>(Date.now());
 
-  // Hide the initial-mount overlay once the app has hydrated
-  useEffect(() => {
-    hideTimer.current = setTimeout(() => setVisible(false), 500);
-    return () => clearTimeout(hideTimer.current);
+  // Schedule hide so that at least one full animation cycle has played
+  const scheduleHide = useCallback(() => {
+    clearTimeout(hideTimer.current);
+    const elapsed = Date.now() - shownAt.current;
+    const wait = Math.max(0, CYCLE_MS - elapsed);
+    hideTimer.current = setTimeout(() => setVisible(false), wait);
   }, []);
 
-  // Intercept internal link clicks — show overlay immediately before Next.js navigates
+  // Initial mount — hide after one full cycle
+  useEffect(() => {
+    shownAt.current = Date.now();
+    scheduleHide();
+    return () => clearTimeout(hideTimer.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Intercept internal link clicks — show overlay immediately
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       const anchor = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
       if (!anchor) return;
       const href = anchor.getAttribute('href') ?? '';
-      // Skip external links, hash-only links, and download links
-      if (href.startsWith('http') || href.startsWith('//') || href.startsWith('#') || href.startsWith('mailto') || anchor.hasAttribute('download')) return;
+      if (
+        href.startsWith('http') || href.startsWith('//') ||
+        href.startsWith('#') || href.startsWith('mailto') ||
+        anchor.hasAttribute('download')
+      ) return;
       clearTimeout(hideTimer.current);
+      shownAt.current = Date.now();
       setVisible(true);
     };
     document.addEventListener('click', onClick, true);
     return () => document.removeEventListener('click', onClick, true);
   }, []);
 
-  // Once the new pathname has settled, hide the overlay
+  // Once the pathname settles (page loaded), wait out the remaining cycle time
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setVisible(false), 250);
-  }, [pathname]);
+    scheduleHide();
+  }, [pathname, scheduleHide]);
 
   if (!visible) return null;
   return <LoadingOverlay />;
