@@ -175,6 +175,26 @@ const BRIEFINGS: Briefing[] = [
       },
     ],
   },
+  {
+    id: 'attendant',
+    image: '/attendant-1.png',
+    badge: 'FACILITY CONTACT',
+    title: 'The Chief Attendant',
+    subtitle: 'Bellevue Psychiatric Isolation Ward',
+    cardHint: 'Bellevue · Chief Attendant',
+    sections: [
+      {
+        audio: '/attendant-1.mp3',
+        paragraphs: [
+          "Hello.",
+          "I'm the chief attendant at this......magical place.",
+          "I was told about your arrival.",
+          "I would be happy to help, but please keep in mind that our patient records are strictly confidential unless they have been approved to be released by the patient themselves or a family member.",
+          "I think you will like it here.",
+        ],
+      },
+    ],
+  },
 ];
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -739,8 +759,10 @@ export default function HearthboardPage() {
               const img = scene ? locationImages[scene.locationId] : undefined;
               const isDocks = scene?.locationId === 'loc-docks';
               const isSpeakeasy = scene?.locationId === 'loc-underworld';
+              const isBellevue = scene?.locationId === 'loc-bellevue';
               const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
               const mobsterBriefing = BRIEFINGS.find(b => b.id === 'mobster');
+              const attendantBriefing = BRIEFINGS.find(b => b.id === 'attendant');
               return (
                 <div className="loc-info-panel">
                   <button className="loc-close-btn" onClick={() => setMapZoomedTo(null)}>✕</button>
@@ -837,6 +859,53 @@ export default function HearthboardPage() {
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
                             Unknown Subject · Surveillance
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                            ▶ Click to open
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Facility contact — only shown on Bellevue */}
+                  {isBellevue && attendantBriefing && (
+                    <>
+                      <div style={{ height: 1, background: 'var(--brass-dim)', opacity: 0.5 }} />
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+                        Facility Contact
+                      </div>
+                      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                      <div
+                        style={{
+                          position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                          cursor: 'pointer', border: '1px solid var(--brass-dim)',
+                          boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        }}
+                        onClick={() => openBriefing(attendantBriefing)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => e.key === 'Enter' && openBriefing(attendantBriefing)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={attendantBriefing.image}
+                          alt={attendantBriefing.title}
+                          style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', filter: 'sepia(0.35) brightness(0.7)' }}
+                        />
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          background: 'linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.25) 60%, transparent 100%)',
+                          padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                            {attendantBriefing.badge}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                            {attendantBriefing.title}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
+                            Bellevue · Chief Attendant
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
                             ▶ Click to open
@@ -1134,7 +1203,7 @@ export default function HearthboardPage() {
                 Mission Details
               </div>
 
-              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster').map(b => (
+              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant').map(b => (
                 <div
                   key={b.id}
                   style={{ ...missionCard, marginBottom: 10 }}
