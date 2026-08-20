@@ -61,6 +61,7 @@ type Briefing = {
   subtitle: string;
   sections: BriefingSection[];
   cardHint?: string;
+  bgSong?: string;
 };
 
 const BRIEFINGS: Briefing[] = [
@@ -155,6 +156,7 @@ const BRIEFINGS: Briefing[] = [
     title: 'A Business Arrangement',
     subtitle: 'Unknown Subject · Surveillance Recording',
     cardHint: 'Unknown Subject · Surveillance',
+    bgSong: '/speakeasy-1.mp3',
     sections: [
       {
         audio: '/mobster-2.mp3',
@@ -254,6 +256,7 @@ export default function HearthboardPage() {
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.4);
+  const [briefingBgActive, setBriefingBgActive] = useState(false);
   const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
@@ -276,6 +279,7 @@ export default function HearthboardPage() {
   const chatInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const briefingAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speakeasyBgRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
 
@@ -322,17 +326,35 @@ export default function HearthboardPage() {
     }
   }, [activeBriefing, activeSectionIdx]);
 
-  // Sync audio with music controls
+  // Sync audio with music controls — paused while briefing bg is active
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     audio.volume = musicVolume;
-    if (musicPlaying) {
+    if (musicPlaying && !briefingBgActive) {
       audio.play().catch(() => {});
     } else {
       audio.pause();
     }
-  }, [musicPlaying, musicVolume]);
+  }, [musicPlaying, musicVolume, briefingBgActive]);
+
+  // Play briefing background song (e.g. Speakeasy) when a briefing with bgSong opens
+  useEffect(() => {
+    const bgAudio = speakeasyBgRef.current;
+    if (!bgAudio) return;
+    if (activeBriefing?.bgSong) {
+      setBriefingBgActive(true);
+      bgAudio.src = activeBriefing.bgSong;
+      bgAudio.volume = 0.75;
+      bgAudio.loop = true;
+      bgAudio.load();
+      bgAudio.play().catch(() => {});
+    } else {
+      setBriefingBgActive(false);
+      bgAudio.pause();
+      bgAudio.currentTime = 0;
+    }
+  }, [activeBriefing]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -1271,6 +1293,8 @@ export default function HearthboardPage() {
 
       {/* Briefing audio — single element, src swapped per entry */}
       <audio ref={briefingAudioRef} preload="none" />
+      {/* Speakeasy background song — plays when a briefing with bgSong is open */}
+      <audio ref={speakeasyBgRef} preload="none" />
 
       {/* Briefing overlay */}
       {activeBriefing && (() => {
