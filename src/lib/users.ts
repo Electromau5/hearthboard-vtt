@@ -20,7 +20,7 @@ const ACCOUNTS = [
   {
     id: "greg",
     username: "greg",
-    passwordHash: "$2b$12$FDUEkDNz5BsoARsFIOXOzu24PXk0VeizKMZN4CQkwWwjEM/8z97Ye",
+    passwordHash: "$2b$12$yD299ZH9BO2pkIJiwVeLOeHoiza8wTQay6uf2U01zqpTzagJUDWR.",
     defaultRole: "user" as const,
     protected: false,
   },
