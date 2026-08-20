@@ -35,13 +35,13 @@ const COMPENDIUM = [
 ];
 
 const CHARACTERS = [
-  { id: 'c1', name: 'Dr. Alistair Finch', cls: 'The Disgraced Mortician', hp: 12, maxHp: 12, ac: 0, abilities: { STR: 50, CON: 65, DEX: 75, INT: 85, POW: 75, EDU: 85 }, inventory: [{ name: 'Dissection kit', qty: 1 }, { name: 'Formaldehyde jars', qty: 3 }, { name: 'Scalpel holster', qty: 1 }, { name: 'Mortuary credentials', qty: 1 }] },
-  { id: 'c2', name: 'Silas "The Great" Vance', cls: 'The Blackmailed Illusionist', hp: 11, maxHp: 11, ac: 0, abilities: { STR: 55, CON: 60, DEX: 85, INT: 75, POW: 70, EDU: 65 }, inventory: [{ name: 'Lockpick kit', qty: 1 }, { name: 'Flash pellets', qty: 4 }, { name: 'Defense cane', qty: 1 }, { name: 'Debt note', qty: 1 }] },
-  { id: 'c3', name: 'Julian Sterling', cls: 'The Desperate Auteur', hp: 10, maxHp: 10, ac: 0, abilities: { STR: 45, CON: 55, DEX: 70, INT: 80, POW: 65, EDU: 75 }, inventory: [{ name: '35mm Eyemo camera', qty: 1 }, { name: 'Nitrate film rolls', qty: 4 }, { name: 'Magnesium dish', qty: 1 }, { name: 'Dev kit', qty: 1 }] },
-  { id: 'c4', name: 'Thomas "Mack" Callahan', cls: 'The Amnesiac Detective', hp: 14, maxHp: 14, ac: 0, abilities: { STR: 75, CON: 70, DEX: 65, INT: 70, POW: 65, EDU: 60 }, inventory: [{ name: 'Colt M1911', qty: 1 }, { name: 'Spare magazines', qty: 3 }, { name: 'Trench knife', qty: 1 }, { name: 'PI badge', qty: 1 }] },
-  { id: 'c5', name: 'Richard Pickman Graves', cls: 'The Macabre Visionary', hp: 9, maxHp: 9, ac: 0, abilities: { STR: 40, CON: 45, DEX: 80, INT: 85, POW: 80, EDU: 70 }, inventory: [{ name: 'Charcoal sketchbook', qty: 1 }, { name: 'Bristle brushes', qty: 1 }, { name: 'Oil paint tubes', qty: 1 }, { name: 'Cemetery sketches', qty: 1 }] },
-  { id: 'c6', name: 'Arthur Wright', cls: 'The Non-Euclidean Architect', hp: 12, maxHp: 12, ac: 0, abilities: { STR: 55, CON: 65, DEX: 60, INT: 90, POW: 70, EDU: 85 }, inventory: [{ name: 'Brass compass', qty: 1 }, { name: 'Theodolite', qty: 1 }, { name: 'Dynamite sticks', qty: 2 }, { name: 'Blueprint parchment', qty: 1 }] },
-  { id: 'c7', name: 'Percival Winthrop', cls: 'The Ruined Tycoon', hp: 11, maxHp: 11, ac: 0, abilities: { STR: 50, CON: 55, DEX: 55, INT: 80, POW: 75, EDU: 85 }, inventory: [{ name: 'Savile Row suit', qty: 1 }, { name: 'Gold pocket watch', qty: 1 }, { name: '.32 ACP revolver', qty: 1 }, { name: 'Bankrupt ledger', qty: 1 }] },
+  { id: 'c1', slug: 'dr-alistair-finch',    name: 'Dr. Alistair Finch',       cls: 'The Disgraced Mortician',         hp: 12, maxHp: 12, ac: 0, abilities: { STR: 50, CON: 65, DEX: 75, INT: 85, POW: 75, EDU: 85 }, inventory: [{ name: 'Dissection kit', qty: 1 }, { name: 'Formaldehyde jars', qty: 3 }, { name: 'Scalpel holster', qty: 1 }, { name: 'Mortuary credentials', qty: 1 }] },
+  { id: 'c2', slug: 'silas-vance',           name: 'Silas "The Great" Vance',  cls: 'The Blackmailed Illusionist',     hp: 11, maxHp: 11, ac: 0, abilities: { STR: 55, CON: 60, DEX: 85, INT: 75, POW: 70, EDU: 65 }, inventory: [{ name: 'Lockpick kit', qty: 1 }, { name: 'Flash pellets', qty: 4 }, { name: 'Defense cane', qty: 1 }, { name: 'Debt note', qty: 1 }] },
+  { id: 'c3', slug: 'julian-sterling',       name: 'Julian Sterling',           cls: 'The Desperate Auteur',            hp: 10, maxHp: 10, ac: 0, abilities: { STR: 45, CON: 55, DEX: 70, INT: 80, POW: 65, EDU: 75 }, inventory: [{ name: '35mm Eyemo camera', qty: 1 }, { name: 'Nitrate film rolls', qty: 4 }, { name: 'Magnesium dish', qty: 1 }, { name: 'Dev kit', qty: 1 }] },
+  { id: 'c4', slug: 'thomas-callahan',       name: 'Thomas "Mack" Callahan',   cls: 'The Amnesiac Detective',          hp: 14, maxHp: 14, ac: 0, abilities: { STR: 75, CON: 70, DEX: 65, INT: 70, POW: 65, EDU: 60 }, inventory: [{ name: 'Colt M1911', qty: 1 }, { name: 'Spare magazines', qty: 3 }, { name: 'Trench knife', qty: 1 }, { name: 'PI badge', qty: 1 }] },
+  { id: 'c5', slug: 'richard-graves',        name: 'Richard Pickman Graves',   cls: 'The Macabre Visionary',           hp: 9,  maxHp: 9,  ac: 0, abilities: { STR: 40, CON: 45, DEX: 80, INT: 85, POW: 80, EDU: 70 }, inventory: [{ name: 'Charcoal sketchbook', qty: 1 }, { name: 'Bristle brushes', qty: 1 }, { name: 'Oil paint tubes', qty: 1 }, { name: 'Cemetery sketches', qty: 1 }] },
+  { id: 'c6', slug: 'arthur-wright',         name: 'Arthur Wright',             cls: 'The Non-Euclidean Architect',     hp: 12, maxHp: 12, ac: 0, abilities: { STR: 55, CON: 65, DEX: 60, INT: 90, POW: 70, EDU: 85 }, inventory: [{ name: 'Brass compass', qty: 1 }, { name: 'Theodolite', qty: 1 }, { name: 'Dynamite sticks', qty: 2 }, { name: 'Blueprint parchment', qty: 1 }] },
+  { id: 'c7', slug: 'percival-winthrop',     name: 'Percival Winthrop',         cls: 'The Ruined Tycoon',               hp: 11, maxHp: 11, ac: 0, abilities: { STR: 50, CON: 55, DEX: 55, INT: 80, POW: 75, EDU: 85 }, inventory: [{ name: 'Savile Row suit', qty: 1 }, { name: 'Gold pocket watch', qty: 1 }, { name: '.32 ACP revolver', qty: 1 }, { name: 'Bankrupt ledger', qty: 1 }] },
 ];
 
 // ── Briefing entries ─────────────────────────────────────────────────
@@ -214,6 +214,7 @@ export default function HearthboardPage() {
   const [musicVolume, setMusicVolume] = useState(0.4);
   const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string } | { kind: 'compendium'; idx: number } | null>(null);
@@ -230,6 +231,21 @@ export default function HearthboardPage() {
   const briefingAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
+
+  // Fetch character assignments on mount
+  useEffect(() => {
+    fetch('/api/characters/assignments', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : {})
+      .then((data: Record<string, string>) => {
+        setAssignments(data);
+        // Auto-select the player's own character in the pane
+        if (session && session.user.role !== 'admin') {
+          const mySlug = Object.entries(data).find(([, uid]) => uid === session.user.id)?.[0];
+          const mine = CHARACTERS.find(c => c.slug === mySlug);
+          if (mine) setActiveCharId(mine.id);
+        }
+      });
+  }, [session]);
 
   // Load and play briefing audio when active briefing or section changes
   useEffect(() => {
@@ -752,45 +768,66 @@ export default function HearthboardPage() {
 
             {/* Characters pane */}
             <div className={`rp-pane${activePane === 'characters' ? ' active' : ''}`}>
-              <div className="char-list">
-                {CHARACTERS.map(c => (
-                  <button
-                    key={c.id}
-                    className={`char-chip${c.id === activeCharId ? ' active' : ''}`}
-                    onClick={() => setActiveCharId(c.id)}
-                  >
-                    {c.name.split(' ')[0]}
-                  </button>
-                ))}
-              </div>
-              <div className="char-sheet">
-                {(() => {
-                  const charIdx = CHARACTERS.findIndex(c => c.id === activeCharId);
-                  const color = TOKEN_COLORS[charIdx % TOKEN_COLORS.length];
+              {(() => {
+                const myId = session?.user?.id ?? '';
+                const mySlug = Object.entries(assignments).find(([, uid]) => uid === myId)?.[0];
+                const visibleChars = isAdmin
+                  ? CHARACTERS
+                  : CHARACTERS.filter(c => c.slug === mySlug);
+
+                if (visibleChars.length === 0) {
                   return (
-                    <>
+                    <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--ink-text-2)', fontSize: 13 }}>
+                      <div style={{ fontSize: 24, marginBottom: 10, opacity: 0.4 }}>⬡</div>
+                      No investigator assigned.
+                      <br />
+                      <a href="/characters" style={{ color: 'var(--brass)', textDecoration: 'none', fontSize: 12, marginTop: 8, display: 'inline-block' }}>Choose your character →</a>
+                    </div>
+                  );
+                }
+
+                const displayChar = visibleChars.find(c => c.id === activeCharId) ?? visibleChars[0];
+                const charIdx = CHARACTERS.findIndex(c => c.id === displayChar.id);
+                const color = TOKEN_COLORS[charIdx % TOKEN_COLORS.length];
+
+                return (
+                  <>
+                    {visibleChars.length > 1 && (
+                      <div className="char-list">
+                        {visibleChars.map(c => (
+                          <button
+                            key={c.id}
+                            className={`char-chip${c.id === activeCharId ? ' active' : ''}`}
+                            onClick={() => setActiveCharId(c.id)}
+                          >
+                            {c.name.split(' ')[0]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="char-sheet">
                       <div className="cs-head">
                         <div className="cs-avatar" style={{ background: color + '22', color }}>
-                          {activeChar.name[0]}
+                          {displayChar.name[0]}
                         </div>
                         <div>
-                          <div className="cs-name">{activeChar.name}</div>
-                          <div className="cs-sub">{activeChar.cls}</div>
+                          <div className="cs-name">{displayChar.name}</div>
+                          <div className="cs-sub">{displayChar.cls}</div>
                         </div>
                       </div>
                       <div className="cs-vitals">
                         <div className="vital-box hp">
                           <div className="v-label">HP</div>
-                          <div className="v-val">{activeChar.hp}/{activeChar.maxHp}</div>
+                          <div className="v-val">{displayChar.hp}/{displayChar.maxHp}</div>
                         </div>
                         <div className="vital-box ac">
                           <div className="v-label">AC</div>
-                          <div className="v-val">{activeChar.ac}</div>
+                          <div className="v-val">{displayChar.ac}</div>
                         </div>
                       </div>
                       <div className="ability-grid">
-                        {Object.entries(activeChar.abilities).map(([key, val]) => (
-                          <div key={key} className="ability" onClick={() => rollAbility(activeChar.name, key, val)}>
+                        {Object.entries(displayChar.abilities).map(([key, val]) => (
+                          <div key={key} className="ability" onClick={() => rollAbility(displayChar.name, key, val)}>
                             <div className="a-name">{key}</div>
                             <div className="a-mod">{abilityMod(val)}</div>
                             <div className="a-score">{val}</div>
@@ -799,14 +836,14 @@ export default function HearthboardPage() {
                       </div>
                       <div className="inv-title">Inventory</div>
                       <ul className="inv-list">
-                        {activeChar.inventory.map((item, i) => (
+                        {displayChar.inventory.map((item, i) => (
                           <li key={i}><span>{item.name}</span><span className="qty">×{item.qty}</span></li>
                         ))}
                       </ul>
-                    </>
-                  );
-                })()}
-              </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Compendium pane */}
