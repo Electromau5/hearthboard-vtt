@@ -57,6 +57,7 @@ export default function AdminUsersPage() {
           </span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <Link href="/admin/experience" className="btn btn-ghost btn-sm">Experience</Link>
           <Link href="/admin/characters" className="btn btn-ghost btn-sm">Characters</Link>
           <Link href="/admin/locations" className="btn btn-ghost btn-sm">Locations</Link>
           <Link href="/admin/assets" className="btn btn-ghost btn-sm">Assets</Link>

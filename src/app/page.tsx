@@ -215,6 +215,7 @@ export default function HearthboardPage() {
   const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number } | null>(null);
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string } | { kind: 'compendium'; idx: number } | null>(null);
@@ -326,6 +327,22 @@ export default function HearthboardPage() {
     setActivePane('chat');
     setSelectedTokenId(null);
   };
+
+  // Poll for admin-triggered screen effects (non-admin players only)
+  useEffect(() => {
+    if (session?.user?.role === 'admin') return;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/effects/current');
+        if (!res.ok) return;
+        const data = await res.json();
+        setScreenEffect(data);
+      } catch {}
+    };
+    poll();
+    const iv = setInterval(poll, 1500);
+    return () => clearInterval(iv);
+  }, [session]);
 
   const backToDashboard = () => {
     setView('dashboard');
@@ -487,6 +504,9 @@ export default function HearthboardPage() {
   return (
     <div className="app">
 
+      {/* Screen effect overlay (triggered by admin) */}
+      {screenEffect && <EffectLayer effect={screenEffect} onExpire={() => setScreenEffect(null)} />}
+
       {/* ============ DASHBOARD ============ */}
       <div className={`view${view === 'dashboard' ? ' active' : ''}`} id="view-dashboard">
         <div className="dash-topbar">
@@ -497,6 +517,9 @@ export default function HearthboardPage() {
           <div className="dash-actions">
             <Link href="/characters" className="btn btn-ghost btn-sm">Characters</Link>
             <Link href="/locations" className="btn btn-ghost btn-sm">Locations</Link>
+            {isAdmin && (
+              <Link href="/admin/experience" className="btn btn-ghost btn-sm">Experience</Link>
+            )}
             {isAdmin && (
               <Link href="/admin/characters" className="btn btn-ghost btn-sm">Admin</Link>
             )}
@@ -1194,3 +1217,92 @@ const volIcon: React.CSSProperties = {
 const volSlider: React.CSSProperties = {
   width: 90, accentColor: 'var(--brass)', cursor: 'pointer',
 };
+
+// ── Screen Effect Layer ───────────────────────────────────────────────
+type EffectProps = { effect: { id: string; duration: number; triggeredAt: number }; onExpire: () => void };
+
+function EffectLayer({ effect, onExpire }: EffectProps) {
+  const { id, duration, triggeredAt } = effect;
+  const remaining = Math.max(0, triggeredAt + duration - Date.now());
+
+  useEffect(() => {
+    if (remaining <= 0) { onExpire(); return; }
+    const t = setTimeout(onExpire, remaining);
+    return () => clearTimeout(t);
+  }, [triggeredAt, onExpire, remaining]);
+
+  // Horror: shake the body
+  useEffect(() => {
+    if (id !== 'horror') return;
+    document.body.classList.add('eff-horror');
+    return () => document.body.classList.remove('eff-horror');
+  }, [id]);
+
+  if (id === 'sanity') {
+    return <div className="eff-sanity" />;
+  }
+
+  if (id === 'darkness') {
+    return (
+      <div
+        className="eff-darkness"
+        style={{ animationDuration: `${duration}ms` }}
+      />
+    );
+  }
+
+  if (id === 'blood') {
+    return <div className="eff-blood" />;
+  }
+
+  if (id === 'static') {
+    return <StaticCanvas />;
+  }
+
+  if (id === 'horror') {
+    return <div className="eff-horror-flash" />;
+  }
+
+  if (id === 'echo') {
+    return <div className="eff-echo" />;
+  }
+
+  return null;
+}
+
+function StaticCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    let animId: number;
+
+    const draw = () => {
+      const img = ctx.createImageData(canvas.width, canvas.height);
+      for (let i = 0; i < img.data.length; i += 4) {
+        const v = (Math.random() * 255) | 0;
+        img.data[i] = v;
+        img.data[i + 1] = v;
+        img.data[i + 2] = v;
+        img.data[i + 3] = ((Math.random() * 180) + 60) | 0;
+      }
+      ctx.putImageData(img, 0, 0);
+      animId = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(animId);
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="eff-static"
+      style={{ width: '100vw', height: '100vh' }}
+    />
+  );
+}
