@@ -258,6 +258,7 @@ export default function HearthboardPage() {
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number; data?: Record<string, unknown> } | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   // Track triggeredAt values we've already displayed so one-shot effects (visions)
   // don't replay on every poll while the blob entry is still live.
   const shownEffectsRef = useRef<Set<number>>(new Set());
@@ -1187,11 +1188,13 @@ export default function HearthboardPage() {
                 <img
                   src="/journal-1.jpeg"
                   alt="Patient journal — Bellevue Psychiatric Isolation Ward"
+                  onClick={() => setLightboxSrc('/journal-1.jpeg')}
                   style={{
                     width: '100%', display: 'block',
                     borderRadius: 'var(--r-md)',
                     border: '1px solid var(--line)',
                     boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                    cursor: 'zoom-in',
                   }}
                 />
               </div>
@@ -1369,6 +1372,43 @@ export default function HearthboardPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div
+          onClick={() => setLightboxSrc(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.88)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'zoom-out',
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxSrc}
+            alt=""
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              borderRadius: 'var(--r-lg)',
+              border: '1px solid var(--line)',
+              boxShadow: '0 8px 60px rgba(0,0,0,0.8)',
+              objectFit: 'contain',
+            }}
+          />
+          <button
+            onClick={() => setLightboxSrc(null)}
+            style={{
+              position: 'absolute', top: 20, right: 24,
+              background: 'none', border: 'none',
+              color: 'var(--ink-text-2)', fontSize: 26, cursor: 'pointer',
+              lineHeight: 1,
+            }}
+          >✕</button>
+        </div>
       )}
     </div>
   );
