@@ -1219,11 +1219,14 @@ const volSlider: React.CSSProperties = {
 };
 
 // ── Screen Effect Layer ───────────────────────────────────────────────
-type EffectProps = { effect: { id: string; duration: number; triggeredAt: number }; onExpire: () => void };
+type EffectProps = { effect: { id: string; duration: number; triggeredAt: number; data?: Record<string, unknown> }; onExpire: () => void };
 
 function EffectLayer({ effect, onExpire }: EffectProps) {
-  const { id, duration, triggeredAt } = effect;
-  const remaining = Math.max(0, triggeredAt + duration - Date.now());
+  const { id, duration, triggeredAt, data } = effect;
+  // Visions: always flash for 500ms from the moment the player first sees it,
+  // regardless of polling delay. Duration in blob is kept long (8s) so the
+  // effect is still present when players poll.
+  const remaining = id === 'visions' ? 500 : Math.max(0, triggeredAt + duration - Date.now());
 
   useEffect(() => {
     if (remaining <= 0) { onExpire(); return; }
@@ -1265,6 +1268,18 @@ function EffectLayer({ effect, onExpire }: EffectProps) {
 
   if (id === 'echo') {
     return <div className="eff-echo" />;
+  }
+
+  if (id === 'visions') {
+    const imageIndex = (data?.imageIndex as number) ?? 1;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`/vision-${imageIndex}.jpeg`}
+        alt=""
+        className="eff-vision"
+      />
+    );
   }
 
   return null;

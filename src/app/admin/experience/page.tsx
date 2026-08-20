@@ -59,6 +59,15 @@ const EFFECTS = [
     glow: "rgba(95,143,201,0.35)",
     icon: "👁",
   },
+  {
+    id: "visions",
+    label: "Visions",
+    desc: "A horrifying image flashes on screen for half a second",
+    duration: 8000,
+    color: "#c47a2b",
+    glow: "rgba(196,122,43,0.4)",
+    icon: "🌀",
+  },
 ] as const;
 
 const PLAYERS = [
@@ -101,15 +110,19 @@ export default function ExperiencePage() {
   }, [current?.triggeredAt]);
 
   const trigger = async (effect: typeof EFFECTS[number]) => {
+    const body: Record<string, unknown> = {
+      id: effect.id,
+      label: effect.label,
+      duration: effect.duration,
+      targetUserIds: target ? [target] : null,
+    };
+    if (effect.id === "visions") {
+      body.data = { imageIndex: Math.floor(Math.random() * 3) + 1 };
+    }
     const res = await fetch("/api/admin/effects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: effect.id,
-        label: effect.label,
-        duration: effect.duration,
-        targetUserIds: target ? [target] : null,
-      }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       setCurrent(await res.json());

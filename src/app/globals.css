@@ -565,3 +565,10 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
   backdrop-filter: blur(0.5px) brightness(1.08) saturate(1.4);
   animation: eff-echo 1.8s ease-in-out infinite;
 }
+
+/* Visions — full-screen image flash, no animation, removed by React after 500ms */
+.eff-vision {
+  position: fixed; inset: 0; z-index: 9995; pointer-events: none;
+  width: 100vw; height: 100vh; object-fit: cover;
+  display: block;
+}

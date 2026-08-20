@@ -8,6 +8,7 @@ export type ActiveEffect = {
   duration: number;
   triggeredAt: number;
   targetUserIds: string[] | null;
+  data?: Record<string, unknown>;
 };
 
 const BLOB_PATH = "effects/current.json";
@@ -26,13 +27,14 @@ export async function POST(req: NextRequest) {
   if (!session || session.user.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const { id, label, duration, targetUserIds } = await req.json();
+  const { id, label, duration, targetUserIds, data } = await req.json();
   const effect: ActiveEffect = {
     id,
     label,
     duration,
     triggeredAt: Date.now(),
     targetUserIds: targetUserIds ?? null,
+    ...(data ? { data } : {}),
   };
   await writeJSON(BLOB_PATH, effect);
   return NextResponse.json(effect, { status: 201 });
