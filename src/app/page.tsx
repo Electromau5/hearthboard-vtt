@@ -122,6 +122,14 @@ const BRIEFINGS: Briefing[] = [
     cardHint: 'Anonymous · Innsmouth Harbour',
     sections: [
       {
+        audio: '/old-man-0.mp3',
+        paragraphs: [
+          "I used to live in this fishing town called Innsmouth near Newburyport.",
+          "I never thought that the town could get any weirder till this guy showed up asking questions about the town's history.",
+          "Apparently he had access to information that wasn't made public and he wanted to learn more.",
+        ],
+      },
+      {
         audio: '/old-man-1.mp3',
         paragraphs: [
           "That poor bastard. He was asking too many questions and in this town, everyone knows that'll get ya in deep trouble.",
@@ -720,6 +728,8 @@ export default function HearthboardPage() {
             {mapZoomedTo && (() => {
               const scene = SCENES.find(s => s.id === mapZoomedTo);
               const img = scene ? locationImages[scene.locationId] : undefined;
+              const isDocks = scene?.locationId === 'loc-docks';
+              const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
               return (
                 <div className="loc-info-panel">
                   <button className="loc-close-btn" onClick={() => setMapZoomedTo(null)}>✕</button>
@@ -729,6 +739,53 @@ export default function HearthboardPage() {
                     <img src={img} alt={scene?.name} className="loc-info-img" />
                   ) : (
                     <div className="loc-info-placeholder">No image set — upload one in Admin → Locations</div>
+                  )}
+
+                  {/* Witness account — only shown on the Docks */}
+                  {isDocks && oldManBriefing && (
+                    <>
+                      <div style={{ height: 1, background: 'var(--brass-dim)', opacity: 0.5 }} />
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+                        Witness Account
+                      </div>
+                      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                      <div
+                        style={{
+                          position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                          cursor: 'pointer', border: '1px solid var(--brass-dim)',
+                          boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        }}
+                        onClick={() => openBriefing(oldManBriefing)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => e.key === 'Enter' && openBriefing(oldManBriefing)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={oldManBriefing.image}
+                          alt={oldManBriefing.title}
+                          style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', filter: 'sepia(0.35) brightness(0.7)' }}
+                        />
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          background: 'linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.25) 60%, transparent 100%)',
+                          padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                            {oldManBriefing.badge}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                            {oldManBriefing.title}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
+                            Anonymous · Innsmouth Harbour
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                            ▶ Click to open
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               );
@@ -1019,7 +1076,7 @@ export default function HearthboardPage() {
                 Mission Details
               </div>
 
-              {BRIEFINGS.map(b => (
+              {BRIEFINGS.filter(b => b.id !== 'old-man').map(b => (
                 <div
                   key={b.id}
                   style={{ ...missionCard, marginBottom: 10 }}
