@@ -1195,6 +1195,20 @@ export default function HearthboardPage() {
                     border: '1px solid var(--line)',
                     boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
                     cursor: 'zoom-in',
+                    marginBottom: 8,
+                  }}
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/inmate-log.jpeg"
+                  alt="Inmate Census & Observation List — Bellevue Psychiatric Isolation Ward"
+                  onClick={() => setLightboxSrc('/inmate-log.jpeg')}
+                  style={{
+                    width: '100%', display: 'block',
+                    borderRadius: 'var(--r-md)',
+                    border: '1px solid var(--line)',
+                    boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                    cursor: 'zoom-in',
                   }}
                 />
               </div>
