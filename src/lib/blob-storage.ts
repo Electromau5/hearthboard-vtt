@@ -1,4 +1,4 @@
-import { put, list, del } from "@vercel/blob";
+import { put, list, del, get } from "@vercel/blob";
 import fs from "fs";
 import path from "path";
 
@@ -29,9 +29,10 @@ export async function readJSON<T>(blobPath: string, fallback: T): Promise<T> {
   try {
     const { blobs } = await list({ prefix: blobPrefix(blobPath), limit: 1 });
     if (blobs.length === 0) return fallback;
-    const res = await fetch(blobs[0].downloadUrl, { cache: "no-store" });
-    if (!res.ok) return fallback;
-    return await res.json();
+    const result = await get(blobs[0].url, { access: "private", useCache: false });
+    if (!result || !result.stream) return fallback;
+    const text = await new Response(result.stream).text();
+    return JSON.parse(text) as T;
   } catch {
     return fallback;
   }
