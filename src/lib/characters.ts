@@ -22,6 +22,7 @@ export type Character = {
   slug: string;
   name: string;
   age: number;
+  gender: string;
   className: string;
   cover: string;
   formerStatus: string;
@@ -38,6 +39,7 @@ export const CHARACTERS: Character[] = [
     slug: "dr-alistair-finch",
     name: "Dr. Alistair Finch",
     age: 42,
+    gender: "Male",
     className: "The Disgraced Mortician",
     cover: "City Morgue Contract Embalmer at Arkham Sanitarium",
     formerStatus: "Senior Chief of Surgery, Danvers State Hospital",
@@ -79,6 +81,7 @@ export const CHARACTERS: Character[] = [
     slug: "silas-vance",
     name: "Silas \"The Great\" Vance",
     age: 36,
+    gender: "Male",
     className: "The Blackmailed Illusionist",
     cover: "Vaudeville Escape Artist & Illusionist",
     formerStatus: "Sergeant, Corps of Royal Engineers / Special Infiltration Scout",
@@ -119,6 +122,7 @@ export const CHARACTERS: Character[] = [
     slug: "julian-sterling",
     name: "Julian Sterling",
     age: 31,
+    gender: "Male",
     className: "The Desperate Auteur",
     cover: "Freelance Newsreel Cameraman & Documentarian",
     formerStatus: "Blacklisted Indie Filmmaker",
@@ -159,6 +163,7 @@ export const CHARACTERS: Character[] = [
     slug: "thomas-callahan",
     name: "Thomas \"Mack\" Callahan",
     age: 38,
+    gender: "Male",
     className: "The Amnesiac Detective",
     cover: "Licensed Private Investigator (Boston/Arkham)",
     formerStatus: "26th Infantry Division, AEF (Service Record Redacted)",
@@ -199,6 +204,7 @@ export const CHARACTERS: Character[] = [
     slug: "richard-graves",
     name: "Richard Pickman Graves",
     age: 34,
+    gender: "Male",
     className: "The Macabre Visionary",
     cover: "Commercial Illustrator & Pulp Cover Artist",
     formerStatus: "Expelled Fine Arts Prodigy, Boston Guild",
@@ -239,6 +245,7 @@ export const CHARACTERS: Character[] = [
     slug: "arthur-wright",
     name: "Arthur Wright",
     age: 45,
+    gender: "Male",
     className: "The Non-Euclidean Architect",
     cover: "Independent Civil Surveyor & Demolition Consultant",
     formerStatus: "Chief Urban Draftsman, Boston Metropolitan Commission",
@@ -279,6 +286,7 @@ export const CHARACTERS: Character[] = [
     slug: "percival-winthrop",
     name: "Percival Montgomery Winthrop",
     age: 48,
+    gender: "Male",
     className: "The Ruined Tycoon",
     cover: "Disgraced High-Society Speculator & Antiquities Broker",
     formerStatus: "Majority Shareholder, Winthrop Maritime Shipping Empire",

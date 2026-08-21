@@ -123,6 +123,9 @@ export default function EditCharacterPage() {
             <Field label="Age">
               <input style={input} type="number" value={char.age} onChange={(e) => setChar((c) => c ? { ...c, age: +e.target.value } : c)} />
             </Field>
+            <Field label="Gender">
+              <input style={input} value={char.gender ?? ""} onChange={(e) => setChar((c) => c ? { ...c, gender: e.target.value } : c)} />
+            </Field>
             <Field label="Class / Archetype">
               <input style={input} value={char.className} onChange={(e) => setChar((c) => c ? { ...c, className: e.target.value } : c)} />
             </Field>

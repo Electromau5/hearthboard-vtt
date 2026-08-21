@@ -251,7 +251,7 @@ export default function CharacterSheetPage() {
                 textTransform: "uppercase", color: "var(--brass)", marginBottom: 8,
               }}>{char.className}</div>
               <div style={{ fontSize: 11, color: "rgba(232,227,210,0.45)", lineHeight: 1.6 }}>
-                Age {char.age}<br />{char.cover}
+                Age {char.age} · {char.gender}<br />{char.cover}
               </div>
             </div>
 
