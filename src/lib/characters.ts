@@ -23,6 +23,7 @@ export type Character = {
   name: string;
   age: number;
   gender: string;
+  pastDemons: string;
   className: string;
   cover: string;
   formerStatus: string;
@@ -40,6 +41,7 @@ export const CHARACTERS: Character[] = [
     name: "Dr. Alistair Finch",
     age: 42,
     gender: "Male",
+    pastDemons: "",
     className: "The Disgraced Mortician",
     cover: "City Morgue Contract Embalmer at Arkham Sanitarium",
     formerStatus: "Senior Chief of Surgery, Danvers State Hospital",
@@ -82,6 +84,7 @@ export const CHARACTERS: Character[] = [
     name: "Silas \"The Great\" Vance",
     age: 36,
     gender: "Male",
+    pastDemons: "",
     className: "The Blackmailed Illusionist",
     cover: "Vaudeville Escape Artist & Illusionist",
     formerStatus: "Sergeant, Corps of Royal Engineers / Special Infiltration Scout",
@@ -123,6 +126,7 @@ export const CHARACTERS: Character[] = [
     name: "Julian Sterling",
     age: 31,
     gender: "Male",
+    pastDemons: "",
     className: "The Desperate Auteur",
     cover: "Freelance Newsreel Cameraman & Documentarian",
     formerStatus: "Blacklisted Indie Filmmaker",
@@ -164,6 +168,7 @@ export const CHARACTERS: Character[] = [
     name: "Thomas \"Mack\" Callahan",
     age: 38,
     gender: "Male",
+    pastDemons: "",
     className: "The Amnesiac Detective",
     cover: "Licensed Private Investigator (Boston/Arkham)",
     formerStatus: "26th Infantry Division, AEF (Service Record Redacted)",
@@ -205,6 +210,7 @@ export const CHARACTERS: Character[] = [
     name: "Richard Pickman Graves",
     age: 34,
     gender: "Male",
+    pastDemons: "",
     className: "The Macabre Visionary",
     cover: "Commercial Illustrator & Pulp Cover Artist",
     formerStatus: "Expelled Fine Arts Prodigy, Boston Guild",
@@ -246,6 +252,7 @@ export const CHARACTERS: Character[] = [
     name: "Arthur Wright",
     age: 45,
     gender: "Male",
+    pastDemons: "",
     className: "The Non-Euclidean Architect",
     cover: "Independent Civil Surveyor & Demolition Consultant",
     formerStatus: "Chief Urban Draftsman, Boston Metropolitan Commission",
@@ -287,6 +294,7 @@ export const CHARACTERS: Character[] = [
     name: "Percival Montgomery Winthrop",
     age: 48,
     gender: "Male",
+    pastDemons: "",
     className: "The Ruined Tycoon",
     cover: "Disgraced High-Society Speculator & Antiquities Broker",
     formerStatus: "Majority Shareholder, Winthrop Maritime Shipping Empire",

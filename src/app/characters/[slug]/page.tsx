@@ -275,6 +275,17 @@ export default function CharacterSheetPage() {
             </div>
           </div>
 
+          {/* Past Demons */}
+          {char.pastDemons && (
+            <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(201,148,79,0.1)" }}>
+              <PanelLabel>Past Demons</PanelLabel>
+              <div style={{
+                marginTop: 12, fontSize: 11, color: "rgba(232,227,210,0.5)",
+                lineHeight: 1.65, whiteSpace: "pre-wrap",
+              }}>{char.pastDemons}</div>
+            </div>
+          )}
+
           {/* Psychological profile / hooks */}
           <div style={{ padding: "18px 20px", flex: 1 }}>
             <PanelLabel>Psychological Profile</PanelLabel>

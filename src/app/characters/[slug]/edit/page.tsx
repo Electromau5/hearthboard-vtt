@@ -158,6 +158,15 @@ export default function PlayerEditCharacterPage() {
           </Field>
         </Section>
 
+        {/* ── Past Demons ── */}
+        <Section title="Past Demons">
+          <Field label="Past Demons">
+            <textarea style={{ ...input, minHeight: 120, resize: "vertical" }}
+              value={char.pastDemons ?? ""}
+              onChange={(e) => setChar((c) => c ? { ...c, pastDemons: e.target.value } : c)} />
+          </Field>
+        </Section>
+
         {/* ── Vitals ── */}
         <Section title="Dynamic Vitals">
           <div style={fieldGrid4}>
