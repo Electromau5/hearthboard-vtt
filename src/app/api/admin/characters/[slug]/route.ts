@@ -83,7 +83,7 @@ export async function PATCH(
   } catch (err) {
     console.error("[character PATCH] writeJSON failed:", err);
     return NextResponse.json(
-      { error: "Could not persist changes — storage unavailable. Configure BLOB_READ_WRITE_TOKEN on Vercel." },
+      { error: "Could not persist changes — storage unavailable." },
       { status: 503 }
     );
   }

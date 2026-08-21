@@ -6,7 +6,7 @@ import path from "path";
 const LOCAL_DATA = process.env.VERCEL
   ? "/tmp/data"
   : path.join(process.cwd(), "data");
-const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
+const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN && process.env.NODE_ENV !== "development";
 
 // ── JSON helpers ─────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ export async function readJSON<T>(blobPath: string, fallback: T): Promise<T> {
   try {
     const { blobs } = await list({ prefix: blobPrefix(blobPath), limit: 1 });
     if (blobs.length === 0) return fallback;
-    const res = await fetch(blobs[0].url, { cache: "no-store" });
+    const res = await fetch(blobs[0].downloadUrl, { cache: "no-store" });
     if (!res.ok) return fallback;
     return await res.json();
   } catch {
@@ -50,7 +50,7 @@ export async function writeJSON(blobPath: string, data: unknown): Promise<void> 
   const { blobs } = await list({ prefix: blobPrefix(blobPath), limit: 5 });
   if (blobs.length > 0) await del(blobs.map((b) => b.url));
   await put(blobPath, JSON.stringify(data), {
-    access: "public",
+    access: "private",
     contentType: "application/json",
     addRandomSuffix: true,
     cacheControlMaxAge: 0,
@@ -79,11 +79,11 @@ export async function uploadFile(
     return `/api/dev-assets/${blobPath}`;
   }
   const blob = await put(blobPath, file, {
-    access: "public",
+    access: "private",
     contentType,
     addRandomSuffix: true,
   });
-  return blob.url;
+  return blob.downloadUrl;
 }
 
 export async function deleteFile(url: string): Promise<void> {
