@@ -264,6 +264,7 @@ export default function HearthboardPage() {
   const [charAvatars, setCharAvatars] = useState<Record<string, string>>({});
   const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number; data?: Record<string, unknown> } | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   // Track triggeredAt values we've already displayed so one-shot effects (visions)
   // don't replay on every poll while the blob entry is still live.
   const shownEffectsRef = useRef<Set<number>>(new Set());
@@ -1290,8 +1291,46 @@ export default function HearthboardPage() {
                     border: '1px solid var(--line)',
                     boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
                     cursor: 'zoom-in',
+                    marginBottom: 8,
                   }}
                 />
+
+                {/* Tomb footage video */}
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                <div
+                  onClick={() => setVideoModalSrc('/tomb-1.mp4')}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && setVideoModalSrc('/tomb-1.mp4')}
+                  style={{
+                    position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                    border: '1px solid var(--line)', boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                    cursor: 'pointer', background: '#0a0807',
+                  }}
+                >
+                  <video
+                    src="/tomb-1.mp4"
+                    muted
+                    playsInline
+                    style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', opacity: 0.6, pointerEvents: 'none' }}
+                  />
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(to top, rgba(10,8,6,0.9) 0%, rgba(10,8,6,0.2) 60%, transparent 100%)',
+                    display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                    padding: '8px 10px',
+                  }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                      FOOTAGE
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                      Tomb Excavation
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                      ▶ Click to play
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1523,6 +1562,49 @@ export default function HearthboardPage() {
               lineHeight: 1,
             }}
           >✕</button>
+        </div>
+      )}
+
+      {/* Video modal */}
+      {videoModalSrc && (
+        <div
+          onClick={() => setVideoModalSrc(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 250,
+            background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'relative', maxWidth: '88vw', width: 900,
+              borderRadius: 'var(--r-lg)', overflow: 'hidden',
+              border: '1px solid var(--brass-dim)',
+              boxShadow: '0 24px 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(201,148,79,0.15)',
+              cursor: 'default',
+              background: '#000',
+            }}
+          >
+            <video
+              src={videoModalSrc}
+              controls
+              autoPlay
+              style={{ width: '100%', display: 'block', maxHeight: '80vh' }}
+            />
+            <button
+              onClick={() => setVideoModalSrc(null)}
+              style={{
+                position: 'absolute', top: 12, right: 16,
+                background: 'rgba(0,0,0,0.6)', border: '1px solid var(--line)',
+                borderRadius: '50%', width: 32, height: 32,
+                color: 'var(--parchment)', fontSize: 16, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                lineHeight: 1,
+              }}
+            >✕</button>
+          </div>
         </div>
       )}
     </div>
