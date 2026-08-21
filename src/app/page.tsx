@@ -202,7 +202,7 @@ const BRIEFINGS: Briefing[] = [
 // ── Types ────────────────────────────────────────────────────────────
 interface Game { id: string; name: string; system: string; description: string; art: string; lastPlayed: string; }
 
-interface Token { id: string; label: string; fullName: string; color: string; x: number; y: number; hp: number; maxHp: number; }
+interface Token { id: string; label: string; fullName: string; color: string; x: number; y: number; hp: number; maxHp: number; avatarUrl?: string; }
 interface InitEntry { tokenId: string; name: string; color: string; value: number; }
 type RollResult = { formula: string; rolls: number[]; mod: number; sides: number; total: number; n: number; };
 type ChatItem =
@@ -261,6 +261,7 @@ export default function HearthboardPage() {
   const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const [charAvatars, setCharAvatars] = useState<Record<string, string>>({});
   const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number; data?: Record<string, unknown> } | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   // Track triggeredAt values we've already displayed so one-shot effects (visions)
@@ -268,7 +269,7 @@ export default function HearthboardPage() {
   const shownEffectsRef = useRef<Set<number>>(new Set());
 
   // Refs
-  const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string } | { kind: 'compendium'; idx: number } | null>(null);
+  const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string; fullName?: string; avatarUrl?: string; hp?: number; maxHp?: number } | { kind: 'compendium'; idx: number } | null>(null);
   const dragTokRef = useRef<{ id: string; offsetX: number; offsetY: number; moved: boolean } | null>(null);
   const dragPosRef = useRef<{ id: string; x: number; y: number } | null>(null);
   const tokenSeqRef = useRef(1);
@@ -284,17 +285,31 @@ export default function HearthboardPage() {
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
 
-  // Fetch character assignments on mount
+  // Fetch character assignments on mount, then load avatar URLs for claimed characters
   useEffect(() => {
     fetch('/api/characters/assignments', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : {})
-      .then((data: Record<string, string>) => {
+      .then(async (data: Record<string, string>) => {
         setAssignments(data);
         // Auto-select the player's own character in the pane
         if (session && session.user.role !== 'admin') {
           const mySlug = Object.entries(data).find(([, uid]) => uid === session.user.id)?.[0];
           const mine = CHARACTERS.find(c => c.slug === mySlug);
           if (mine) setActiveCharId(mine.id);
+        }
+        // Fetch avatar URLs for claimed characters
+        const claimedSlugs = Object.keys(data);
+        if (claimedSlugs.length > 0) {
+          const avatarMap: Record<string, string> = {};
+          await Promise.all(claimedSlugs.map(async (slug) => {
+            try {
+              const res = await fetch(`/api/admin/characters/${slug}`, { cache: 'no-store' });
+              if (!res.ok) return;
+              const char = await res.json() as { avatar?: string };
+              if (char.avatar) avatarMap[slug] = char.avatar;
+            } catch {}
+          }));
+          setCharAvatars(avatarMap);
         }
       });
   }, [session]);
@@ -459,9 +474,9 @@ export default function HearthboardPage() {
     if (audio) { audio.pause(); audio.currentTime = 0; }
   };
 
-  const addToken = (t: { label: string; color: string; x: number; y: number; hp: number; maxHp: number; fullName?: string }) => {
+  const addToken = (t: { label: string; color: string; x: number; y: number; hp: number; maxHp: number; fullName?: string; avatarUrl?: string }) => {
     const id = 't' + tokenSeqRef.current++;
-    const tok: Token = { id, label: t.label, fullName: t.fullName || t.label, color: t.color, x: t.x, y: t.y, hp: t.hp, maxHp: t.maxHp };
+    const tok: Token = { id, label: t.label, fullName: t.fullName || t.label, color: t.color, x: t.x, y: t.y, hp: t.hp, maxHp: t.maxHp, avatarUrl: t.avatarUrl };
     setTokensByScene(prev => {
       const scene = currentSceneIdRef.current;
       return { ...prev, [scene]: [...(prev[scene] || []), tok] };
@@ -476,7 +491,7 @@ export default function HearthboardPage() {
     const y = e.clientY - rect.top;
     const payload = dragPayloadRef.current;
     if (payload.kind === 'tray') {
-      addToken({ label: payload.label, color: payload.color, x, y, hp: 20, maxHp: 20 });
+      addToken({ label: payload.label, color: payload.color, x, y, hp: payload.hp ?? 20, maxHp: payload.maxHp ?? 20, fullName: payload.fullName, avatarUrl: payload.avatarUrl });
     } else {
       const item = COMPENDIUM[payload.idx];
       const initials = item.name.split(' ').map(w => w[0]).slice(0, 2).join('');
@@ -713,19 +728,47 @@ export default function HearthboardPage() {
             <div className="rail-section">
               <div className="rail-title">Token Tray</div>
               <div className="token-tray">
-                {['A', 'B', 'C', 'D', 'E', 'F'].map((label, i) => (
-                  <div
-                    key={label}
-                    className="tray-token"
-                    style={{ background: TOKEN_COLORS[i % TOKEN_COLORS.length] }}
-                    draggable
-                    onDragStart={() => {
-                      dragPayloadRef.current = { kind: 'tray', color: TOKEN_COLORS[i % TOKEN_COLORS.length], label };
-                    }}
-                  >
-                    {label}
+                {CHARACTERS.filter(c => !!assignments[c.slug]).map((char) => {
+                  const charIdx = CHARACTERS.indexOf(char);
+                  const color = TOKEN_COLORS[charIdx % TOKEN_COLORS.length];
+                  const avatarUrl = charAvatars[char.slug];
+                  const words = char.name.replace(/[^a-zA-Z ]/g, '').split(' ').filter(Boolean);
+                  const initials = words.length >= 2
+                    ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
+                    : (words[0]?.[0] ?? '?').toUpperCase();
+                  return (
+                    <div
+                      key={char.slug}
+                      className="tray-token"
+                      style={{
+                        background: avatarUrl ? 'transparent' : color,
+                        overflow: 'hidden',
+                        position: 'relative',
+                        border: avatarUrl ? '2px solid var(--brass-dim)' : undefined,
+                      }}
+                      draggable
+                      onDragStart={() => {
+                        dragPayloadRef.current = { kind: 'tray', color, label: initials, fullName: char.name, hp: char.hp, maxHp: char.maxHp, avatarUrl };
+                      }}
+                      title={char.name}
+                    >
+                      {avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={avatarUrl}
+                          alt={char.name}
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                          draggable={false}
+                        />
+                      ) : initials}
+                    </div>
+                  );
+                })}
+                {CHARACTERS.filter(c => !!assignments[c.slug]).length === 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--ink-text-2)', padding: '4px 0', lineHeight: 1.5 }}>
+                    No investigators claimed yet.
                   </div>
-                ))}
+                )}
               </div>
               <div className="tray-hint">Drag a token onto the map to place it. Drag placed tokens to move them.</div>
             </div>
@@ -961,13 +1004,21 @@ export default function HearthboardPage() {
                   key={tok.id}
                   className={`token${selectedTokenId === tok.id ? ' selected' : ''}${dragPos?.id === tok.id ? ' dragging' : ''}`}
                   data-id={tok.id}
-                  style={{ left: pos.x, top: pos.y, background: tok.color, ['--hp-pct' as string]: hpPct } as React.CSSProperties}
+                  style={{ left: pos.x, top: pos.y, background: tok.avatarUrl ? 'transparent' : tok.color, overflow: 'hidden', position: 'relative', ['--hp-pct' as string]: hpPct } as React.CSSProperties}
                   onMouseDown={e => handleTokenMouseDown(e, tok)}
                   onClick={e => e.stopPropagation()}
                 >
-                  <div className="hp-ring" />
-                  {tok.label}
-                  <div className="token-label">{tok.fullName} · {tok.hp}/{tok.maxHp}</div>
+                  <div className="hp-ring" style={{ position: 'absolute', inset: 0, zIndex: 2 }} />
+                  {tok.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={tok.avatarUrl}
+                      alt={tok.label}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                      draggable={false}
+                    />
+                  ) : tok.label}
+                  <div className="token-label" style={{ position: 'absolute', zIndex: 3 }}>{tok.fullName} · {tok.hp}/{tok.maxHp}</div>
                 </div>
               );
             })}

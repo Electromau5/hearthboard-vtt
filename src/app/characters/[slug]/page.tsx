@@ -236,8 +236,18 @@ export default function CharacterSheetPage() {
                 boxShadow: "0 0 28px rgba(201,148,79,0.18), 0 0 60px rgba(201,148,79,0.06), inset 0 0 24px rgba(0,0,0,0.5)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontFamily: "var(--font-display)", fontSize: 44, fontWeight: 700, color: "var(--brass)",
+                overflow: "hidden", position: "relative",
               }}>
-                {char.name.charAt(0)}
+                {char.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={char.avatar}
+                    alt={char.name}
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+                  />
+                ) : (
+                  char.name.charAt(0)
+                )}
               </div>
             </div>
 

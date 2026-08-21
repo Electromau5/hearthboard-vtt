@@ -24,14 +24,28 @@ export default function EditCharacterPage() {
 
   useEffect(() => { if (!base) { router.replace("/admin/characters"); return; } load(); }, [base, load, router]);
 
+  const uploadAvatar = async (file: File) => {
+    const form = new FormData();
+    form.append("avatar", file);
+    const res = await fetch(`/api/admin/characters/${slug}/avatar`, { method: "POST", body: form });
+    if (res.ok) {
+      const data = await res.json() as { avatar: string };
+      setChar((c) => c ? { ...c, avatar: data.avatar } : c);
+      notify("Avatar updated.");
+    } else {
+      notify("Avatar upload failed.");
+    }
+  };
+
   const save = async () => {
     if (!char) return;
     setSaving(true);
     try {
+      // Strip avatar — it is managed separately via the upload endpoint
       const res = await fetch(`/api/admin/characters/${slug}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(char),
+        body: JSON.stringify({ ...char, avatar: undefined }),
       });
       if (res.ok) {
         const saved = await res.json() as Character;
@@ -261,6 +275,33 @@ export default function EditCharacterPage() {
                 <button className="btn btn-ghost btn-sm btn-danger" onClick={() => removeEquip(i)}>✕</button>
               </div>
             ))}
+          </div>
+        </Section>
+
+        {/* ── Avatar ── */}
+        <Section title="Character Avatar">
+          <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+            {char.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={char.avatar}
+                alt="Current avatar"
+                style={{ width: 80, height: 80, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--brass-dim)", flexShrink: 0 }}
+              />
+            ) : (
+              <div style={{ width: 80, height: 80, borderRadius: "50%", background: "var(--surface-2)", border: "2px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-display)", fontSize: 32, color: "var(--brass)", flexShrink: 0 }}>
+                {char.name.charAt(0)}
+              </div>
+            )}
+            <Field label="Upload Avatar Image">
+              <input
+                type="file"
+                accept="image/*"
+                style={input}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); }}
+              />
+              <div style={{ fontSize: 11, color: "var(--ink-text-2)", marginTop: 4 }}>Replaces the initial in the token tray and character portrait.</div>
+            </Field>
           </div>
         </Section>
 

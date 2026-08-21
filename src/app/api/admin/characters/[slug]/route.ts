@@ -10,7 +10,7 @@ function blobPath(slug: string) {
 }
 
 function mergeCharacter(base: Character, overrides: Partial<Character>): Character {
-  return {
+  const merged = {
     ...base,
     ...overrides,
     vitals: { ...base.vitals, ...(overrides.vitals || {}) },
@@ -20,6 +20,11 @@ function mergeCharacter(base: Character, overrides: Partial<Character>): Charact
     hooks: overrides.hooks ?? base.hooks,
     equipment: overrides.equipment ?? base.equipment,
   };
+  // Replace internal avatar storage URL with client-safe proxy URL
+  if (merged.avatar) {
+    merged.avatar = `/api/characters/${merged.slug}/avatar`;
+  }
+  return merged;
 }
 
 export async function GET(

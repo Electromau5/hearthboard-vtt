@@ -24,6 +24,7 @@ export type Character = {
   age: number;
   gender: string;
   pastDemons: string;
+  avatar?: string;
   className: string;
   cover: string;
   formerStatus: string;
