@@ -29,6 +29,13 @@ interface AnimState {
   onDone?: () => void;
 }
 
+const DIE_CONFIG = {
+  d10:  { sides: 10,  glb: '/space-d10.glb',  meshName: 'D10',  label: 'D10',  formula: '1d10'  },
+  d4:   { sides: 4,   glb: '/space-d4.glb',   meshName: 'D4',   label: 'D4',   formula: '1d4'   },
+  d100: { sides: 100, glb: '/space-d100.glb', meshName: 'D100', label: 'D100', formula: '1d100' },
+} as const;
+type DieType = keyof typeof DIE_CONFIG;
+
 // Deep-space navy material for the die body
 function makeBodyMaterial() {
   return new THREE.MeshPhysicalMaterial({
@@ -38,7 +45,6 @@ function makeBodyMaterial() {
     clearcoat: 0.85,
     clearcoatRoughness: 0.08,
     envMapIntensity: 2.2,
-    // Faint blue iridescent sheen
     sheenColor: new THREE.Color(0x3040aa),
     sheen: 0.4,
   });
@@ -58,13 +64,19 @@ function makeDigitMaterial() {
 export function DiceRollerPane({ pushRollToChat, who }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<AnimState | null>(null);
+  const [dieType, setDieType] = useState<DieType>('d10');
   const [loaded, setLoaded] = useState(false);
   const [result, setResult] = useState<number | null>(null);
   const [rolling, setRolling] = useState(false);
 
+  const cfg = DIE_CONFIG[dieType];
+
   useEffect(() => {
     const el = mountRef.current;
     if (!el) return;
+
+    setLoaded(false);
+    setResult(null);
 
     const width  = el.clientWidth  || 280;
     const height = el.clientHeight || 280;
@@ -82,41 +94,35 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
     // ── Scene ───────────────────────────────────────────────────────
     const scene = new THREE.Scene();
 
-    // Environment map — makes metallic materials look realistic
     const pmrem = new THREE.PMREMGenerator(renderer);
     pmrem.compileEquirectangularShader();
     const envMap = pmrem.fromScene(new RoomEnvironment()).texture;
     scene.environment = envMap;
     pmrem.dispose();
 
-    // ── Camera — equatorial view matching the Blender render ────────
+    // ── Camera ──────────────────────────────────────────────────────
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
     camera.position.set(0, 0.6, 3.4);
     camera.lookAt(0, 0.1, 0);
 
     // ── Lights ──────────────────────────────────────────────────────
-    // Warm key from upper-right
     const keyLight = new THREE.DirectionalLight(0xffd880, 3.5);
     keyLight.position.set(4, 5, 4);
     keyLight.castShadow = true;
     scene.add(keyLight);
 
-    // Cool blue fill from the left
     const fillLight = new THREE.DirectionalLight(0x3858cc, 1.8);
     fillLight.position.set(-4, 1, -2);
     scene.add(fillLight);
 
-    // Purple rim from behind/below
     const rimLight = new THREE.PointLight(0x7020ff, 5, 12);
     rimLight.position.set(0, -2.5, -3.5);
     scene.add(rimLight);
 
-    // Gentle top glow
     const topGlow = new THREE.PointLight(0xffd060, 1.2, 8);
     topGlow.position.set(0, 4, 1);
     scene.add(topGlow);
 
-    // Soft ambient
     const ambient = new THREE.AmbientLight(0x08102a, 6);
     scene.add(ambient);
 
@@ -127,16 +133,16 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
     // ── Load GLB ────────────────────────────────────────────────────
     const loader = new GLTFLoader();
     loader.load(
-      '/space-d10.glb',
+      cfg.glb,
       (gltf) => {
         if (disposed) return;
 
         const die = gltf.scene;
 
-        // Scale using the die-body mesh only (avoids text object skewing bounds)
+        // Scale using the primary die-body mesh
         let dieMesh: THREE.Mesh | null = null;
         die.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh && child.name === 'D10') {
+          if ((child as THREE.Mesh).isMesh && child.name === cfg.meshName) {
             dieMesh = child as THREE.Mesh;
           }
         });
@@ -145,11 +151,9 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
         const box = new THREE.Box3().setFromObject(refObj);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        // Target: die fills most of the viewport (2.0 units across longest axis)
         const scale = (maxDim > 0 ? 2.0 / maxDim : 1);
         die.scale.setScalar(scale);
 
-        // Recenter around origin after scaling
         const box2 = new THREE.Box3().setFromObject(die);
         const center = box2.getCenter(new THREE.Vector3());
         die.position.sub(center);
@@ -159,14 +163,12 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
           if (!(child as THREE.Mesh).isMesh) return;
           const mesh = child as THREE.Mesh;
 
-          // Dispose the placeholder GLB material(s)
           if (Array.isArray(mesh.material)) {
             mesh.material.forEach(m => m.dispose());
           } else if (mesh.material) {
             (mesh.material as THREE.Material).dispose();
           }
 
-          // Text.XXX = digit labels, everything else = die body
           const isDigit = mesh.name.startsWith('Text');
           mesh.material = isDigit ? digitMat : bodyMat;
           mesh.castShadow    = true;
@@ -201,7 +203,6 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
             die.rotation.y += state.velY * dt;
             die.rotation.z += state.velZ * dt;
 
-            // Dampen: 0.972 per frame → ~3 s roll at 60 fps
             state.velX *= 0.972;
             state.velY *= 0.972;
             state.velZ *= 0.972;
@@ -236,18 +237,17 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
       animRef.current = null;
     };
-  }, []);
+  }, [dieType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRoll = useCallback(() => {
     const s = animRef.current;
     if (!s || rolling) return;
 
-    const r = Math.floor(Math.random() * 10) + 1;
+    const r = Math.floor(Math.random() * cfg.sides) + 1;
     s.rolledResult = r;
     setRolling(true);
     setResult(null);
 
-    // Fully random spin axis and speed every roll
     const angle = Math.random() * Math.PI * 2;
     const tilt  = Math.random() * Math.PI;
     const speed = 22 + Math.random() * 14;
@@ -261,28 +261,60 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
       setResult(final);
       setRolling(false);
       pushRollToChat(who, {
-        formula: '1d10',
+        formula: cfg.formula,
         rolls: [final],
         mod: 0,
-        sides: 10,
+        sides: cfg.sides,
         total: final,
         n: 1,
       });
     };
-  }, [rolling, pushRollToChat, who]);
+  }, [rolling, pushRollToChat, who, cfg]);
 
-  const displayNum = result === null ? null : result === 10 ? 0 : result;
+  const displayNum = result === null ? null : (dieType === 'd10' && result === 10) ? 0 : result;
+  const resultLabel = result === null ? '' :
+    dieType === 'd10' && result === 10 ? '00 · ten' : `${result} · ${cfg.formula}`;
 
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: '14px 12px', gap: 10, height: '100%', boxSizing: 'border-box',
     }}>
+
+      {/* Die selector */}
+      <select
+        value={dieType}
+        disabled={rolling}
+        onChange={(e) => setDieType(e.target.value as DieType)}
+        style={{
+          alignSelf: 'stretch',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--brass-dim)',
+          borderRadius: 'var(--r-lg)',
+          color: 'var(--brass)',
+          fontFamily: 'var(--font-mono)', fontSize: 11,
+          fontWeight: 600, letterSpacing: '1.5px',
+          padding: '6px 10px',
+          cursor: rolling ? 'not-allowed' : 'pointer',
+          outline: 'none',
+          appearance: 'none' as const,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c9944f' opacity='0.7'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 10px center',
+          paddingRight: 28,
+        }}
+      >
+        {(Object.keys(DIE_CONFIG) as DieType[]).map((key) => (
+          <option key={key} value={key}>Space {DIE_CONFIG[key].label}</option>
+        ))}
+      </select>
+
+      {/* Label */}
       <div style={{
         fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.8px',
         textTransform: 'uppercase', color: 'var(--ink-text-2)', alignSelf: 'flex-start',
       }}>
-        Space D10
+        Space {cfg.label}
       </div>
 
       {/* 3D viewport */}
@@ -314,7 +346,7 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
               fontFamily: 'var(--font-mono)', fontSize: 10,
               color: 'var(--ink-text-2)', letterSpacing: '1.2px', marginTop: 3,
             }}>
-              {result === 10 ? '00 · ten' : `${result} · 1d10`}
+              {resultLabel}
             </div>
           </>
         ) : rolling ? (
@@ -352,7 +384,7 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
           flexShrink: 0,
         }}
       >
-        {!loaded ? 'Loading…' : rolling ? 'Rolling…' : '⚄  Roll D10'}
+        {!loaded ? 'Loading…' : rolling ? 'Rolling…' : `⚄  Roll ${cfg.label}`}
       </button>
 
       <div style={{
