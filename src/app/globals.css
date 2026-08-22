@@ -564,13 +564,25 @@ input, textarea, select { font-family: inherit; }
 /* Sanity (mild) — bas relief passive influence on regular humans */
 /* Barely perceptible: slow, low-amplitude hue creep + micro-blur       */
 @keyframes eff-sanity-mild {
-  0%,100% { backdrop-filter: blur(0px)   saturate(1.0) hue-rotate(0deg);  background: rgba(79,155,146,0); }
-  30%     { backdrop-filter: blur(1.2px) saturate(0.92) hue-rotate(4deg); background: rgba(79,155,146,0.015); }
-  60%     { backdrop-filter: blur(0.6px) saturate(0.88) hue-rotate(-6deg);background: rgba(79,155,146,0.02); }
+  0%,100% { backdrop-filter: blur(0px)   saturate(1.0)  hue-rotate(0deg);   background: rgba(79,155,146,0); }
+  30%     { backdrop-filter: blur(2.5px) saturate(0.87) hue-rotate(8deg);   background: rgba(79,155,146,0.025); }
+  60%     { backdrop-filter: blur(1.5px) saturate(0.82) hue-rotate(-12deg); background: rgba(79,155,146,0.03); }
 }
 .eff-sanity-mild {
   position: fixed; inset: 0; z-index: 305; pointer-events: none;
-  animation: eff-sanity-mild 9s ease-in-out infinite;
+  animation: eff-sanity-mild 7s ease-in-out infinite;
+}
+
+/* Primal horror — slow peripheral darkness, like something vast stirring beyond the frame */
+@keyframes eff-primal-horror {
+  0%,100% { opacity: 0;    }
+  35%     { opacity: 0.65; }
+  65%     { opacity: 0.45; }
+}
+.eff-primal-horror {
+  position: fixed; inset: 0; z-index: 306; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 28%, rgba(8,3,1,0.92) 100%);
+  animation: eff-primal-horror 14s ease-in-out infinite;
 }
 
 /* Darkness — fade to black */

@@ -1635,7 +1635,7 @@ export default function HearthboardPage() {
       {/* Cthulhu bas relief 3D modal + mild passive sanity effect */}
       {reliefModalOpen && (
         <>
-          {/* Passive sanity drain — very subtle, local only */}
+          <div className="eff-primal-horror" />
           <div className="eff-sanity-mild" />
           <CthulhuReliefModal onClose={() => setReliefModalOpen(false)} />
         </>
