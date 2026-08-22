@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
+import { CthulhuReliefModal } from './components/CthulhuReliefModal';
 
 // ── Constants ────────────────────────────────────────────────────────
 const TOKEN_COLORS = ['#c9944f', '#4f9b92', '#b1483f', '#8a72c9', '#5f8fc9', '#c9b04f'];
@@ -265,6 +266,7 @@ export default function HearthboardPage() {
   const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number; data?: Record<string, unknown> } | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
+  const [reliefModalOpen, setReliefModalOpen] = useState(false);
   // Track triggeredAt values we've already displayed so one-shot effects (visions)
   // don't replay on every poll while the blob entry is still live.
   const shownEffectsRef = useRef<Set<number>>(new Set());
@@ -1231,105 +1233,170 @@ export default function HearthboardPage() {
                   onChange={e => setCompSearch(e.target.value)}
                 />
               </div>
-              <div className="comp-list">
-                {filteredCompendium.length === 0 ? (
-                  <div style={{ color: 'var(--ink-text-2)', fontSize: 13, padding: 10 }}>No matches.</div>
-                ) : filteredCompendium.map(c => {
-                  const idx = COMPENDIUM.indexOf(c);
-                  return (
-                    <div
-                      key={c.name}
-                      className="comp-item"
-                      draggable
-                      onDragStart={() => { dragPayloadRef.current = { kind: 'compendium', idx }; }}
-                    >
-                      <div className="ci-top">
-                        <span className="ci-name">{c.name}</span>
-                        <span className="ci-cr">{c.cr}</span>
+              {/* Single scrollable container for all Resources content */}
+              <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                {/* Draggable compendium entries */}
+                <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {filteredCompendium.length === 0 ? (
+                    <div style={{ color: 'var(--ink-text-2)', fontSize: 13, padding: 10 }}>No matches.</div>
+                  ) : filteredCompendium.map(c => {
+                    const idx = COMPENDIUM.indexOf(c);
+                    return (
+                      <div
+                        key={c.name}
+                        className="comp-item"
+                        draggable
+                        onDragStart={() => { dragPayloadRef.current = { kind: 'compendium', idx }; }}
+                      >
+                        <div className="ci-top">
+                          <span className="ci-name">{c.name}</span>
+                          <span className="ci-cr">{c.cr}</span>
+                        </div>
+                        <div className="ci-type">{c.type}</div>
+                        {c.hp !== null && (
+                          <div className="ci-stats"><span>HP {c.hp}</span></div>
+                        )}
                       </div>
-                      <div className="ci-type">{c.type}</div>
-                      {c.hp !== null && (
-                        <div className="ci-stats"><span>HP {c.hp}</span></div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="comp-hint">Drag an entry onto the map to spawn it as a token.</div>
-
-              {/* Journal entry image */}
-              <div style={{ padding: '12px 10px 10px' }}>
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px',
-                  textTransform: 'uppercase', color: 'var(--ink-text-2)',
-                  marginBottom: 8,
-                }}>
-                  Field Documents
+                    );
+                  })}
                 </div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/journal-1.jpeg"
-                  alt="Patient journal — Bellevue Psychiatric Isolation Ward"
-                  onClick={() => setLightboxSrc('/journal-1.jpeg')}
-                  style={{
-                    width: '100%', display: 'block',
-                    borderRadius: 'var(--r-md)',
-                    border: '1px solid var(--line)',
-                    boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
-                    cursor: 'zoom-in',
-                    marginBottom: 8,
-                  }}
-                />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/inmate-log.jpeg"
-                  alt="Inmate Census & Observation List — Bellevue Psychiatric Isolation Ward"
-                  onClick={() => setLightboxSrc('/inmate-log.jpeg')}
-                  style={{
-                    width: '100%', display: 'block',
-                    borderRadius: 'var(--r-md)',
-                    border: '1px solid var(--line)',
-                    boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
-                    cursor: 'zoom-in',
-                    marginBottom: 8,
-                  }}
-                />
+                <div className="comp-hint">Drag an entry onto the map to spawn it as a token.</div>
 
-                {/* Tomb footage video */}
-                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-                <div
-                  onClick={() => setVideoModalSrc('/tomb-1.mp4')}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => e.key === 'Enter' && setVideoModalSrc('/tomb-1.mp4')}
-                  style={{
-                    position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
-                    border: '1px solid var(--line)', boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
-                    cursor: 'pointer', background: '#0a0807',
-                  }}
-                >
-                  <video
-                    src="/tomb-1.mp4"
-                    muted
-                    playsInline
-                    style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', opacity: 0.6, pointerEvents: 'none' }}
-                  />
+                {/* Field Documents */}
+                <div style={{ padding: '4px 10px 10px' }}>
                   <div style={{
-                    position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to top, rgba(10,8,6,0.9) 0%, rgba(10,8,6,0.2) 60%, transparent 100%)',
-                    display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-                    padding: '8px 10px',
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px',
+                    textTransform: 'uppercase', color: 'var(--ink-text-2)',
+                    marginBottom: 8,
                   }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
-                      FOOTAGE
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
-                      Tomb Excavation
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
-                      ▶ Click to play
+                    Field Documents
+                  </div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/journal-1.jpeg"
+                    alt="Patient journal — Bellevue Psychiatric Isolation Ward"
+                    onClick={() => setLightboxSrc('/journal-1.jpeg')}
+                    style={{
+                      width: '100%', display: 'block',
+                      borderRadius: 'var(--r-md)',
+                      border: '1px solid var(--line)',
+                      boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                      cursor: 'zoom-in',
+                      marginBottom: 8,
+                    }}
+                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/inmate-log.jpeg"
+                    alt="Inmate Census & Observation List — Bellevue Psychiatric Isolation Ward"
+                    onClick={() => setLightboxSrc('/inmate-log.jpeg')}
+                    style={{
+                      width: '100%', display: 'block',
+                      borderRadius: 'var(--r-md)',
+                      border: '1px solid var(--line)',
+                      boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                      cursor: 'zoom-in',
+                      marginBottom: 8,
+                    }}
+                  />
+
+                  {/* Tomb footage video */}
+                  {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                  <div
+                    onClick={() => setVideoModalSrc('/tomb-1.mp4')}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={e => e.key === 'Enter' && setVideoModalSrc('/tomb-1.mp4')}
+                    style={{
+                      position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                      border: '1px solid var(--line)', boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                      cursor: 'pointer', background: '#0a0807',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <video
+                      src="/tomb-1.mp4"
+                      muted
+                      playsInline
+                      style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', opacity: 0.6, pointerEvents: 'none' }}
+                    />
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'linear-gradient(to top, rgba(10,8,6,0.9) 0%, rgba(10,8,6,0.2) 60%, transparent 100%)',
+                      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                      padding: '8px 10px',
+                    }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                        FOOTAGE
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                        Tomb Excavation
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                        ▶ Click to play
+                      </div>
                     </div>
                   </div>
+
+                  {/* ── Cthulhu Bas Relief — 3D Artifact ── */}
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px',
+                    textTransform: 'uppercase', color: 'var(--ink-text-2)',
+                    marginBottom: 8, marginTop: 10,
+                  }}>
+                    3D Artifacts
+                  </div>
+                  {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setReliefModalOpen(true)}
+                    onKeyDown={e => e.key === 'Enter' && setReliefModalOpen(true)}
+                    style={{
+                      position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                      border: '1px solid var(--brass-dim)',
+                      boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                      cursor: 'pointer',
+                      background: '#0d0905',
+                      marginBottom: 10,
+                    }}
+                  >
+                    {/* Static render preview image */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/cthulhu-relief-preview.png"
+                      alt="Cthulhu Bas Relief"
+                      style={{
+                        width: '100%', display: 'block', aspectRatio: '4/3',
+                        objectFit: 'cover', opacity: 0.75,
+                        pointerEvents: 'none',
+                        filter: 'sepia(0.2) contrast(1.1)',
+                      }}
+                      onError={e => {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'linear-gradient(to top, rgba(10,6,4,0.96) 0%, rgba(10,6,4,0.35) 55%, transparent 100%)',
+                      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                      padding: '8px 10px',
+                    }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--brass)', border: '1px solid var(--brass-dim)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                        3D ARTIFACT
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                        Cthulhu Bas Relief
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass-dim)', marginTop: 2 }}>
+                        Sub-chamber · Section 7
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                        ⬡ Click to inspect
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             </div>
@@ -1563,6 +1630,15 @@ export default function HearthboardPage() {
             }}
           >✕</button>
         </div>
+      )}
+
+      {/* Cthulhu bas relief 3D modal + mild passive sanity effect */}
+      {reliefModalOpen && (
+        <>
+          {/* Passive sanity drain — very subtle, local only */}
+          <div className="eff-sanity-mild" />
+          <CthulhuReliefModal onClose={() => setReliefModalOpen(false)} />
+        </>
       )}
 
       {/* Video modal */}

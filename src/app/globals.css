@@ -561,6 +561,18 @@ input, textarea, select { font-family: inherit; }
   animation: eff-sanity 2.8s ease-in-out infinite;
 }
 
+/* Sanity (mild) — bas relief passive influence on regular humans */
+/* Barely perceptible: slow, low-amplitude hue creep + micro-blur       */
+@keyframes eff-sanity-mild {
+  0%,100% { backdrop-filter: blur(0px)   saturate(1.0) hue-rotate(0deg);  background: rgba(79,155,146,0); }
+  30%     { backdrop-filter: blur(1.2px) saturate(0.92) hue-rotate(4deg); background: rgba(79,155,146,0.015); }
+  60%     { backdrop-filter: blur(0.6px) saturate(0.88) hue-rotate(-6deg);background: rgba(79,155,146,0.02); }
+}
+.eff-sanity-mild {
+  position: fixed; inset: 0; z-index: 295; pointer-events: none;
+  animation: eff-sanity-mild 9s ease-in-out infinite;
+}
+
 /* Darkness — fade to black */
 @keyframes eff-darkness {
   0% { opacity: 0; }
