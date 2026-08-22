@@ -387,6 +387,15 @@ export default function HearthboardPage() {
     if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
   }, [chatItems]);
 
+  useEffect(() => {
+    if (reliefModalOpen) {
+      document.body.classList.add('eff-primal-horror');
+    } else {
+      document.body.classList.remove('eff-primal-horror');
+    }
+    return () => document.body.classList.remove('eff-primal-horror');
+  }, [reliefModalOpen]);
+
   // Global mouse handlers for token dragging
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
@@ -1635,7 +1644,7 @@ export default function HearthboardPage() {
       {/* Cthulhu bas relief 3D modal + mild passive sanity effect */}
       {reliefModalOpen && (
         <>
-          <div className="eff-primal-horror" />
+          <div className="eff-primal-horror-flash" />
           <div className="eff-sanity-mild" />
           <CthulhuReliefModal onClose={() => setReliefModalOpen(false)} />
         </>

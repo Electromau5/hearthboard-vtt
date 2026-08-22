@@ -573,16 +573,21 @@ input, textarea, select { font-family: inherit; }
   animation: eff-sanity-mild 7s ease-in-out infinite;
 }
 
-/* Primal horror — slow peripheral darkness, like something vast stirring beyond the frame */
-@keyframes eff-primal-horror {
-  0%,100% { opacity: 0;    }
-  35%     { opacity: 0.65; }
-  65%     { opacity: 0.45; }
+/* Primal Horror — violent body shake (body-level class) */
+body.eff-primal-horror { animation: eff-horror-shake 0.11s linear infinite; }
+
+/* Primal Horror flash — rapid blinding white strobes */
+@keyframes eff-primal-flash {
+  0%,100%  { opacity: 0;    }
+  6%,16%   { opacity: 0.88; }
+  11%,21%  { opacity: 0;    }
+  48%,56%  { opacity: 0.72; }
+  52%,60%  { opacity: 0;    }
 }
-.eff-primal-horror {
+.eff-primal-horror-flash {
   position: fixed; inset: 0; z-index: 306; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 50%, transparent 28%, rgba(8,3,1,0.92) 100%);
-  animation: eff-primal-horror 14s ease-in-out infinite;
+  background: #fff;
+  animation: eff-primal-flash 0.75s linear infinite;
 }
 
 /* Darkness — fade to black */
