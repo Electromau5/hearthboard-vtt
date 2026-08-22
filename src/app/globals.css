@@ -569,7 +569,7 @@ input, textarea, select { font-family: inherit; }
   60%     { backdrop-filter: blur(0.6px) saturate(0.88) hue-rotate(-6deg);background: rgba(79,155,146,0.02); }
 }
 .eff-sanity-mild {
-  position: fixed; inset: 0; z-index: 295; pointer-events: none;
+  position: fixed; inset: 0; z-index: 305; pointer-events: none;
   animation: eff-sanity-mild 9s ease-in-out infinite;
 }
 
