@@ -267,6 +267,7 @@ export default function HearthboardPage() {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   // Track triggeredAt values we've already displayed so one-shot effects (visions)
   // don't replay on every poll while the blob entry is still live.
   const shownEffectsRef = useRef<Set<number>>(new Set());
@@ -599,6 +600,32 @@ export default function HearthboardPage() {
     journalTimerRef.current = setTimeout(() => setJournalSaved('Autosaves as you type'), 1500);
   };
 
+  const downloadExport = async () => {
+    setExportLoading(true);
+    try {
+      const res = await fetch('/api/campaign/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ journal: journals[ECHOES_OF_DARKNESS.id] ?? '' }),
+      });
+      if (!res.ok) { showToast('Export failed'); return; }
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `echoes-of-darkness-${new Date().toISOString().split('T')[0]}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast('Export failed');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   // ── Derived ──────────────────────────────────────────────────────────
   const currentGame = ECHOES_OF_DARKNESS;
   const currentTokens = tokensByScene[currentSceneId] ?? [];
@@ -677,6 +704,18 @@ export default function HearthboardPage() {
               </div>
             </div>
           </div>
+          {isAdmin && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={e => { e.stopPropagation(); downloadExport(); }}
+                disabled={exportLoading}
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.5px', opacity: exportLoading ? 0.6 : 1 }}
+              >
+                {exportLoading ? 'Generating…' : '↓ Export Session (.md)'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
