@@ -5,6 +5,7 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
 import { CthulhuReliefModal } from './components/CthulhuReliefModal';
+import { InvestigationBoard } from './components/InvestigationBoard';
 
 // ── Constants ────────────────────────────────────────────────────────
 const TOKEN_COLORS = ['#c9944f', '#4f9b92', '#b1483f', '#8a72c9', '#5f8fc9', '#c9b04f'];
@@ -269,6 +270,7 @@ export default function HearthboardPage() {
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [boardView, setBoardView] = useState<'map' | 'board'>('map');
   const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
@@ -823,6 +825,14 @@ export default function HearthboardPage() {
               </button>
             ))}
           </div>
+          <button
+            className={`scene-chip${boardView === 'board' ? ' active' : ''}`}
+            style={{ marginLeft: 8, borderColor: boardView === 'board' ? 'var(--brass)' : undefined, color: boardView === 'board' ? 'var(--brass)' : undefined }}
+            onClick={() => setBoardView(v => v === 'map' ? 'board' : 'map')}
+            title="Toggle case investigation board"
+          >
+            ⬡ Case Board
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => showToast('Invite link copied')}>
             Invite players
           </button>
@@ -905,10 +915,16 @@ export default function HearthboardPage() {
             </div>
           </div>
 
+          {/* Case board — replaces map when toggled */}
+          {boardView === 'board' && (
+            <InvestigationBoard username={session?.user?.name ?? 'Unknown'} />
+          )}
+
           {/* Center map */}
           <div
             className={`map-wrap${tool === 'note' ? ' tool-note' : ''}`}
             ref={mapWrapRef}
+            style={{ display: boardView === 'board' ? 'none' : undefined }}
             onDragOver={e => e.preventDefault()}
             onDrop={handleMapDrop}
             onMouseDown={e => {
