@@ -204,6 +204,7 @@ const BRIEFINGS: Briefing[] = [
 interface Game { id: string; name: string; system: string; description: string; art: string; lastPlayed: string; }
 
 interface Token { id: string; label: string; fullName: string; color: string; x: number; y: number; hp: number; maxHp: number; avatarUrl?: string; }
+interface StickyNote { id: string; text: string; x: number; y: number; sceneId: string; author: string; }
 interface InitEntry { tokenId: string; name: string; color: string; value: number; }
 type RollResult = { formula: string; rolls: number[]; mod: number; sides: number; total: number; n: number; };
 type ChatItem =
@@ -268,6 +269,10 @@ export default function HearthboardPage() {
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
+  const [dragNotePos, setDragNotePos] = useState<{ id: string; x: number; y: number } | null>(null);
   // Track triggeredAt values we've already displayed so one-shot effects (visions)
   // don't replay on every poll while the blob entry is still live.
   const shownEffectsRef = useRef<Set<number>>(new Set());
@@ -283,6 +288,8 @@ export default function HearthboardPage() {
   const chatLogRef = useRef<HTMLDivElement>(null);
   const currentSceneIdRef = useRef(currentSceneId);
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const dragNoteRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const dragNotePosRef = useRef<{ id: string; x: number; y: number } | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const briefingAudioRef = useRef<HTMLAudioElement | null>(null);
   const speakeasyBgRef = useRef<HTMLAudioElement | null>(null);
@@ -388,6 +395,18 @@ export default function HearthboardPage() {
     if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
   }, [chatItems]);
 
+  // Poll sticky notes for all players
+  useEffect(() => {
+    const load = () =>
+      fetch('/api/notes', { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : [])
+        .then((notes: StickyNote[]) => setStickyNotes(notes))
+        .catch(() => {});
+    load();
+    const iv = setInterval(load, 2500);
+    return () => clearInterval(iv);
+  }, []);
+
   useEffect(() => {
     if (reliefModalOpen) {
       document.body.classList.add('eff-primal-horror');
@@ -397,32 +416,59 @@ export default function HearthboardPage() {
     return () => document.body.classList.remove('eff-primal-horror');
   }, [reliefModalOpen]);
 
-  // Global mouse handlers for token dragging
+  // Global mouse handlers for token and note dragging
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      if (!dragTokRef.current || !mapWrapRef.current) return;
-      dragTokRef.current.moved = true;
-      const rect = mapWrapRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left - dragTokRef.current.offsetX;
-      const y = e.clientY - rect.top - dragTokRef.current.offsetY;
-      const pos = { id: dragTokRef.current.id, x, y };
-      dragPosRef.current = pos;
-      setDragPos({ ...pos });
+      if (mapWrapRef.current) {
+        if (dragTokRef.current) {
+          dragTokRef.current.moved = true;
+          const rect = mapWrapRef.current.getBoundingClientRect();
+          const x = e.clientX - rect.left - dragTokRef.current.offsetX;
+          const y = e.clientY - rect.top - dragTokRef.current.offsetY;
+          const pos = { id: dragTokRef.current.id, x, y };
+          dragPosRef.current = pos;
+          setDragPos({ ...pos });
+        }
+        if (dragNoteRef.current) {
+          const rect = mapWrapRef.current.getBoundingClientRect();
+          const x = e.clientX - rect.left - dragNoteRef.current.offsetX;
+          const y = e.clientY - rect.top - dragNoteRef.current.offsetY;
+          const pos = { id: dragNoteRef.current.id, x, y };
+          dragNotePosRef.current = pos;
+          setDragNotePos({ ...pos });
+        }
+      }
     };
     const onMouseUp = () => {
-      if (!dragTokRef.current) return;
-      const { id, moved } = dragTokRef.current;
-      const pos = dragPosRef.current;
-      if (pos && moved) {
-        setTokensByScene(prev => {
-          const scene = currentSceneIdRef.current;
-          return { ...prev, [scene]: prev[scene].map(t => t.id === id ? { ...t, x: pos.x, y: pos.y } : t) };
-        });
+      if (dragTokRef.current) {
+        const { id, moved } = dragTokRef.current;
+        const pos = dragPosRef.current;
+        if (pos && moved) {
+          setTokensByScene(prev => {
+            const scene = currentSceneIdRef.current;
+            return { ...prev, [scene]: prev[scene].map(t => t.id === id ? { ...t, x: pos.x, y: pos.y } : t) };
+          });
+        }
+        dragPosRef.current = null;
+        dragTokRef.current = null;
+        setDragPos(null);
+        if (!moved) setSelectedTokenId(id);
       }
-      dragPosRef.current = null;
-      dragTokRef.current = null;
-      setDragPos(null);
-      if (!moved) setSelectedTokenId(id);
+      if (dragNoteRef.current) {
+        const { id } = dragNoteRef.current;
+        const pos = dragNotePosRef.current;
+        if (pos) {
+          setStickyNotes(prev => prev.map(n => n.id === id ? { ...n, x: pos.x, y: pos.y } : n));
+          fetch(`/api/notes/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ x: pos.x, y: pos.y }),
+          }).catch(() => {});
+        }
+        dragNoteRef.current = null;
+        dragNotePosRef.current = null;
+        setDragNotePos(null);
+      }
     };
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
@@ -626,6 +672,35 @@ export default function HearthboardPage() {
     }
   };
 
+  const createNote = useCallback((x: number, y: number) => {
+    const id = 'n' + Date.now();
+    const note: StickyNote = { id, text: '', x, y, sceneId: currentSceneIdRef.current, author: session?.user?.name ?? 'Unknown' };
+    setStickyNotes(prev => [...prev, note]);
+    setEditingNoteId(id);
+    setEditingNoteText('');
+    fetch('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(note),
+    }).catch(() => {});
+  }, [session]);
+
+  const saveNoteText = useCallback((id: string, text: string) => {
+    setStickyNotes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
+    setEditingNoteId(null);
+    fetch(`/api/notes/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }).catch(() => {});
+  }, []);
+
+  const deleteNote = useCallback((id: string) => {
+    setStickyNotes(prev => prev.filter(n => n.id !== id));
+    setEditingNoteId(prev => prev === id ? null : prev);
+    fetch(`/api/notes/${id}`, { method: 'DELETE' }).catch(() => {});
+  }, []);
+
   // ── Derived ──────────────────────────────────────────────────────────
   const currentGame = ECHOES_OF_DARKNESS;
   const currentTokens = tokensByScene[currentSceneId] ?? [];
@@ -759,6 +834,7 @@ export default function HearthboardPage() {
                   { id: 'select', icon: '↖', label: 'Select' },
                   { id: 'ping', icon: '◎', label: 'Ping' },
                   { id: 'measure', icon: '📏', label: 'Measure' },
+                  { id: 'note', icon: '✏', label: 'Note' },
                 ].map(t => (
                   <button
                     key={t.id}
@@ -827,7 +903,7 @@ export default function HearthboardPage() {
 
           {/* Center map */}
           <div
-            className="map-wrap"
+            className={`map-wrap${tool === 'note' ? ' tool-note' : ''}`}
             ref={mapWrapRef}
             onDragOver={e => e.preventDefault()}
             onDrop={handleMapDrop}
@@ -838,6 +914,10 @@ export default function HearthboardPage() {
               if (isBg) {
                 setSelectedTokenId(null);
                 if (mapZoomedTo) setMapZoomedTo(null);
+                if (tool === 'note' && !mapZoomedTo && mapWrapRef.current) {
+                  const rect = mapWrapRef.current.getBoundingClientRect();
+                  createNote(e.clientX - rect.left, e.clientY - rect.top);
+                }
               }
             }}
           >
@@ -1098,6 +1178,68 @@ export default function HearthboardPage() {
                 </button>
               </div>
             )}
+
+            {/* Sticky Notes */}
+            {stickyNotes.filter(n => n.sceneId === currentSceneId).map(note => {
+              const livePos = dragNotePos?.id === note.id ? dragNotePos : null;
+              const nx = livePos ? livePos.x : note.x;
+              const ny = livePos ? livePos.y : note.y;
+              const isEditing = editingNoteId === note.id;
+              return (
+                <div
+                  key={note.id}
+                  className="sticky-note"
+                  style={{ left: nx, top: ny }}
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div
+                    className="sticky-note-handle"
+                    onMouseDown={e => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!mapWrapRef.current) return;
+                      const rect = mapWrapRef.current.getBoundingClientRect();
+                      dragNoteRef.current = {
+                        id: note.id,
+                        offsetX: e.clientX - rect.left - note.x,
+                        offsetY: e.clientY - rect.top - note.y,
+                      };
+                    }}
+                  >
+                    <span className="sticky-note-author">{note.author}</span>
+                    <button
+                      className="sticky-note-delete"
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={() => deleteNote(note.id)}
+                    >✕</button>
+                  </div>
+                  {isEditing ? (
+                    <textarea
+                      className="sticky-note-textarea"
+                      autoFocus
+                      value={editingNoteText}
+                      onChange={e => setEditingNoteText(e.target.value)}
+                      onBlur={() => saveNoteText(note.id, editingNoteText)}
+                      onKeyDown={e => {
+                        if (e.key === 'Escape') saveNoteText(note.id, editingNoteText);
+                        e.stopPropagation();
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="sticky-note-text"
+                      onClick={() => {
+                        setEditingNoteId(note.id);
+                        setEditingNoteText(note.text);
+                      }}
+                    >
+                      {note.text || <span className="sticky-note-placeholder">Click to write…</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Initiative bar */}
             <div className="initiative-bar">
