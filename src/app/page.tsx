@@ -290,11 +290,13 @@ export default function HearthboardPage() {
   const chatInputRef = useRef<HTMLInputElement>(null);
   const dragNoteRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const dragNotePosRef = useRef<{ id: string; x: number; y: number } | null>(null);
+  const editingNoteIdRef = useRef<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const briefingAudioRef = useRef<HTMLAudioElement | null>(null);
   const speakeasyBgRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
+  useEffect(() => { editingNoteIdRef.current = editingNoteId; }, [editingNoteId]);
 
   // Fetch character assignments on mount, then load avatar URLs for claimed characters
   useEffect(() => {
@@ -395,12 +397,14 @@ export default function HearthboardPage() {
     if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
   }, [chatItems]);
 
-  // Poll sticky notes for all players
+  // Poll sticky notes for all players — skip update while a note is open for editing
   useEffect(() => {
     const load = () =>
       fetch('/api/notes', { cache: 'no-store' })
         .then(r => r.ok ? r.json() : [])
-        .then((notes: StickyNote[]) => setStickyNotes(notes))
+        .then((notes: StickyNote[]) => {
+          if (!editingNoteIdRef.current) setStickyNotes(notes);
+        })
         .catch(() => {});
     load();
     const iv = setInterval(load, 2500);
