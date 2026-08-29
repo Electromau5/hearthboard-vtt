@@ -199,6 +199,25 @@ const BRIEFINGS: Briefing[] = [
       },
     ],
   },
+  {
+    id: 'armitage',
+    image: '/dr-armitage.jpeg',
+    badge: 'RESTRICTED ACCESS',
+    title: 'Miskatonic University & Orne Library',
+    subtitle: 'Dr. Henry Armitage · Head Librarian',
+    cardHint: 'Dr. Armitage · Orne Library',
+    sections: [
+      {
+        audio: '/dr-armitage-1.mp3',
+        paragraphs: [
+          "There was an incident several years back — one that I would rather like to forget, but circumstances beyond my control have forced to retain memories of that ghastly night.",
+          "His name was Wilbur Whatley. The smell. That wretched smell drove my dog insane to the point where it broke loose and tore his flesh apart.",
+          "I'm not at liberty to divulge what we saw when we discovered his lifeless body, but I can tell you right now — he was trying to steal our copy of that 'unspeakable' book.",
+          "Because of that day, the book is sealed within our archives and only can be seen with special permission under my observation.",
+        ],
+      },
+    ],
+  },
 ];
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -409,7 +428,7 @@ export default function HearthboardPage() {
         })
         .catch(() => {});
     load();
-    const iv = setInterval(load, 2500);
+    const iv = setInterval(load, 5000);
     return () => clearInterval(iv);
   }, []);
 
@@ -511,7 +530,7 @@ export default function HearthboardPage() {
       } catch {}
     };
     poll();
-    const iv = setInterval(poll, 1500);
+    const iv = setInterval(poll, 3000);
     return () => clearInterval(iv);
   }, [session]);
 
