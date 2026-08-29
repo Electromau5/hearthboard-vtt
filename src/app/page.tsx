@@ -1004,9 +1004,11 @@ export default function HearthboardPage() {
               const isDocks = scene?.locationId === 'loc-docks';
               const isSpeakeasy = scene?.locationId === 'loc-underworld';
               const isBellevue = scene?.locationId === 'loc-bellevue';
+              const isMiskatonic = scene?.locationId === 'loc-miskatonic';
               const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
               const mobsterBriefing = BRIEFINGS.find(b => b.id === 'mobster');
               const attendantBriefing = BRIEFINGS.find(b => b.id === 'attendant');
+              const armitageBriefing = BRIEFINGS.find(b => b.id === 'armitage');
               return (
                 <div className="loc-info-panel">
                   <button className="loc-close-btn" onClick={() => setMapZoomedTo(null)}>✕</button>
@@ -1150,6 +1152,53 @@ export default function HearthboardPage() {
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
                             Bellevue · Chief Attendant
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                            ▶ Click to open
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Restricted access — only shown on Miskatonic */}
+                  {isMiskatonic && armitageBriefing && (
+                    <>
+                      <div style={{ height: 1, background: 'var(--brass-dim)', opacity: 0.5 }} />
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+                        Restricted Access
+                      </div>
+                      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                      <div
+                        style={{
+                          position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                          cursor: 'pointer', border: '1px solid var(--brass-dim)',
+                          boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        }}
+                        onClick={() => openBriefing(armitageBriefing)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => e.key === 'Enter' && openBriefing(armitageBriefing)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={armitageBriefing.image}
+                          alt={armitageBriefing.title}
+                          style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', filter: 'sepia(0.35) brightness(0.7)' }}
+                        />
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          background: 'linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.25) 60%, transparent 100%)',
+                          padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                            {armitageBriefing.badge}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                            {armitageBriefing.title}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
+                            Dr. Henry Armitage · Head Librarian
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
                             ▶ Click to open
@@ -1658,7 +1707,7 @@ export default function HearthboardPage() {
                 Mission Details
               </div>
 
-              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant').map(b => (
+              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant' && b.id !== 'armitage').map(b => (
                 <div
                   key={b.id}
                   style={{ ...missionCard, marginBottom: 10 }}
