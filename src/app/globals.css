@@ -87,6 +87,7 @@ input, textarea, select { font-family: inherit; }
 .btn-ghost { background: transparent; border-color: transparent; color: var(--ink-text); }
 .btn-ghost:hover { background: var(--surface-2); color: var(--parchment); }
 .btn-sm { padding: 6px 12px; font-size: 12.5px; }
+.nav-btn { display: inline-flex; align-items: center; gap: 5px; }
 .btn-danger { color: var(--blood); }
 
 .dash-body { padding: 40px 48px 80px; max-width: 1280px; margin: 0 auto; width: 100%; }
@@ -336,11 +337,10 @@ input, textarea, select { font-family: inherit; }
 
 .token {
   position: absolute; width: 52px; height: 52px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center; font-weight: 700;
-  font-family: var(--font-display); font-size: 14px; color: #14161c;
   border: 3px solid rgba(255,255,255,0.85); cursor: grab; user-select: none;
   box-shadow: 0 6px 16px rgba(0,0,0,0.45); transition: box-shadow .12s, border-color .12s;
   transform: translate(-50%, -50%);
+  z-index: 0; /* Creates stacking context so hp-ring z-index:-1 stays within token */
 }
 .token:hover { box-shadow: 0 8px 22px rgba(0,0,0,0.55); }
 .token.selected { border-color: var(--brass); box-shadow: 0 0 0 4px rgba(201,148,79,0.25), 0 8px 22px rgba(0,0,0,0.5); }
@@ -348,7 +348,14 @@ input, textarea, select { font-family: inherit; }
 .token .hp-ring {
   position: absolute; inset: -6px; border-radius: 50%;
   background: conic-gradient(var(--blood) calc(var(--hp-pct, 100) * 1%), rgba(255,255,255,0.12) 0);
-  z-index: -1; padding: 2px;
+  z-index: -1;
+}
+/* Inner face — clips avatar to circle and sits above hp-ring */
+.token .token-face {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 14px; font-weight: 700; color: #14161c;
+  z-index: 1;
 }
 .token-label {
   position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 4px;
@@ -409,10 +416,12 @@ input, textarea, select { font-family: inherit; }
 }
 .rp-tabs { display: flex; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
 .rp-tab {
-  flex: 1; padding: 12px 4px; text-align: center; font-size: 11px; font-family: var(--font-mono);
+  flex: 1; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  text-align: center; font-size: 10px; font-family: var(--font-mono);
   letter-spacing: .5px; text-transform: uppercase; color: var(--ink-text-2); border-bottom: 2px solid transparent;
   background: transparent;
 }
+.rp-tab svg { flex-shrink: 0; }
 .rp-tab:hover { color: var(--parchment); }
 .rp-tab.active { color: var(--brass); border-color: var(--brass); }
 .rp-pane { flex: 1; display: none; min-height: 0; flex-direction: column; }

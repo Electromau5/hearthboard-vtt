@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getCharacter } from "@/lib/characters";
-import type { Character } from "@/lib/characters";
-import { readJSON, writeJSON, uploadFile } from "@/lib/blob-storage";
+import { readCharacterOverrides, writeCharacterOverrides } from "@/lib/character-storage";
+import { uploadFile } from "@/lib/blob-storage";
 import { put, del } from "@vercel/blob";
 import { getAssignments } from "@/app/api/characters/assignments/route";
 
@@ -41,8 +41,8 @@ export async function POST(
   const rawExt = (contentType.split("/")[1] || "jpg").split("+")[0];
   const ext = rawExt === "jpeg" ? "jpg" : rawExt;
 
-  const blobPath = `characters/${slug}.json`;
-  const existing = await readJSON<Partial<Character>>(blobPath, {});
+  // Read existing overrides to preserve other fields and delete old avatar blob
+  const existing = await readCharacterOverrides(slug);
 
   let avatarUrl: string;
 
@@ -57,13 +57,13 @@ export async function POST(
       contentType,
       addRandomSuffix: true,
     });
-    avatarUrl = blob.url; // permanent URL (not expiring downloadUrl)
+    avatarUrl = blob.url;
   } else {
-    // Dev: save locally via uploadFile, returns /api/dev-assets/... URL
     avatarUrl = await uploadFile(`avatars/${slug}.${ext}`, file, contentType);
   }
 
-  await writeJSON(blobPath, { ...existing, avatar: avatarUrl });
+  // Save avatar URL to Redis (same store as all other character overrides)
+  await writeCharacterOverrides(slug, { ...existing, avatar: avatarUrl });
 
   return NextResponse.json({ avatar: `/api/characters/${slug}/avatar` });
 }

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getCharacter } from "@/lib/characters";
-import type { Character } from "@/lib/characters";
-import { readJSON } from "@/lib/blob-storage";
+import { readCharacterOverrides } from "@/lib/character-storage";
 import { get } from "@vercel/blob";
 
 const EXT_TO_CT: Record<string, string> = {
@@ -21,7 +20,7 @@ export async function GET(
   const { slug } = await params;
   if (!getCharacter(slug)) return new NextResponse(null, { status: 404 });
 
-  const overrides = await readJSON<Partial<Character>>(`characters/${slug}.json`, {});
+  const overrides = await readCharacterOverrides(slug);
   const storedAvatar = overrides.avatar;
   if (!storedAvatar) return new NextResponse(null, { status: 404 });
 

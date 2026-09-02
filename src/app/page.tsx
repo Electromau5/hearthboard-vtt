@@ -1292,20 +1292,22 @@ export default function HearthboardPage() {
                   key={tok.id}
                   className={`token${selectedTokenId === tok.id ? ' selected' : ''}${dragPos?.id === tok.id ? ' dragging' : ''}`}
                   data-id={tok.id}
-                  style={{ left: pos.x, top: pos.y, background: tok.avatarUrl ? 'transparent' : tok.color, overflow: 'hidden', position: 'relative', ['--hp-pct' as string]: hpPct } as React.CSSProperties}
+                  style={{ left: pos.x, top: pos.y, ['--hp-pct' as string]: hpPct } as React.CSSProperties}
                   onMouseDown={e => handleTokenMouseDown(e, tok)}
                   onClick={e => e.stopPropagation()}
                 >
-                  <div className="hp-ring" style={{ position: 'absolute', inset: 0, zIndex: 2 }} />
-                  {tok.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={tok.avatarUrl}
-                      alt={tok.label}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-                      draggable={false}
-                    />
-                  ) : tok.label}
+                  <div className="hp-ring" />
+                  <div className="token-face" style={{ background: tok.avatarUrl ? 'transparent' : tok.color }}>
+                    {tok.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={tok.avatarUrl}
+                        alt={tok.label}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                        draggable={false}
+                      />
+                    ) : tok.label}
+                  </div>
                   <div className="token-label" style={{ position: 'absolute', zIndex: 3 }}>{tok.fullName} · {tok.hp}/{tok.maxHp}</div>
                 </div>
               );
