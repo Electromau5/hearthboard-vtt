@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON, writeJSON } from "@/lib/blob-storage";
+import { Redis } from "@upstash/redis";
+import fs from "fs";
+import path from "path";
 
 export interface BoardItem {
   id: string;
@@ -35,11 +37,40 @@ export interface BoardState {
   strokes: BoardStroke[];
 }
 
-const BLOB_PATH = "board/state.json";
 const EMPTY: BoardState = { items: [], connections: [], strokes: [] };
+const BOARD_KEY = "board:state";
+
+const redisAvailable =
+  !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) &&
+  process.env.NODE_ENV !== "development";
+
+const redis = redisAvailable
+  ? new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! })
+  : null;
+
+const LOCAL_PATH = path.join(
+  process.env.VERCEL ? "/tmp/data" : path.join(process.cwd(), "data"),
+  "board/state.json"
+);
 
 async function getBoard(): Promise<BoardState> {
-  return readJSON<BoardState>(BLOB_PATH, EMPTY);
+  if (redis) {
+    const data = await redis.get<BoardState>(BOARD_KEY);
+    return data ?? EMPTY;
+  }
+  try {
+    if (fs.existsSync(LOCAL_PATH)) return JSON.parse(fs.readFileSync(LOCAL_PATH, "utf8"));
+  } catch {}
+  return EMPTY;
+}
+
+async function saveBoard(state: BoardState): Promise<void> {
+  if (redis) {
+    await redis.set(BOARD_KEY, state);
+    return;
+  }
+  fs.mkdirSync(path.dirname(LOCAL_PATH), { recursive: true });
+  fs.writeFileSync(LOCAL_PATH, JSON.stringify(state, null, 2));
 }
 
 type BoardOp =
@@ -80,7 +111,6 @@ export async function POST(req: NextRequest) {
       );
       break;
     case "add-connection":
-      // Prevent duplicate connections between same pair
       if (!state.connections.some(
         (c) => (c.fromId === op.connection.fromId && c.toId === op.connection.toId) ||
                (c.fromId === op.connection.toId && c.toId === op.connection.fromId)
@@ -99,6 +129,6 @@ export async function POST(req: NextRequest) {
       break;
   }
 
-  await writeJSON(BLOB_PATH, state);
+  await saveBoard(state);
   return NextResponse.json(state);
 }

@@ -299,6 +299,8 @@ export default function HearthboardPage() {
   const shownEffectsRef = useRef<Set<number>>(new Set());
   const seenRollIds = useRef<Set<string>>(new Set());
   const sessionStartTs = useRef(Date.now());
+  const [musicPos, setMusicPos] = useState<{ x: number; y: number } | null>(null);
+  const musicDragRef = useRef<{ startX: number; startY: number; elemX: number; elemY: number } | null>(null);
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string; fullName?: string; avatarUrl?: string; hp?: number; maxHp?: number } | { kind: 'compendium'; idx: number } | null>(null);
@@ -564,6 +566,19 @@ export default function HearthboardPage() {
     const iv = setInterval(poll, 3000);
     return () => clearInterval(iv);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Music player drag
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const d = musicDragRef.current;
+      if (!d) return;
+      setMusicPos({ x: d.elemX + (e.clientX - d.startX), y: d.elemY + (e.clientY - d.startY) });
+    };
+    const onUp = () => { musicDragRef.current = null; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
 
   const backToDashboard = () => {
     setView('dashboard');
@@ -1918,7 +1933,20 @@ export default function HearthboardPage() {
       {isAdmin && (
         <>
           <audio ref={audioRef} src="/soundtrack-1.mp3" loop preload="metadata" />
-          <div style={musicBarStyle}>
+          <div style={{
+            ...musicBarStyle,
+            ...(musicPos ? { top: musicPos.y, left: musicPos.x, bottom: 'auto', right: 'auto' } : {}),
+          }}>
+            {/* Drag handle */}
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                musicDragRef.current = { startX: e.clientX, startY: e.clientY, elemX: rect.left, elemY: rect.top };
+              }}
+              style={{ cursor: 'grab', padding: '0 4px 0 0', color: 'var(--line)', fontSize: 14, userSelect: 'none', lineHeight: 1 }}
+              title="Drag to move"
+            >⠿</div>
             <div style={musicInfo}>
               <span style={musicNote}>{musicPlaying ? '♫' : '♩'}</span>
               <div>
