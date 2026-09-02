@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { CHARACTERS, type Character } from "@/lib/characters";
-import { readJSON } from "@/lib/blob-storage";
+import { readCharacterOverrides } from "@/lib/character-storage";
 import { getAssignments } from "@/app/api/characters/assignments/route";
 import { getStoredLocations } from "@/app/api/admin/locations/route";
 import { CAMPAIGN_LOCATIONS } from "@/lib/campaign-defaults";
@@ -316,10 +316,7 @@ export async function POST(req: NextRequest) {
     getStoredLocations(),
     Promise.all(
       CHARACTERS.map(async (base) => {
-        const overrides = await readJSON<Partial<Character>>(
-          `characters/${base.slug}.json`,
-          {}
-        );
+        const overrides = await readCharacterOverrides(base.slug);
         return mergeChar(base, overrides);
       })
     ),

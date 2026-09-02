@@ -2,12 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getCharacter } from "@/lib/characters";
 import type { Character } from "@/lib/characters";
-import { readJSON, writeJSON } from "@/lib/blob-storage";
+import { readCharacterOverrides, writeCharacterOverrides } from "@/lib/character-storage";
 import { getAssignments } from "@/app/api/characters/assignments/route";
-
-function blobPath(slug: string) {
-  return `characters/${slug}.json`;
-}
 
 function mergeCharacter(base: Character, overrides: Partial<Character>): Character {
   const merged = {
@@ -38,7 +34,7 @@ export async function GET(
   const base = getCharacter(slug);
   if (!base) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const overrides = await readJSON<Partial<Character>>(blobPath(slug), {});
+  const overrides = await readCharacterOverrides(slug);
   const merged = mergeCharacter(base, overrides);
   return NextResponse.json(merged);
 }
@@ -67,7 +63,7 @@ export async function PATCH(
   const body = await req.json() as Partial<Character>;
 
   // Merge with existing overrides before saving so partial updates compose
-  const existing = await readJSON<Partial<Character>>(blobPath(slug), {});
+  const existing = await readCharacterOverrides(slug);
   const merged: Partial<Character> = {
     ...existing,
     ...body,
@@ -84,9 +80,9 @@ export async function PATCH(
   if (body.equipment !== undefined) merged.equipment = body.equipment;
 
   try {
-    await writeJSON(blobPath(slug), merged);
+    await writeCharacterOverrides(slug, merged);
   } catch (err) {
-    console.error("[character PATCH] writeJSON failed:", err);
+    console.error("[character PATCH] write failed:", err);
     return NextResponse.json(
       { error: "Could not persist changes — storage unavailable." },
       { status: 503 }
