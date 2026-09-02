@@ -297,6 +297,8 @@ export default function HearthboardPage() {
   // Track triggeredAt values we've already displayed so one-shot effects (visions)
   // don't replay on every poll while the blob entry is still live.
   const shownEffectsRef = useRef<Set<number>>(new Set());
+  const seenRollIds = useRef<Set<string>>(new Set());
+  const sessionStartTs = useRef(Date.now());
 
   // Refs
   const dragPayloadRef = useRef<{ kind: 'tray'; color: string; label: string; fullName?: string; avatarUrl?: string; hp?: number; maxHp?: number } | { kind: 'compendium'; idx: number } | null>(null);
@@ -534,6 +536,35 @@ export default function HearthboardPage() {
     return () => clearInterval(iv);
   }, [session]);
 
+  // Poll for shared chat roll events from other players
+  useEffect(() => {
+    const startTs = sessionStartTs.current;
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/chat', { cache: 'no-store' });
+        if (!r.ok) return;
+        const events: Array<{ id: string; who: string; formula: string; rolls: number[]; total: number; sides: number; n: number; ts: number }> = await r.json();
+        const fresh = events.filter(e => !seenRollIds.current.has(e.id) && e.ts > startTs);
+        if (fresh.length === 0) return;
+        fresh.forEach(e => seenRollIds.current.add(e.id));
+        setChatItems(prev => [
+          ...prev,
+          ...fresh.map(e => ({
+            type: 'roll' as const,
+            who: e.who,
+            res: { formula: e.formula, rolls: e.rolls, mod: 0, sides: e.sides, total: e.total, n: e.n },
+            crit: e.sides === 20 && e.n === 1 && e.rolls[0] === 20,
+            fumble: e.sides === 20 && e.n === 1 && e.rolls[0] === 1,
+            ts: e.ts,
+          })),
+        ]);
+        setRollCount(c => c + fresh.length);
+      } catch {}
+    };
+    const iv = setInterval(poll, 3000);
+    return () => clearInterval(iv);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const backToDashboard = () => {
     setView('dashboard');
   };
@@ -632,10 +663,18 @@ export default function HearthboardPage() {
   };
 
   const pushRollToChat = useCallback((who: string, res: RollResult) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    seenRollIds.current.add(id);
     setRollCount(c => c + 1);
     const isCrit = res.sides === 20 && res.n === 1 && res.rolls[0] === 20;
     const isFumble = res.sides === 20 && res.n === 1 && res.rolls[0] === 1;
-    setChatItems(prev => [...prev, { type: 'roll', who, res, crit: isCrit, fumble: isFumble, ts: Date.now() }]);
+    const ts = Date.now();
+    setChatItems(prev => [...prev, { type: 'roll', who, res, crit: isCrit, fumble: isFumble, ts }]);
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, type: 'roll', who, formula: res.formula, rolls: res.rolls, total: res.total, sides: res.sides, n: res.n, ts }),
+    }).catch(() => {});
   }, []);
 
   const rollDie = (sides: number) => {
@@ -767,16 +806,31 @@ export default function HearthboardPage() {
             <div className="brand-name">Hearth<em>board</em></div>
           </div>
           <div className="dash-actions">
-            <Link href="/characters" className="btn btn-ghost btn-sm">Characters</Link>
-            <Link href="/locations" className="btn btn-ghost btn-sm">Locations</Link>
+            <Link href="/characters" className="btn btn-ghost btn-sm nav-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Characters
+            </Link>
+            <Link href="/locations" className="btn btn-ghost btn-sm nav-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Locations
+            </Link>
             {isAdmin && (
-              <Link href="/admin/experience" className="btn btn-ghost btn-sm">Experience</Link>
+              <Link href="/admin/experience" className="btn btn-ghost btn-sm nav-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                Experience
+              </Link>
             )}
             {isAdmin && (
-              <Link href="/admin/characters" className="btn btn-ghost btn-sm">Admin</Link>
+              <Link href="/admin/characters" className="btn btn-ghost btn-sm nav-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                Admin
+              </Link>
             )}
             <span style={{ fontSize: 13, color: 'var(--ink-text-2)' }}>{session?.user?.name}</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => signOut({ callbackUrl: '/login' })}>Sign out</button>
+            <button className="btn btn-ghost btn-sm nav-btn" onClick={() => signOut({ callbackUrl: '/login' })}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Sign out
+            </button>
           </div>
         </div>
 
@@ -1361,18 +1415,43 @@ export default function HearthboardPage() {
           <div className="right-panel">
             <div className="rp-tabs">
               {[
-                { id: 'chat', label: 'Chat' },
-                { id: 'characters', label: 'Characters' },
-                { id: 'compendium', label: 'Resources' },
-                { id: 'journal', label: 'Journal' },
-                { id: 'mission', label: 'Mission' },
-                { id: 'roll', label: 'Roll' },
-              ].map(({ id, label }) => (
+                { id: 'chat', label: 'Chat', icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                )},
+                { id: 'characters', label: 'Characters', icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                )},
+                { id: 'compendium', label: 'Resources', icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                  </svg>
+                )},
+                { id: 'journal', label: 'Journal', icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                  </svg>
+                )},
+                { id: 'mission', label: 'Mission', icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                  </svg>
+                )},
+                { id: 'roll', label: 'Roll', icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 8h.01M12 12h.01M8 16h.01M16 16h.01M8 8h.01"/>
+                  </svg>
+                )},
+              ].map(({ id, label, icon }) => (
                 <button
                   key={id}
                   className={`rp-tab${activePane === id ? ' active' : ''}`}
                   onClick={() => setActivePane(id)}
                 >
+                  {icon}
                   {label}
                 </button>
               ))}

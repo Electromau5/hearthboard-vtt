@@ -61,6 +61,18 @@ function makeDigitMaterial() {
   });
 }
 
+function isWebGLAvailable(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function DiceRollerPane({ pushRollToChat, who }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<AnimState | null>(null);
@@ -68,6 +80,8 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [result, setResult] = useState<number | null>(null);
   const [rolling, setRolling] = useState(false);
+  const [webglAvailable, setWebglAvailable] = useState(true);
+  const [dieCount, setDieCount] = useState(1);
 
   const cfg = DIE_CONFIG[dieType];
 
@@ -78,11 +92,22 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
     setLoaded(false);
     setResult(null);
 
+    if (!isWebGLAvailable()) {
+      setWebglAvailable(false);
+      return;
+    }
+
     const width  = el.clientWidth  || 280;
     const height = el.clientHeight || 280;
 
     // ── Renderer ────────────────────────────────────────────────────
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      setWebglAvailable(false);
+      return;
+    }
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -239,12 +264,26 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
     };
   }, [dieType]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleRollFallback = useCallback(() => {
+    if (rolling) return;
+    const allRolls = Array.from({ length: dieCount }, () => Math.floor(Math.random() * cfg.sides) + 1);
+    const total = allRolls.reduce((a, b) => a + b, 0);
+    setRolling(true);
+    setResult(null);
+    setTimeout(() => {
+      setResult(total);
+      setRolling(false);
+      pushRollToChat(who, { formula: `${dieCount}d${cfg.sides}`, rolls: allRolls, mod: 0, sides: cfg.sides, total, n: dieCount });
+    }, 600);
+  }, [rolling, pushRollToChat, who, cfg, dieCount]);
+
   const handleRoll = useCallback(() => {
     const s = animRef.current;
     if (!s || rolling) return;
 
-    const r = Math.floor(Math.random() * cfg.sides) + 1;
-    s.rolledResult = r;
+    const allRolls = Array.from({ length: dieCount }, () => Math.floor(Math.random() * cfg.sides) + 1);
+    const total = allRolls.reduce((a, b) => a + b, 0);
+    s.rolledResult = total;
     setRolling(true);
     setResult(null);
 
@@ -261,19 +300,104 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
       setResult(final);
       setRolling(false);
       pushRollToChat(who, {
-        formula: cfg.formula,
-        rolls: [final],
+        formula: `${dieCount}d${cfg.sides}`,
+        rolls: allRolls,
         mod: 0,
         sides: cfg.sides,
         total: final,
-        n: 1,
+        n: dieCount,
       });
     };
-  }, [rolling, pushRollToChat, who, cfg]);
+  }, [rolling, pushRollToChat, who, cfg, dieCount]);
 
-  const displayNum = result === null ? null : (dieType === 'd10' && result === 10) ? 0 : result;
+  const formula = `${dieCount}d${cfg.sides}`;
+  const displayNum = result === null ? null : (dieType === 'd10' && dieCount === 1 && result === 10) ? 0 : result;
   const resultLabel = result === null ? '' :
-    dieType === 'd10' && result === 10 ? '00 · ten' : `${result} · ${cfg.formula}`;
+    (dieType === 'd10' && dieCount === 1 && result === 10) ? '00 · ten' : `${result} · ${formula}`;
+
+  if (!webglAvailable) {
+    const selectStyle = {
+      background: 'var(--surface-2)', border: '1px solid var(--brass-dim)',
+      borderRadius: 'var(--r-lg)', color: 'var(--brass)',
+      fontFamily: 'var(--font-mono)', fontSize: 11,
+      fontWeight: 600, letterSpacing: '1.5px', padding: '6px 10px',
+      cursor: rolling ? 'not-allowed' : 'pointer', outline: 'none',
+    };
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        padding: '14px 12px', gap: 10, height: '100%', boxSizing: 'border-box',
+      }}>
+        <div style={{ display: 'flex', gap: 8, alignSelf: 'stretch' }}>
+          <select
+            value={dieType}
+            disabled={rolling}
+            onChange={(e) => setDieType(e.target.value as DieType)}
+            style={{ ...selectStyle, flex: 1 }}
+          >
+            {(Object.keys(DIE_CONFIG) as DieType[]).map((key) => (
+              <option key={key} value={key}>{DIE_CONFIG[key].label}</option>
+            ))}
+          </select>
+          <select
+            value={dieCount}
+            disabled={rolling}
+            onChange={(e) => setDieCount(Number(e.target.value))}
+            style={{ ...selectStyle, width: 56 }}
+          >
+            {[1, 2, 3, 4, 5, 6].map(n => (
+              <option key={n} value={n}>{n}×</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 8,
+          border: '1px solid var(--line)', borderRadius: 'var(--r-lg)',
+          width: '100%', background: 'radial-gradient(ellipse at 50% 40%, #0f0930 0%, #04050c 100%)',
+        }}>
+          {!rolling && result !== null ? (
+            <>
+              <div style={{
+                fontFamily: 'var(--font-display)', fontSize: 72, fontWeight: 700,
+                color: 'var(--brass)', lineHeight: 1,
+                textShadow: '0 0 24px rgba(201,148,79,0.6), 0 0 6px rgba(201,148,79,0.3)',
+              }}>{displayNum}</div>
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10,
+                color: 'var(--ink-text-2)', letterSpacing: '1.2px',
+              }}>{resultLabel}</div>
+            </>
+          ) : rolling ? (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--ink-text-2)', letterSpacing: '4px' }}>· · ·</div>
+          ) : (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--line)', letterSpacing: '1px' }}>Click Roll to begin</div>
+          )}
+        </div>
+
+        <button
+          onClick={handleRollFallback}
+          disabled={rolling}
+          style={{
+            width: '100%', padding: '11px 0',
+            background: rolling ? 'var(--surface-2)' : 'linear-gradient(135deg, rgba(201,148,79,0.18) 0%, rgba(201,148,79,0.06) 100%)',
+            border: `1px solid ${rolling ? 'var(--line)' : 'var(--brass-dim)'}`,
+            borderRadius: 'var(--r-lg)',
+            color: rolling ? 'var(--ink-text-2)' : 'var(--brass)',
+            fontFamily: 'var(--font-mono)', fontSize: 13,
+            fontWeight: 600, letterSpacing: '2.5px', textTransform: 'uppercase' as const,
+            cursor: rolling ? 'not-allowed' : 'pointer', flexShrink: 0,
+          }}
+        >
+          {rolling ? 'Rolling…' : `⚄  Roll ${dieCount > 1 ? `${dieCount}×` : ''}${cfg.label}`}
+        </button>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--line)', letterSpacing: '0.8px', textAlign: 'center' }}>
+          Result also appears in Chat
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -281,40 +405,63 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
       padding: '14px 12px', gap: 10, height: '100%', boxSizing: 'border-box',
     }}>
 
-      {/* Die selector */}
-      <select
-        value={dieType}
-        disabled={rolling}
-        onChange={(e) => setDieType(e.target.value as DieType)}
-        style={{
-          alignSelf: 'stretch',
-          background: 'var(--surface-2)',
-          border: '1px solid var(--brass-dim)',
-          borderRadius: 'var(--r-lg)',
-          color: 'var(--brass)',
-          fontFamily: 'var(--font-mono)', fontSize: 11,
-          fontWeight: 600, letterSpacing: '1.5px',
-          padding: '6px 10px',
-          cursor: rolling ? 'not-allowed' : 'pointer',
-          outline: 'none',
-          appearance: 'none' as const,
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c9944f' opacity='0.7'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 10px center',
-          paddingRight: 28,
-        }}
-      >
-        {(Object.keys(DIE_CONFIG) as DieType[]).map((key) => (
-          <option key={key} value={key}>Space {DIE_CONFIG[key].label}</option>
-        ))}
-      </select>
+      {/* Die selector + count */}
+      <div style={{ display: 'flex', gap: 8, alignSelf: 'stretch' }}>
+        <select
+          value={dieType}
+          disabled={rolling}
+          onChange={(e) => setDieType(e.target.value as DieType)}
+          style={{
+            flex: 1,
+            background: 'var(--surface-2)',
+            border: '1px solid var(--brass-dim)',
+            borderRadius: 'var(--r-lg)',
+            color: 'var(--brass)',
+            fontFamily: 'var(--font-mono)', fontSize: 11,
+            fontWeight: 600, letterSpacing: '1.5px',
+            padding: '6px 10px',
+            cursor: rolling ? 'not-allowed' : 'pointer',
+            outline: 'none',
+            appearance: 'none' as const,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c9944f' opacity='0.7'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 10px center',
+            paddingRight: 28,
+          }}
+        >
+          {(Object.keys(DIE_CONFIG) as DieType[]).map((key) => (
+            <option key={key} value={key}>Space {DIE_CONFIG[key].label}</option>
+          ))}
+        </select>
+        <select
+          value={dieCount}
+          disabled={rolling}
+          onChange={(e) => setDieCount(Number(e.target.value))}
+          style={{
+            width: 56,
+            background: 'var(--surface-2)',
+            border: '1px solid var(--brass-dim)',
+            borderRadius: 'var(--r-lg)',
+            color: 'var(--brass)',
+            fontFamily: 'var(--font-mono)', fontSize: 11,
+            fontWeight: 600, letterSpacing: '1px',
+            padding: '6px 8px',
+            cursor: rolling ? 'not-allowed' : 'pointer',
+            outline: 'none',
+          }}
+        >
+          {[1, 2, 3, 4, 5, 6].map(n => (
+            <option key={n} value={n}>{n}×</option>
+          ))}
+        </select>
+      </div>
 
       {/* Label */}
       <div style={{
         fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.8px',
         textTransform: 'uppercase', color: 'var(--ink-text-2)', alignSelf: 'flex-start',
       }}>
-        Space {cfg.label}
+        {dieCount > 1 ? `${dieCount}× ` : ''}Space {cfg.label}
       </div>
 
       {/* 3D viewport */}
@@ -384,7 +531,7 @@ export function DiceRollerPane({ pushRollToChat, who }: Props) {
           flexShrink: 0,
         }}
       >
-        {!loaded ? 'Loading…' : rolling ? 'Rolling…' : `⚄  Roll ${cfg.label}`}
+        {!loaded ? 'Loading…' : rolling ? 'Rolling…' : `⚄  Roll ${dieCount > 1 ? `${dieCount}× ` : ''}${cfg.label}`}
       </button>
 
       <div style={{
