@@ -8,6 +8,11 @@ const LOCAL_DATA = process.env.VERCEL
   : path.join(process.cwd(), "data");
 const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN && process.env.NODE_ENV !== "development";
 
+// Short CDN cache TTL (seconds) for JSON state. Long enough that frequent poll
+// reads are served as free cache HITs, short enough that edits still propagate
+// within a couple of seconds.
+const BLOB_CACHE_MAX_AGE = 2;
+
 // ── JSON helpers ─────────────────────────────────────────────────────
 
 // Strip file extension to use as list() prefix so it matches addRandomSuffix filenames.
@@ -26,13 +31,26 @@ export async function readJSON<T>(blobPath: string, fallback: T): Promise<T> {
     } catch {}
     return fallback;
   }
+  // Fast path: read the fixed pathname straight from the CDN cache. No list()
+  // call, so reads no longer spend an Advanced Operation each — and cache HITs
+  // cost no Simple Op and no origin transfer. get() resolves the URL from
+  // BLOB_STORE_ID and returns null when the blob doesn't exist.
+  try {
+    const result = await get(blobPath, { access: "private" });
+    if (result?.stream) {
+      return JSON.parse(await new Response(result.stream).text()) as T;
+    }
+  } catch {}
+  // Legacy fallback: blobs written before the fixed-pathname migration live at
+  // "<path>-<randomsuffix>.json". Locate one once; the next writeJSON re-saves
+  // it to the fixed pathname, after which the fast path takes over and this
+  // list() stops firing for that path.
   try {
     const { blobs } = await list({ prefix: blobPrefix(blobPath), limit: 1 });
     if (blobs.length === 0) return fallback;
-    const result = await get(blobs[0].url, { access: "private", useCache: false });
-    if (!result || !result.stream) return fallback;
-    const text = await new Response(result.stream).text();
-    return JSON.parse(text) as T;
+    const legacy = await get(blobs[0].url, { access: "private", useCache: false });
+    if (!legacy?.stream) return fallback;
+    return JSON.parse(await new Response(legacy.stream).text()) as T;
   } catch {
     return fallback;
   }
@@ -45,16 +63,15 @@ export async function writeJSON(blobPath: string, data: unknown): Promise<void> 
     fs.writeFileSync(localPath, JSON.stringify(data, null, 2));
     return;
   }
-  // Delete any existing blobs at this path before writing so reads always
-  // get the latest version via list(). addRandomSuffix:true gives each write
-  // a unique CDN URL, preventing stale CDN cache from masking updates.
-  const { blobs } = await list({ prefix: blobPrefix(blobPath), limit: 5 });
-  if (blobs.length > 0) await del(blobs.map((b) => b.url));
+  // Overwrite a fixed pathname in place. The stable URL lets reads be served
+  // from the CDN cache (see readJSON), and the short TTL keeps edits fresh.
+  // No list()/del() churn per write.
   await put(blobPath, JSON.stringify(data), {
     access: "private",
     contentType: "application/json",
-    addRandomSuffix: true,
-    cacheControlMaxAge: 0,
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    cacheControlMaxAge: BLOB_CACHE_MAX_AGE,
   });
 }
 
