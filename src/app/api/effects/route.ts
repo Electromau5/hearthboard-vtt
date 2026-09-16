@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON } from "@/lib/blob-storage";
+import { readJSON } from "@/lib/redis-storage";
 import type { ActiveEffect } from "@/app/api/admin/effects/route";
 
 const BLOB_PATH = "effects/current.json";

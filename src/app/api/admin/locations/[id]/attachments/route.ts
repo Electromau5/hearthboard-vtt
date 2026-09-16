@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { writeJSON, uploadFile, deleteFile } from "@/lib/blob-storage";
+import { writeJSON } from "@/lib/redis-storage";
+import { uploadFile, deleteFile } from "@/lib/blob-storage";
 import type { Attachment, AttachmentType } from "@/lib/vtt-types";
 import { CAMPAIGN_LOCATIONS } from "@/lib/campaign-defaults";
 import { getStoredLocations } from "@/app/api/admin/locations/route";

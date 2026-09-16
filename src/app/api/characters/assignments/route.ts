@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON, writeJSON } from "@/lib/blob-storage";
+import { readJSON, writeJSON } from "@/lib/redis-storage";
 import { getCharacter } from "@/lib/characters";
 import { getHardcodedAssignments } from "@/lib/users";
 

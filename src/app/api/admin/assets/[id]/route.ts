@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON, writeJSON, deleteFile } from "@/lib/blob-storage";
+import { readJSON, writeJSON } from "@/lib/redis-storage";
+import { deleteFile } from "@/lib/blob-storage";
 import type { Asset } from "@/lib/vtt-types";
 
 const BLOB_PATH = "assets/index.json";

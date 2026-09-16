@@ -3,25 +3,8 @@ import { auth } from "@/auth";
 import { getCharacter } from "@/lib/characters";
 import type { Character } from "@/lib/characters";
 import { readCharacterOverrides, writeCharacterOverrides } from "@/lib/character-storage";
+import { mergeCharacterForClient } from "@/lib/character-merge";
 import { getAssignments } from "@/app/api/characters/assignments/route";
-
-function mergeCharacter(base: Character, overrides: Partial<Character>): Character {
-  const merged = {
-    ...base,
-    ...overrides,
-    vitals: { ...base.vitals, ...(overrides.vitals || {}) },
-    characteristics: { ...base.characteristics, ...(overrides.characteristics || {}) },
-    skills: overrides.skills ?? base.skills,
-    abilities: overrides.abilities ?? base.abilities,
-    hooks: overrides.hooks ?? base.hooks,
-    equipment: overrides.equipment ?? base.equipment,
-  };
-  // Replace internal avatar storage URL with client-safe proxy URL
-  if (merged.avatar) {
-    merged.avatar = `/api/characters/${merged.slug}/avatar`;
-  }
-  return merged;
-}
 
 export async function GET(
   _req: NextRequest,
@@ -35,7 +18,7 @@ export async function GET(
   if (!base) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const overrides = await readCharacterOverrides(slug);
-  const merged = mergeCharacter(base, overrides);
+  const merged = mergeCharacterForClient(base, overrides);
   return NextResponse.json(merged);
 }
 
@@ -88,5 +71,5 @@ export async function PATCH(
       { status: 503 }
     );
   }
-  return NextResponse.json(mergeCharacter(base, merged));
+  return NextResponse.json(mergeCharacterForClient(base, merged));
 }

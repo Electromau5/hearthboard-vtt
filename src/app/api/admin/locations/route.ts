@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON, writeJSON } from "@/lib/blob-storage";
+import { readJSON, writeJSON } from "@/lib/redis-storage";
 import type { Location } from "@/lib/vtt-types";
 import { CAMPAIGN_LOCATIONS } from "@/lib/campaign-defaults";
 import { randomUUID } from "crypto";

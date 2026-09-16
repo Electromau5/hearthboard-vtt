@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON, writeJSON, uploadFile } from "@/lib/blob-storage";
+import { readJSON, writeJSON } from "@/lib/redis-storage";
+import { uploadFile } from "@/lib/blob-storage";
 import type { Asset, AssetType } from "@/lib/vtt-types";
 import { randomUUID } from "crypto";
 

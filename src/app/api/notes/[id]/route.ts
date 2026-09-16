@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { writeJSON } from "@/lib/blob-storage";
+import { writeJSON } from "@/lib/redis-storage";
 import { getNotes } from "@/app/api/notes/route";
 
 const BLOB_PATH = "notes/notes.json";

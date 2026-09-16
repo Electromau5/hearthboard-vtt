@@ -2,23 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { CHARACTERS, type Character } from "@/lib/characters";
 import { readCharacterOverrides } from "@/lib/character-storage";
+import { mergeCharacter as mergeChar } from "@/lib/character-merge";
 import { getAssignments } from "@/app/api/characters/assignments/route";
 import { getStoredLocations } from "@/app/api/admin/locations/route";
 import { CAMPAIGN_LOCATIONS } from "@/lib/campaign-defaults";
 import type { Location } from "@/lib/vtt-types";
-
-function mergeChar(base: Character, overrides: Partial<Character>): Character {
-  return {
-    ...base,
-    ...overrides,
-    vitals: { ...base.vitals, ...(overrides.vitals ?? {}) },
-    characteristics: { ...base.characteristics, ...(overrides.characteristics ?? {}) },
-    skills: overrides.skills ?? base.skills,
-    abilities: overrides.abilities ?? base.abilities,
-    hooks: overrides.hooks ?? base.hooks,
-    equipment: overrides.equipment ?? base.equipment,
-  };
-}
 
 function mergeLocations(stored: Location[]): Location[] {
   const storedMap = new Map(stored.map((l) => [l.id, l]));

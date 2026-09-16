@@ -7,7 +7,28 @@ import { CHARACTERS } from "@/lib/characters";
 import type { Character } from "@/lib/characters";
 import { useEffect, useState } from "react";
 
+
+/**
+ * Roster with stored overrides applied. Falls back to the compiled-in
+ * defaults until the request lands so the grid still paints immediately.
+ */
+function useMergedCharacters(): Character[] {
+  const [chars, setChars] = useState<Character[]>(CHARACTERS);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/characters", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: Character[] | null) => {
+        if (!cancelled && Array.isArray(data) && data.length > 0) setChars(data);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return chars;
+}
+
 export default function CharactersPage() {
+  const characters = useMergedCharacters();
   const { data: session } = useSession();
   const [assignments, setAssignments] = useState<Record<string, string>>({});
 
@@ -33,8 +54,14 @@ export default function CharactersPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: "var(--ink-text-2)" }}>{session?.user?.name}</span>
-          <Link href="/" className="btn btn-ghost btn-sm">← Back to app</Link>
-          <button className="btn btn-ghost btn-sm" onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
+          <Link href="/" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Back to app
+          </Link>
+          <button className="btn btn-ghost btn-sm nav-btn" onClick={() => signOut({ callbackUrl: "/login" })}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sign out
+          </button>
         </div>
       </div>
 
@@ -47,19 +74,19 @@ export default function CharactersPage() {
               Seven specialists bound by fate to the 17-year subterranean excavation.
             </p>
           </div>
-          <span style={countBadge}>{CHARACTERS.length} investigators</span>
+          <span style={countBadge}>{characters.length} investigators</span>
         </div>
 
         {mySlug && (
           <div style={myCharBanner}>
             Your investigator: <strong style={{ color: "var(--brass)" }}>
-              {CHARACTERS.find(c => c.slug === mySlug)?.name}
+              {characters.find(c => c.slug === mySlug)?.name}
             </strong>
           </div>
         )}
 
         <div style={grid}>
-          {CHARACTERS.map((char) => {
+          {characters.map((char) => {
             const assignedTo = assignments[char.slug];
             const status: "mine" | "available" | "taken" =
               assignedTo === myId ? "mine" : assignedTo ? "taken" : "available";

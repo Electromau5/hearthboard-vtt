@@ -1,9 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CHARACTERS } from "@/lib/characters";
+import type { Character } from "@/lib/characters";
+
+/**
+ * Roster with stored overrides applied. Falls back to the compiled-in
+ * defaults until the request lands so the grid still paints immediately.
+ */
+function useMergedCharacters(): Character[] {
+  const [chars, setChars] = useState<Character[]>(CHARACTERS);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/characters", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: Character[] | null) => {
+        if (!cancelled && Array.isArray(data) && data.length > 0) setChars(data);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return chars;
+}
 
 export default function AdminCharactersPage() {
+  const characters = useMergedCharacters();
   return (
     <div style={page}>
       <div style={topbar}>
@@ -14,17 +36,29 @@ export default function AdminCharactersPage() {
           </span>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <Link href="/admin/locations" className="btn btn-ghost btn-sm">Locations</Link>
-          <Link href="/admin/assets" className="btn btn-ghost btn-sm">Assets</Link>
-          <Link href="/admin/users" className="btn btn-ghost btn-sm">Users</Link>
-          <Link href="/" className="btn btn-ghost btn-sm">← App</Link>
+          <Link href="/admin/locations" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            Locations
+          </Link>
+          <Link href="/admin/assets" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Assets
+          </Link>
+          <Link href="/admin/users" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users
+          </Link>
+          <Link href="/" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            App
+          </Link>
         </div>
       </div>
 
       <div style={body}>
         <div style={sectionHeader}>
           <span style={label}>Investigator Dossiers</span>
-          <span style={count}>{CHARACTERS.length} characters</span>
+          <span style={count}>{characters.length} characters</span>
         </div>
         <p style={hint}>
           Click Edit to modify a character's vitals, stats, skills, abilities, hooks, and equipment.
@@ -32,7 +66,7 @@ export default function AdminCharactersPage() {
         </p>
 
         <div style={grid}>
-          {CHARACTERS.map((c) => (
+          {characters.map((c) => (
             <div key={c.slug} style={card}>
               <div style={cardInitial}>{c.name.charAt(0)}</div>
               <div style={cardInfo}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
@@ -39,7 +39,11 @@ const COMPENDIUM = [
   { name: 'Vial of Still Water', type: 'Consumable', cr: '—', hp: null as number | null, color: '#4f9b92' },
 ];
 
-const CHARACTERS = [
+// Compiled-in starting roster. These are DEFAULTS ONLY — `characters` state
+// below is rehydrated from /api/characters on mount so names, classes, HP and
+// avatars reflect edits made on the character sheets. Never render from this
+// array directly.
+const DEFAULT_CHARACTERS = [
   { id: 'c1', slug: 'dr-alistair-finch',    name: 'Dr. Alistair Finch',       cls: 'The Disgraced Mortician',         hp: 12, maxHp: 12, abilities: { STR: 50, CON: 65, DEX: 75, INT: 85, POW: 75, EDU: 85 }, inventory: [{ name: 'Dissection kit', qty: 1 }, { name: 'Formaldehyde jars', qty: 3 }, { name: 'Scalpel holster', qty: 1 }, { name: 'Mortuary credentials', qty: 1 }] },
   { id: 'c2', slug: 'silas-vance',           name: 'Silas "The Great" Vance',  cls: 'The Blackmailed Illusionist',     hp: 11, maxHp: 11, abilities: { STR: 55, CON: 60, DEX: 85, INT: 75, POW: 70, EDU: 65 }, inventory: [{ name: 'Lockpick kit', qty: 1 }, { name: 'Flash pellets', qty: 4 }, { name: 'Defense cane', qty: 1 }, { name: 'Debt note', qty: 1 }] },
   { id: 'c3', slug: 'julian-sterling',       name: 'Julian Sterling',           cls: 'The Desperate Auteur',            hp: 10, maxHp: 10, abilities: { STR: 45, CON: 55, DEX: 70, INT: 80, POW: 65, EDU: 75 }, inventory: [{ name: '35mm Eyemo camera', qty: 1 }, { name: 'Nitrate film rolls', qty: 4 }, { name: 'Magnesium dish', qty: 1 }, { name: 'Dev kit', qty: 1 }] },
@@ -218,6 +222,25 @@ const BRIEFINGS: Briefing[] = [
       },
     ],
   },
+  {
+    id: 'miles',
+    image: '/sgt-miles.jpeg',
+    badge: 'LOGISTICS CONTACT',
+    title: 'Requisitions & Materiel',
+    subtitle: 'Sgt. Erryn Miles · Logistics Officer',
+    cardHint: 'Sgt. Miles · Logistics Officer',
+    sections: [
+      {
+        audio: '/sgt-miles-1.mp3',
+        paragraphs: [
+          "Good afternoon.",
+          "My name is Sergeant Erryn Miles. I have been tasked by our common benefactor to aid you in the excavation.",
+          "At any specific point during your mission, if you require access to military resources, you will come to me directly.",
+          "I and only I will have final say on what your team receives.",
+        ],
+      },
+    ],
+  },
 ];
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -284,6 +307,8 @@ export default function HearthboardPage() {
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [charAvatars, setCharAvatars] = useState<Record<string, string>>({});
+  // Live roster — starts from DEFAULT_CHARACTERS, patched with stored overrides.
+  const [characters, setCharacters] = useState(DEFAULT_CHARACTERS);
   const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number; data?: Record<string, unknown> } | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
@@ -297,8 +322,10 @@ export default function HearthboardPage() {
   // Track triggeredAt values we've already displayed so one-shot effects (visions)
   // don't replay on every poll while the blob entry is still live.
   const shownEffectsRef = useRef<Set<number>>(new Set());
-  const seenRollIds = useRef<Set<string>>(new Set());
-  const sessionStartTs = useRef(Date.now());
+  const seenChatIds = useRef<Set<string>>(new Set());
+  // Set once the first poll has recorded the pre-existing backlog, so joining
+  // mid-session does not replay old messages.
+  const chatPrimed = useRef(false);
   const [musicPos, setMusicPos] = useState<{ x: number; y: number } | null>(null);
   const musicDragRef = useRef<{ startX: number; startY: number; elemX: number; elemY: number } | null>(null);
 
@@ -323,33 +350,50 @@ export default function HearthboardPage() {
   useEffect(() => { currentSceneIdRef.current = currentSceneId; }, [currentSceneId]);
   useEffect(() => { editingNoteIdRef.current = editingNoteId; }, [editingNoteId]);
 
-  // Fetch character assignments on mount, then load avatar URLs for claimed characters
+  // Fetch character assignments on mount, then the merged roster. One call to
+  // /api/characters replaces the old per-slug avatar fan-out and, crucially,
+  // carries the stored name/class/HP so a rename on a sheet shows up here.
   useEffect(() => {
-    fetch('/api/characters/assignments', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : {})
-      .then(async (data: Record<string, string>) => {
-        setAssignments(data);
-        // Auto-select the player's own character in the pane
-        if (session && session.user.role !== 'admin') {
-          const mySlug = Object.entries(data).find(([, uid]) => uid === session.user.id)?.[0];
-          const mine = CHARACTERS.find(c => c.slug === mySlug);
-          if (mine) setActiveCharId(mine.id);
-        }
-        // Fetch avatar URLs for claimed characters
-        const claimedSlugs = Object.keys(data);
-        if (claimedSlugs.length > 0) {
-          const avatarMap: Record<string, string> = {};
-          await Promise.all(claimedSlugs.map(async (slug) => {
-            try {
-              const res = await fetch(`/api/admin/characters/${slug}`, { cache: 'no-store' });
-              if (!res.ok) return;
-              const char = await res.json() as { avatar?: string };
-              if (char.avatar) avatarMap[slug] = char.avatar;
-            } catch {}
-          }));
-          setCharAvatars(avatarMap);
-        }
-      });
+    let cancelled = false;
+    (async () => {
+      let data: Record<string, string> = {};
+      try {
+        const r = await fetch('/api/characters/assignments', { cache: 'no-store' });
+        if (r.ok) data = await r.json();
+      } catch {}
+      if (cancelled) return;
+      setAssignments(data);
+      // Auto-select the player's own character in the pane
+      if (session && session.user.role !== 'admin') {
+        const mySlug = Object.entries(data).find(([, uid]) => uid === session.user.id)?.[0];
+        const mine = DEFAULT_CHARACTERS.find(c => c.slug === mySlug);
+        if (mine) setActiveCharId(mine.id);
+      }
+      try {
+        const r = await fetch('/api/characters', { cache: 'no-store' });
+        if (!r.ok) return;
+        const merged = await r.json() as Array<{
+          slug: string; name?: string; className?: string; avatar?: string; vitals?: { hp?: number };
+        }>;
+        if (cancelled) return;
+        const bySlug = new Map(merged.map(m => [m.slug, m]));
+        setCharacters(prev => prev.map(c => {
+          const m = bySlug.get(c.slug);
+          if (!m) return c;
+          return {
+            ...c,
+            name: m.name ?? c.name,
+            cls: m.className ?? c.cls,
+            hp: m.vitals?.hp ?? c.hp,
+            maxHp: m.vitals?.hp ?? c.maxHp,
+          };
+        }));
+        const avatarMap: Record<string, string> = {};
+        for (const m of merged) if (m.avatar) avatarMap[m.slug] = m.avatar;
+        setCharAvatars(avatarMap);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
   }, [session]);
 
   // Fetch location primary images for the map info panel
@@ -538,31 +582,52 @@ export default function HearthboardPage() {
     return () => clearInterval(iv);
   }, [session]);
 
-  // Poll for shared chat roll events from other players
+  // Poll the shared feed for rolls and messages from everyone else.
   useEffect(() => {
-    const startTs = sessionStartTs.current;
     const poll = async () => {
       try {
         const r = await fetch('/api/chat', { cache: 'no-store' });
         if (!r.ok) return;
-        const events: Array<{ id: string; who: string; formula: string; rolls: number[]; total: number; sides: number; n: number; ts: number }> = await r.json();
-        const fresh = events.filter(e => !seenRollIds.current.has(e.id) && e.ts > startTs);
+        const events: Array<{
+          id: string; type: 'roll' | 'text'; who: string; ts: number;
+          formula?: string; rolls?: number[]; total?: number; sides?: number; n?: number; text?: string;
+        }> = await r.json();
+
+        // First poll only records what was already there — no clock comparison,
+        // so a player whose device clock is off still sees everyone's traffic.
+        if (!chatPrimed.current) {
+          events.forEach(e => seenChatIds.current.add(e.id));
+          chatPrimed.current = true;
+          return;
+        }
+
+        const fresh = events.filter(e => !seenChatIds.current.has(e.id));
         if (fresh.length === 0) return;
-        fresh.forEach(e => seenRollIds.current.add(e.id));
+        fresh.forEach(e => seenChatIds.current.add(e.id));
+
         setChatItems(prev => [
           ...prev,
-          ...fresh.map(e => ({
-            type: 'roll' as const,
-            who: e.who,
-            res: { formula: e.formula, rolls: e.rolls, mod: 0, sides: e.sides, total: e.total, n: e.n },
-            crit: e.sides === 20 && e.n === 1 && e.rolls[0] === 20,
-            fumble: e.sides === 20 && e.n === 1 && e.rolls[0] === 1,
-            ts: e.ts,
-          })),
+          ...fresh.map(e => {
+            if (e.type === 'text') {
+              return { type: 'chat' as const, who: e.who, text: e.text ?? '' };
+            }
+            const sides = e.sides ?? 0;
+            const n = e.n ?? 1;
+            const rolls = e.rolls ?? [];
+            return {
+              type: 'roll' as const,
+              who: e.who,
+              res: { formula: e.formula ?? '', rolls, mod: 0, sides, total: e.total ?? 0, n },
+              crit: sides === 20 && n === 1 && rolls[0] === 20,
+              fumble: sides === 20 && n === 1 && rolls[0] === 1,
+              ts: e.ts,
+            };
+          }),
         ]);
-        setRollCount(c => c + fresh.length);
+        setRollCount(c => c + fresh.filter(e => e.type === 'roll').length);
       } catch {}
     };
+    poll();
     const iv = setInterval(poll, 3000);
     return () => clearInterval(iv);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -677,24 +742,43 @@ export default function HearthboardPage() {
     showToast(`${initiative[next].name}'s turn`);
   };
 
+  // Broadcast a locally-shown event, warning if the shared store rejects it.
+  const broadcast = useCallback(async (payload: Record<string, unknown>) => {
+    try {
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) {
+        setChatItems(prev => [...prev, { type: 'system', text: 'Not broadcast — other players cannot see that.' }]);
+      }
+    } catch {
+      setChatItems(prev => [...prev, { type: 'system', text: 'Not broadcast — you appear to be offline.' }]);
+    }
+  }, []);
+
   const pushRollToChat = useCallback((who: string, res: RollResult) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    seenRollIds.current.add(id);
+    seenChatIds.current.add(id);
     setRollCount(c => c + 1);
     const isCrit = res.sides === 20 && res.n === 1 && res.rolls[0] === 20;
     const isFumble = res.sides === 20 && res.n === 1 && res.rolls[0] === 1;
     const ts = Date.now();
     setChatItems(prev => [...prev, { type: 'roll', who, res, crit: isCrit, fumble: isFumble, ts }]);
-    fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, type: 'roll', who, formula: res.formula, rolls: res.rolls, total: res.total, sides: res.sides, n: res.n, ts }),
-    }).catch(() => {});
-  }, []);
+    broadcast({ id, type: 'roll', who, formula: res.formula, rolls: res.rolls, total: res.total, sides: res.sides, n: res.n });
+  }, [broadcast]);
+
+  const pushTextToChat = useCallback((who: string, text: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    seenChatIds.current.add(id);
+    setChatItems(prev => [...prev, { type: 'chat', who, text }]);
+    broadcast({ id, type: 'text', who, text });
+  }, [broadcast]);
 
   const rollDie = (sides: number) => {
     const res = rollFormula('1d' + sides);
-    if (res) pushRollToChat('You', res);
+    if (res) pushRollToChat(myDisplayName, res);
   };
 
   const handleChatSubmit = () => {
@@ -704,9 +788,9 @@ export default function HearthboardPage() {
     if (!val) return;
     const res = rollFormula(val);
     if (res) {
-      pushRollToChat('You', res);
+      pushRollToChat(myDisplayName, res);
     } else {
-      setChatItems(prev => [...prev, { type: 'chat', who: 'You', text: val }]);
+      pushTextToChat(myDisplayName, val);
     }
     input.value = '';
   };
@@ -788,7 +872,18 @@ export default function HearthboardPage() {
     const q = compSearch.toLowerCase();
     return !q || c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q);
   });
-  const activeChar = CHARACTERS.find(c => c.id === activeCharId) ?? CHARACTERS[0];
+  const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
+
+  // How this client is labelled in the shared feed. Everyone sees the same
+  // string, so it must identify the author — never "You".
+  const myDisplayName = useMemo(() => {
+    const myId = session?.user?.id ?? '';
+    const mySlug = Object.entries(assignments).find(([, uid]) => uid === myId)?.[0];
+    const mine = characters.find(c => c.slug === mySlug);
+    if (mine) return mine.name;
+    if (session?.user?.role === 'admin') return 'GM';
+    return session?.user?.name ?? 'Unknown';
+  }, [session, assignments, characters]);
 
   const getTokenPos = (tok: Token) =>
     (dragPos && dragPos.id === tok.id) ? { x: dragPos.x, y: dragPos.y } : { x: tok.x, y: tok.y };
@@ -957,8 +1052,8 @@ export default function HearthboardPage() {
             <div className="rail-section">
               <div className="rail-title">Token Tray</div>
               <div className="token-tray">
-                {CHARACTERS.filter(c => !!assignments[c.slug]).map((char) => {
-                  const charIdx = CHARACTERS.indexOf(char);
+                {characters.filter(c => !!assignments[c.slug]).map((char) => {
+                  const charIdx = characters.indexOf(char);
                   const color = TOKEN_COLORS[charIdx % TOKEN_COLORS.length];
                   const avatarUrl = charAvatars[char.slug];
                   const words = char.name.replace(/[^a-zA-Z ]/g, '').split(' ').filter(Boolean);
@@ -993,7 +1088,7 @@ export default function HearthboardPage() {
                     </div>
                   );
                 })}
-                {CHARACTERS.filter(c => !!assignments[c.slug]).length === 0 && (
+                {characters.filter(c => !!assignments[c.slug]).length === 0 && (
                   <div style={{ fontSize: 11, color: 'var(--ink-text-2)', padding: '4px 0', lineHeight: 1.5 }}>
                     No investigators claimed yet.
                   </div>
@@ -1074,10 +1169,12 @@ export default function HearthboardPage() {
               const isSpeakeasy = scene?.locationId === 'loc-underworld';
               const isBellevue = scene?.locationId === 'loc-bellevue';
               const isMiskatonic = scene?.locationId === 'loc-miskatonic';
+              const isBlackArchive = scene?.locationId === 'loc-blackarchive';
               const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
               const mobsterBriefing = BRIEFINGS.find(b => b.id === 'mobster');
               const attendantBriefing = BRIEFINGS.find(b => b.id === 'attendant');
               const armitageBriefing = BRIEFINGS.find(b => b.id === 'armitage');
+              const milesBriefing = BRIEFINGS.find(b => b.id === 'miles');
               return (
                 <div className="loc-info-panel">
                   <button className="loc-close-btn" onClick={() => setMapZoomedTo(null)}>✕</button>
@@ -1268,6 +1365,53 @@ export default function HearthboardPage() {
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
                             Dr. Henry Armitage · Head Librarian
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                            ▶ Click to open
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Logistics contact — only shown on the Black Archives */}
+                  {isBlackArchive && milesBriefing && (
+                    <>
+                      <div style={{ height: 1, background: 'var(--brass-dim)', opacity: 0.5 }} />
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+                        Logistics Contact
+                      </div>
+                      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                      <div
+                        style={{
+                          position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                          cursor: 'pointer', border: '1px solid var(--brass-dim)',
+                          boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        }}
+                        onClick={() => openBriefing(milesBriefing)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => e.key === 'Enter' && openBriefing(milesBriefing)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={milesBriefing.image}
+                          alt={milesBriefing.title}
+                          style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', filter: 'sepia(0.35) brightness(0.7)' }}
+                        />
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          background: 'linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.25) 60%, transparent 100%)',
+                          padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                            {milesBriefing.badge}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                            {milesBriefing.title}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
+                            Sgt. Erryn Miles · Logistics Officer
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
                             ▶ Click to open
@@ -1527,8 +1671,8 @@ export default function HearthboardPage() {
                 const myId = session?.user?.id ?? '';
                 const mySlug = Object.entries(assignments).find(([, uid]) => uid === myId)?.[0];
                 const visibleChars = isAdmin
-                  ? CHARACTERS
-                  : CHARACTERS.filter(c => c.slug === mySlug);
+                  ? characters
+                  : characters.filter(c => c.slug === mySlug);
 
                 if (visibleChars.length === 0) {
                   return (
@@ -1542,7 +1686,7 @@ export default function HearthboardPage() {
                 }
 
                 const displayChar = visibleChars.find(c => c.id === activeCharId) ?? visibleChars[0];
-                const charIdx = CHARACTERS.findIndex(c => c.id === displayChar.id);
+                const charIdx = characters.findIndex(c => c.id === displayChar.id);
                 const color = TOKEN_COLORS[charIdx % TOKEN_COLORS.length];
 
                 return (
@@ -1792,7 +1936,7 @@ export default function HearthboardPage() {
               {activePane === 'roll' && (
                 <DiceRollerPane
                   pushRollToChat={pushRollToChat}
-                  who={session?.user?.name ?? 'You'}
+                  who={myDisplayName}
                 />
               )}
             </div>
@@ -1803,7 +1947,7 @@ export default function HearthboardPage() {
                 Mission Details
               </div>
 
-              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant' && b.id !== 'armitage').map(b => (
+              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant' && b.id !== 'armitage' && b.id !== 'miles').map(b => (
                 <div
                   key={b.id}
                   style={{ ...missionCard, marginBottom: 10 }}

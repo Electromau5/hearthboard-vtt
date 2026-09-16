@@ -77,10 +77,22 @@ export default function AdminAssetsPage() {
           <span style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600 }}>Admin — Assets</span>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <Link href="/admin/characters" className="btn btn-ghost btn-sm">Characters</Link>
-          <Link href="/admin/locations" className="btn btn-ghost btn-sm">Locations</Link>
-          <Link href="/admin/users" className="btn btn-ghost btn-sm">Users</Link>
-          <Link href="/" className="btn btn-ghost btn-sm">← App</Link>
+          <Link href="/admin/characters" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Characters
+          </Link>
+          <Link href="/admin/locations" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            Locations
+          </Link>
+          <Link href="/admin/users" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users
+          </Link>
+          <Link href="/" className="btn btn-ghost btn-sm nav-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            App
+          </Link>
         </div>
       </div>
 

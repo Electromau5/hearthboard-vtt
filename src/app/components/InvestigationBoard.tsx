@@ -64,7 +64,7 @@ export function InvestigationBoard({ username }: { username: string }) {
         })
         .catch(() => {});
     load();
-    const iv = setInterval(load, 3000);
+    const iv = setInterval(load, 5000);
     return () => clearInterval(iv);
   }, []);
 
