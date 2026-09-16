@@ -180,20 +180,11 @@ const BRIEFINGS: Briefing[] = [
     bgSong: '/speakeasy-1.mp3',
     sections: [
       {
-        audio: '/mobster-2.mp3',
+        audio: '/mobster-3.mp3',
         paragraphs: [
-          "The guy you're looking for goes by the name 'Amazo the Amazing'. I know. Stupid name right?",
-          "Anyway, he's built a reputation as the primary magic act in these parts, but the guy — he's really ambitious. So he asks my old man for a loan.",
-          "However, in return the old man doesn't ask him for the money back. He instead gets him to give away his secrets. Shrewd bastard.",
-          "Now he knows everything about this guy's secrets and is blackmailing him for a larger cut of the profits.",
-        ],
-      },
-      {
-        audio: '/mobster-1.mp3',
-        paragraphs: [
-          "Yeah. My father has been behind that guy for a couple of years now.",
-          "He knows he's a fraud, but he's also quite useful. He's not stupid, that one. He knows things — things that could very well be helpful for both of us.",
-          "So we made a deal — I take the old man out of the equation and he and I form… a business partnership. Whatever he finds in that tomb is gonna make him very famous and me very rich.",
+          "Yeah.....I knows about you guys. You're the new team that was put together recently. I was told that you might be stoppin by.",
+          "I was workin with some....ah....people from the old crew. They were doin some....interesting things.",
+          "My resources and connections are at your disposal. I can get you what you need......for a price.",
         ],
       },
     ],
