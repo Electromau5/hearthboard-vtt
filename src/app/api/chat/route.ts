@@ -17,6 +17,10 @@ export type ChatEvent = {
   total?: number;
   sides?: number;
   n?: number;
+  /** Set when the roll was a skill/characteristic check: the roll-under target
+   *  and the Call of Cthulhu success level it produced. */
+  target?: number;
+  level?: string;
   // Text events
   text?: string;
 };
@@ -63,6 +67,8 @@ export async function POST(req: NextRequest) {
           total: body.total,
           sides: body.sides,
           n: body.n,
+          ...(typeof body.target === "number" ? { target: body.target } : {}),
+          ...(body.level ? { level: String(body.level).slice(0, 20) } : {}),
         }
       : { text: body.text!.trim().slice(0, MAX_TEXT_LEN) }),
   };

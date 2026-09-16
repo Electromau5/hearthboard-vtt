@@ -180,6 +180,16 @@ The VTT board is a large `'use client'` component that composes the panes in `sr
 - **Scene management:** `currentSceneIdRef` is kept in sync via a separate `useEffect` so global mouse handlers always have the current scene without being re-registered.
 - **HP ring:** CSS custom property `--hp-pct` is set via `style={{ ['--hp-pct' as string]: hpPct } as React.CSSProperties}`.
 - **Dice rolling:** `rollFormula()` parses `NdS+M` notation and returns typed `RollResult`.
+- **Skill checks:** `rollCheck(charName, label, target)` rolls d100 roll-under and grades the result with `checkLevel()` into the Call of Cthulhu success levels below. Every characteristic and skill in the Characters pane is a button wired to it, so play does not require opening `/characters/[slug]`. Checks deliberately do **not** switch panes — the verdict comes back as a toast while the graded card goes to the shared chat. Skill and characteristic values come from the merged roster (`/api/characters`), so sheet edits change what the buttons roll against.
+
+| Roll | Result |
+|---|---|
+| 01 | Critical |
+| ≤ target ÷ 5 | Extreme success |
+| ≤ target ÷ 2 | Hard success |
+| ≤ target | Regular success |
+| > target | Failure |
+| 100, or 96–00 when target < 50 | Fumble |
 - **Shared roll chat:** Rolls are POSTed to `/api/chat` and polled every 3s so all players see each other's rolls in real time.
 - **Screen effects:** Admin triggers visual effects (sanity slip, darkness, blood vision, etc.) via `/admin/experience`; players poll `/api/effects` every 3s.
 - **3D panes:** `DiceRollerPane` and `CthulhuReliefModal` each build their own three.js scene and load GLTF models via `GLTFLoader`. Both are `'use client'` only — three.js must never reach a server component.
@@ -199,7 +209,7 @@ Defined in `src/app/globals.css`. Key CSS variables:
 --brass-dim      /* muted brass for borders */
 --arcane         /* purple — magic/resonance */
 --blood          /* red — HP and danger */
---forest         /* green — luck/nature */
+--forest         /* green — luck/nature, successful checks */
 --ink-text-2     /* secondary text */
 --font-display   /* Fraunces — headings */
 --font-mono      /* JetBrains Mono — stats, labels */

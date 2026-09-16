@@ -39,16 +39,31 @@ const COMPENDIUM = [
   { name: 'Vial of Still Water', type: 'Consumable', cr: '—', hp: null as number | null, color: '#4f9b92' },
 ];
 
+type BoardSkill = { name: string; value: number };
+type BoardCharacter = {
+  id: string;
+  slug: string;
+  name: string;
+  cls: string;
+  hp: number;
+  maxHp: number;
+  /** Call of Cthulhu characteristics — each is a d100 roll-under target. */
+  abilities: Record<string, number>;
+  inventory: { name: string; qty: number }[];
+  /** Populated from /api/characters; absent until that lands. */
+  skills?: BoardSkill[];
+};
+
 // Compiled-in starting roster. These are DEFAULTS ONLY — `characters` state
-// below is rehydrated from /api/characters on mount so names, classes, HP and
-// avatars reflect edits made on the character sheets. Never render from this
-// array directly.
-const DEFAULT_CHARACTERS = [
+// below is rehydrated from /api/characters on mount so names, classes, HP,
+// characteristics, skills and avatars reflect edits made on the character
+// sheets. Never render from this array directly.
+const DEFAULT_CHARACTERS: BoardCharacter[] = [
   { id: 'c1', slug: 'dr-alistair-finch',    name: 'Dr. Alistair Finch',       cls: 'The Disgraced Mortician',         hp: 12, maxHp: 12, abilities: { STR: 50, CON: 65, DEX: 75, INT: 85, POW: 75, EDU: 85 }, inventory: [{ name: 'Dissection kit', qty: 1 }, { name: 'Formaldehyde jars', qty: 3 }, { name: 'Scalpel holster', qty: 1 }, { name: 'Mortuary credentials', qty: 1 }] },
   { id: 'c2', slug: 'silas-vance',           name: 'Silas "The Great" Vance',  cls: 'The Blackmailed Illusionist',     hp: 11, maxHp: 11, abilities: { STR: 55, CON: 60, DEX: 85, INT: 75, POW: 70, EDU: 65 }, inventory: [{ name: 'Lockpick kit', qty: 1 }, { name: 'Flash pellets', qty: 4 }, { name: 'Defense cane', qty: 1 }, { name: 'Debt note', qty: 1 }] },
   { id: 'c3', slug: 'julian-sterling',       name: 'Julian Sterling',           cls: 'The Desperate Auteur',            hp: 10, maxHp: 10, abilities: { STR: 45, CON: 55, DEX: 70, INT: 80, POW: 65, EDU: 75 }, inventory: [{ name: '35mm Eyemo camera', qty: 1 }, { name: 'Nitrate film rolls', qty: 4 }, { name: 'Magnesium dish', qty: 1 }, { name: 'Dev kit', qty: 1 }] },
   { id: 'c4', slug: 'thomas-callahan',       name: 'Thomas "Mack" Callahan',   cls: 'The Amnesiac Detective',          hp: 14, maxHp: 14, abilities: { STR: 75, CON: 70, DEX: 65, INT: 70, POW: 65, EDU: 60 }, inventory: [{ name: 'Colt M1911', qty: 1 }, { name: 'Spare magazines', qty: 3 }, { name: 'Trench knife', qty: 1 }, { name: 'PI badge', qty: 1 }] },
-  { id: 'c5', slug: 'richard-graves',        name: 'Richard Pickman Graves',   cls: 'The Macabre Visionary',           hp: 9,  maxHp: 9,  ac: 0, abilities: { STR: 40, CON: 45, DEX: 80, INT: 85, POW: 80, EDU: 70 }, inventory: [{ name: 'Charcoal sketchbook', qty: 1 }, { name: 'Bristle brushes', qty: 1 }, { name: 'Oil paint tubes', qty: 1 }, { name: 'Cemetery sketches', qty: 1 }] },
+  { id: 'c5', slug: 'richard-graves',        name: 'Richard Pickman Graves',   cls: 'The Macabre Visionary',           hp: 9,  maxHp: 9,  abilities: { STR: 40, CON: 45, DEX: 80, INT: 85, POW: 80, EDU: 70 }, inventory: [{ name: 'Charcoal sketchbook', qty: 1 }, { name: 'Bristle brushes', qty: 1 }, { name: 'Oil paint tubes', qty: 1 }, { name: 'Cemetery sketches', qty: 1 }] },
   { id: 'c6', slug: 'arthur-wright',         name: 'Arthur Wright',             cls: 'The Non-Euclidean Architect',     hp: 12, maxHp: 12, abilities: { STR: 55, CON: 65, DEX: 60, INT: 90, POW: 70, EDU: 85 }, inventory: [{ name: 'Brass compass', qty: 1 }, { name: 'Theodolite', qty: 1 }, { name: 'Dynamite sticks', qty: 2 }, { name: 'Blueprint parchment', qty: 1 }] },
   { id: 'c7', slug: 'percival-winthrop',     name: 'Percival Winthrop',         cls: 'The Ruined Tycoon',               hp: 11, maxHp: 11, abilities: { STR: 50, CON: 55, DEX: 55, INT: 80, POW: 75, EDU: 85 }, inventory: [{ name: 'Savile Row suit', qty: 1 }, { name: 'Gold pocket watch', qty: 1 }, { name: '.32 ACP revolver', qty: 1 }, { name: 'Bankrupt ledger', qty: 1 }] },
 ];
@@ -253,14 +268,39 @@ type RollResult = { formula: string; rolls: number[]; mod: number; sides: number
 type ChatItem =
   | { type: 'system'; text: string }
   | { type: 'chat'; who: string; text: string }
-  | { type: 'roll'; who: string; res: RollResult; crit: boolean; fumble: boolean; ts: number };
+  | { type: 'roll'; who: string; res: RollResult; crit: boolean; fumble: boolean; ts: number;
+      /** Present when the roll was a skill/characteristic check. */
+      check?: { target: number; level: CheckLevel } };
 
-// ── Helpers ──────────────────────────────────────────────────────────
-function abilityMod(score: number) {
-  const m = Math.floor((score - 10) / 2);
-  return (m >= 0 ? '+' : '') + m;
+// ── Call of Cthulhu skill checks ─────────────────────────────────────
+// A check is d100 roll-under: beat the target, and beat it well enough for a
+// better degree of success. 01 always crits; 100 always fumbles, as does
+// 96-99 when the target is under 50.
+type CheckLevel = 'Critical' | 'Extreme' | 'Hard' | 'Success' | 'Failure' | 'Fumble';
+
+function checkLevel(roll: number, target: number): CheckLevel {
+  if (roll === 1) return 'Critical';
+  if (roll === 100) return 'Fumble';
+  if (target < 50 && roll >= 96) return 'Fumble';
+  if (roll <= Math.floor(target / 5)) return 'Extreme';
+  if (roll <= Math.floor(target / 2)) return 'Hard';
+  if (roll <= target) return 'Success';
+  return 'Failure';
 }
 
+const LEVEL_CLASS: Record<CheckLevel, string> = {
+  Critical: 'crit',
+  Extreme: 'extreme',
+  Hard: 'hard',
+  Success: 'success',
+  Failure: 'failure',
+  Fumble: 'fumble',
+};
+
+const isCheckLevel = (v: unknown): v is CheckLevel =>
+  typeof v === 'string' && v in LEVEL_CLASS;
+
+// ── Helpers ──────────────────────────────────────────────────────────
 function rollFormula(formula: string): RollResult | null {
   const m = formula.replace(/\s+/g, '').match(/^(\d*)d(\d+)([+-]\d+)?$/i);
   if (!m) return null;
@@ -373,7 +413,10 @@ export default function HearthboardPage() {
         const r = await fetch('/api/characters', { cache: 'no-store' });
         if (!r.ok) return;
         const merged = await r.json() as Array<{
-          slug: string; name?: string; className?: string; avatar?: string; vitals?: { hp?: number };
+          slug: string; name?: string; className?: string; avatar?: string;
+          vitals?: { hp?: number };
+          characteristics?: Record<string, number>;
+          skills?: Array<{ name: string; value: number }>;
         }>;
         if (cancelled) return;
         const bySlug = new Map(merged.map(m => [m.slug, m]));
@@ -386,6 +429,8 @@ export default function HearthboardPage() {
             cls: m.className ?? c.cls,
             hp: m.vitals?.hp ?? c.hp,
             maxHp: m.vitals?.hp ?? c.maxHp,
+            abilities: m.characteristics ?? c.abilities,
+            skills: m.skills ?? c.skills,
           };
         }));
         const avatarMap: Record<string, string> = {};
@@ -591,6 +636,7 @@ export default function HearthboardPage() {
         const events: Array<{
           id: string; type: 'roll' | 'text'; who: string; ts: number;
           formula?: string; rolls?: number[]; total?: number; sides?: number; n?: number; text?: string;
+          target?: number; level?: string;
         }> = await r.json();
 
         // First poll only records what was already there — no clock comparison,
@@ -614,13 +660,17 @@ export default function HearthboardPage() {
             const sides = e.sides ?? 0;
             const n = e.n ?? 1;
             const rolls = e.rolls ?? [];
+            const check = e.target !== undefined && isCheckLevel(e.level)
+              ? { target: e.target, level: e.level }
+              : undefined;
             return {
               type: 'roll' as const,
               who: e.who,
               res: { formula: e.formula ?? '', rolls, mod: 0, sides, total: e.total ?? 0, n },
-              crit: sides === 20 && n === 1 && rolls[0] === 20,
-              fumble: sides === 20 && n === 1 && rolls[0] === 1,
+              crit: check ? check.level === 'Critical' : sides === 20 && n === 1 && rolls[0] === 20,
+              fumble: check ? check.level === 'Fumble' : sides === 20 && n === 1 && rolls[0] === 1,
               ts: e.ts,
+              check,
             };
           }),
         ]);
@@ -758,15 +808,24 @@ export default function HearthboardPage() {
     }
   }, []);
 
-  const pushRollToChat = useCallback((who: string, res: RollResult) => {
+  const pushRollToChat = useCallback((
+    who: string,
+    res: RollResult,
+    check?: { target: number; level: CheckLevel },
+  ) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     seenChatIds.current.add(id);
     setRollCount(c => c + 1);
-    const isCrit = res.sides === 20 && res.n === 1 && res.rolls[0] === 20;
-    const isFumble = res.sides === 20 && res.n === 1 && res.rolls[0] === 1;
+    // A check carries its own verdict; a raw formula roll keeps the d20 flourish.
+    const isCrit = check ? check.level === 'Critical' : res.sides === 20 && res.n === 1 && res.rolls[0] === 20;
+    const isFumble = check ? check.level === 'Fumble' : res.sides === 20 && res.n === 1 && res.rolls[0] === 1;
     const ts = Date.now();
-    setChatItems(prev => [...prev, { type: 'roll', who, res, crit: isCrit, fumble: isFumble, ts }]);
-    broadcast({ id, type: 'roll', who, formula: res.formula, rolls: res.rolls, total: res.total, sides: res.sides, n: res.n });
+    setChatItems(prev => [...prev, { type: 'roll', who, res, crit: isCrit, fumble: isFumble, ts, check }]);
+    broadcast({
+      id, type: 'roll', who,
+      formula: res.formula, rolls: res.rolls, total: res.total, sides: res.sides, n: res.n,
+      ...(check ? { target: check.target, level: check.level } : {}),
+    });
   }, [broadcast]);
 
   const pushTextToChat = useCallback((who: string, text: string) => {
@@ -795,12 +854,20 @@ export default function HearthboardPage() {
     input.value = '';
   };
 
-  const rollAbility = (charName: string, ability: string, score: number) => {
-    const mod = Math.floor((score - 10) / 2);
-    const res = rollFormula('1d20' + (mod !== 0 ? (mod > 0 ? '+' : '') + mod : ''));
-    if (res) pushRollToChat(`${charName} (${ability})`, res);
-    setActivePane('chat');
-  };
+  /**
+   * Roll a skill or characteristic: d100 under `target`, graded into Call of
+   * Cthulhu success levels. Used by every roll button on the dashboard, so it
+   * deliberately does NOT switch panes — players roll repeatedly from the
+   * character pane and read the verdict from the toast, with the full result
+   * landing in the shared chat for everyone else.
+   */
+  const rollCheck = useCallback((charName: string, label: string, target: number) => {
+    const roll = 1 + Math.floor(Math.random() * 100);
+    const level = checkLevel(roll, target);
+    const res: RollResult = { formula: `1d100 vs ${label} ${target}%`, rolls: [roll], mod: 0, sides: 100, total: roll, n: 1 };
+    pushRollToChat(`${charName} (${label})`, res, { target, level });
+    showToast(`${label} ${target}% — rolled ${roll} · ${level}`);
+  }, [pushRollToChat, showToast]);
 
   const saveJournal = (value: string) => {
     setJournals(prev => ({ ...prev, [ECHOES_OF_DARKNESS.id]: value }));
@@ -1639,15 +1706,28 @@ export default function HearthboardPage() {
                     const breakdown = r.n > 1
                       ? `[${r.rolls.join(', ')}]${r.mod ? (r.mod > 0 ? ' + ' + r.mod : ' - ' + Math.abs(r.mod)) : ''}`
                       : r.mod ? `[${r.rolls[0]}] ${r.mod > 0 ? '+' : ''}${r.mod}` : '';
-                    const tag = item.crit ? ' · Critical!' : (item.fumble ? ' · Fumble' : '');
+                    // Checks are graded; raw formula rolls keep the old crit/fumble tag.
+                    const tag = item.check
+                      ? ''
+                      : item.crit ? ' · Critical!' : (item.fumble ? ' · Fumble' : '');
+                    const cardClass = item.check
+                      ? LEVEL_CLASS[item.check.level]
+                      : item.crit ? 'crit' : item.fumble ? 'fumble' : '';
                     return (
-                      <div key={i} className={`roll-card${item.crit ? ' crit' : item.fumble ? ' fumble' : ''}`}>
+                      <div key={i} className={`roll-card${cardClass ? ' ' + cardClass : ''}`}>
                         <div className="rc-head">
                           <span className="rc-who">{item.who}</span>
                           <span className="rc-formula">{r.formula}{tag}</span>
                         </div>
                         <div className="rc-result">{r.total}</div>
-                        {breakdown && <div className="rc-breakdown">{breakdown}</div>}
+                        {item.check ? (
+                          <div className="rc-level">
+                            {item.check.level}
+                            <span className="rc-target"> · needed {item.check.target} or under</span>
+                          </div>
+                        ) : breakdown ? (
+                          <div className="rc-breakdown">{breakdown}</div>
+                        ) : null}
                       </div>
                     );
                   }
@@ -1720,15 +1800,44 @@ export default function HearthboardPage() {
                           <div className="v-val">{displayChar.hp}/{displayChar.maxHp}</div>
                         </div>
                       </div>
+                      <div className="inv-title">Characteristics · click to roll</div>
                       <div className="ability-grid">
                         {Object.entries(displayChar.abilities).map(([key, val]) => (
-                          <div key={key} className="ability" onClick={() => rollAbility(displayChar.name, key, val)}>
+                          <button
+                            key={key}
+                            type="button"
+                            className="ability"
+                            title={`Roll ${key} — d100 under ${val}`}
+                            onClick={() => rollCheck(displayChar.name, key, val)}
+                          >
                             <div className="a-name">{key}</div>
-                            <div className="a-mod">{abilityMod(val)}</div>
-                            <div className="a-score">{val}</div>
-                          </div>
+                            <div className="a-mod">{val}</div>
+                            <div className="a-score">{Math.floor(val / 2)} / {Math.floor(val / 5)}</div>
+                          </button>
                         ))}
                       </div>
+                      {displayChar.skills && displayChar.skills.length > 0 && (
+                        <>
+                          <div className="inv-title">Skills · click to roll</div>
+                          <div className="skill-roll-list">
+                            {displayChar.skills.map((sk) => (
+                              <button
+                                key={sk.name}
+                                type="button"
+                                className="skill-roll-btn"
+                                title={`Roll ${sk.name} — d100 under ${sk.value}`}
+                                onClick={() => rollCheck(displayChar.name, sk.name, sk.value)}
+                              >
+                                <span className="sr-name">{sk.name}</span>
+                                <span className="sr-vals">
+                                  <span className="sr-val">{sk.value}%</span>
+                                  <span className="sr-split">{Math.floor(sk.value / 2)}/{Math.floor(sk.value / 5)}</span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                       <div className="inv-title">Inventory</div>
                       <ul className="inv-list">
                         {displayChar.inventory.map((item, i) => (

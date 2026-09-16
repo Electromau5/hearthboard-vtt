@@ -11,6 +11,7 @@
   --arcane:     #4f9b92;
   --arcane-dim: #366b65;
   --blood:      #b1483f;
+  --forest:     #6f9c62;
   --parchment:  #eae3d2;
   --ink-text:   #aab0bd;
   --ink-text-2: #737c8c;
@@ -457,6 +458,25 @@ input, textarea, select { font-family: inherit; }
 .roll-card.crit .rc-result { color: #e0b45c; text-shadow: 0 0 14px rgba(224,180,92,0.5); }
 .roll-card.fumble .rc-result { color: var(--blood); }
 
+/* Call of Cthulhu check verdicts, best to worst. */
+.roll-card .rc-level {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  margin-top: 5px; letter-spacing: .4px;
+}
+.roll-card .rc-level .rc-target { font-weight: 400; font-size: 10.5px; color: var(--ink-text-2); letter-spacing: 0; }
+.roll-card.extreme .rc-result,
+.roll-card.extreme .rc-level { color: var(--arcane); }
+.roll-card.hard .rc-result,
+.roll-card.hard .rc-level { color: var(--forest); }
+.roll-card.success .rc-result,
+.roll-card.success .rc-level { color: var(--forest); }
+.roll-card.failure .rc-result,
+.roll-card.failure .rc-level { color: var(--ink-text-2); }
+.roll-card.crit .rc-level { color: #e0b45c; }
+.roll-card.fumble .rc-level { color: var(--blood); }
+.roll-card.crit, .roll-card.extreme { border-color: var(--brass-dim); }
+.roll-card.fumble { border-color: rgba(177,72,63,0.5); }
+
 .chat-input-row { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); flex: 0 0 auto; }
 .chat-input-row input {
   flex: 1; background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-sm);
@@ -499,11 +519,29 @@ input, textarea, select { font-family: inherit; }
 .ability {
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 8px 6px; text-align: center; cursor: pointer; transition: border-color .12s;
+  width: 100%; font: inherit; color: var(--parchment);
 }
 .ability:hover { border-color: var(--brass); }
+.ability:active { background: rgba(201,148,79,0.12); }
 .ability .a-name { font-size: 10px; color: var(--ink-text-2); font-family: var(--font-mono); letter-spacing: .5px; }
-.ability .a-mod { font-family: var(--font-mono); font-size: 17px; font-weight: 700; margin-top: 2px; }
-.ability .a-score { font-size: 10px; color: var(--ink-text-2); }
+.ability .a-mod { font-family: var(--font-mono); font-size: 17px; font-weight: 700; margin-top: 2px; color: var(--brass); }
+/* Hard (½) and Extreme (⅕) thresholds. */
+.ability .a-score { font-size: 10px; color: var(--ink-text-2); font-family: var(--font-mono); }
+
+/* Skill roll buttons — the dashboard equivalent of the sheet's skill list. */
+.skill-roll-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.skill-roll-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 8px 10px; color: var(--parchment); transition: border-color .12s;
+}
+.skill-roll-btn:hover { border-color: var(--brass); }
+.skill-roll-btn:active { background: rgba(201,148,79,0.12); }
+.skill-roll-btn .sr-name { font-size: 12px; line-height: 1.3; }
+.skill-roll-btn .sr-vals { display: flex; align-items: baseline; gap: 6px; flex: 0 0 auto; }
+.skill-roll-btn .sr-val { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; color: var(--brass); }
+.skill-roll-btn .sr-split { font-family: var(--font-mono); font-size: 10px; color: var(--ink-text-2); }
 
 .inv-title { font-size: 11px; color: var(--ink-text-2); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px; }
 .inv-list { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
