@@ -1258,3 +1258,72 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
 }
 .clear-log-btn:hover { border-color: var(--blood); color: var(--blood); background: rgba(158,42,43,0.08); }
 .clear-log-btn:active { background: rgba(158,42,43,0.16); }
+
+/* ===================== ALL RESOURCES MODAL ===================== */
+/* Shares the All Skills shell (.skills-veil / .skills-modal / .skills-body). */
+
+.res-bar { padding: 10px 12px 0; display: flex; }
+.all-resources-btn {
+  flex: 1; font: inherit; font-family: var(--font-mono); font-size: 10px;
+  text-transform: uppercase; letter-spacing: .7px;
+  background: var(--surface-2); border: 1px solid var(--brass-dim); border-radius: var(--r-sm);
+  color: var(--brass); padding: 7px 10px; cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.all-resources-btn:hover { border-color: var(--brass); background: rgba(201,148,79,0.1); }
+.all-resources-btn:active { background: rgba(201,148,79,0.18); }
+
+/* Resource rows are wider than skill rows — names run long and carry an owner. */
+/* Wider than the skills modal's default so a fourth column fits at the same
+   ~380px column width — measured as the point where no resource name clips. */
+.res-modal { width: min(1560px, 96vw); }
+.res-grid { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+
+.res-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  width: 100%; text-align: left; font: inherit;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 7px 10px; color: var(--parchment);
+  transition: border-color .12s;
+}
+.res-row.viewable { cursor: pointer; }
+.res-row.viewable:hover { border-color: var(--brass); }
+.res-row.viewable:active { background: rgba(201,148,79,0.12); }
+
+.res-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.res-name {
+  font-size: 12px; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.res-sub {
+  font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The standing note on why an item is carried or stored. Clamped to two lines
+   so a long rationale cannot stretch one row past its neighbours. */
+.res-note {
+  font-size: 10px; line-height: 1.35; color: var(--ink-text-2); opacity: 0.78;
+  margin-top: 3px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Archived rows read as stored, not carried — dimmed, with a brass-dim spine. */
+.res-row.archived { opacity: 0.72; border-left: 2px solid var(--brass-dim); }
+.res-row.archived:hover { opacity: 1; }
+
+.res-views { display: flex; gap: 6px; flex: 0 0 auto; }
+
+.res-kind {
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 8.5px;
+  text-transform: uppercase; letter-spacing: .8px;
+  padding: 2px 6px; border-radius: 3px; border: 1px solid var(--line);
+  color: var(--ink-text-2);
+}
+.res-kind.k-image { color: var(--brass); border-color: var(--brass-dim); }
+.res-kind.k-video { color: var(--blood); border-color: rgba(158,42,43,0.5); }
+.res-kind.k-model { color: var(--arcane); border-color: rgba(125,95,184,0.5); }
+
+@media (max-width: 580px) {
+  .res-grid { grid-template-columns: 1fr; }
+}

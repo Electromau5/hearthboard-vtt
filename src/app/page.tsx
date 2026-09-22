@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
 import { CthulhuReliefModal } from './components/CthulhuReliefModal';
 import { AllSkillsModal } from './components/AllSkillsModal';
+import { AllResourcesModal } from './components/AllResourcesModal';
+import { allResources } from '@/lib/resources';
 import { resolveSkills } from '@/lib/coc-skills';
 import { InvestigationBoard } from './components/InvestigationBoard';
 
@@ -30,16 +32,21 @@ const SCENES = [
   { id: 's5', locationId: 'loc-docks',      name: 'Federal Quarantine Docks',             short: 'Fed. Docks', mapX: 70, mapY: 18 },
 ];
 
-const COMPENDIUM = [
-  { name: 'Goblin Skirmisher', type: 'Small humanoid', cr: 'CR 1/4', hp: 7 as number | null, color: '#7a9b4f' },
-  { name: 'Dire Wolf', type: 'Large beast', cr: 'CR 1', hp: 37 as number | null, color: '#6b6b70' },
-  { name: 'Cultist Adept', type: 'Medium humanoid', cr: 'CR 2', hp: 27 as number | null, color: '#8a2f2f' },
-  { name: 'Stone Gargoyle', type: 'Medium construct', cr: 'CR 2', hp: 52 as number | null, color: '#8a8a8a' },
-  { name: 'Drowned Revenant', type: 'Medium undead', cr: 'CR 4', hp: 68 as number | null, color: '#3f6b6b' },
-  { name: 'Young Wyrmling', type: 'Large dragon', cr: 'CR 6', hp: 97 as number | null, color: '#b1483f' },
-  { name: 'Lantern of Tides', type: 'Wondrous item', cr: '—', hp: null as number | null, color: '#c9944f' },
-  { name: 'Vial of Still Water', type: 'Consumable', cr: '—', hp: null as number | null, color: '#4f9b92' },
-];
+/** A draggable Resources entry — drops onto the map as a token. */
+type CompendiumEntry = {
+  name: string;
+  type: string;
+  cr: string;
+  hp: number | null;
+  color: string;
+};
+
+// Empty by design. This held the generic fantasy bestiary that shipped with the
+// VTT template (goblins, a wyrmling, CR ratings) — wrong system and wrong
+// century for Echoes of Darkness. The drag-to-spawn machinery below is kept, so
+// adding campaign-appropriate entries here brings the Resources list back with
+// its search box and hint.
+const COMPENDIUM: CompendiumEntry[] = [];
 
 type BoardSkill = { name: string; value: number };
 type BoardCharacter = {
@@ -380,6 +387,7 @@ export default function HearthboardPage() {
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
   const [allSkillsOpen, setAllSkillsOpen] = useState(false);
+  const [allResourcesOpen, setAllResourcesOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [boardView, setBoardView] = useState<'map' | 'board'>('map');
   const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
@@ -765,8 +773,10 @@ export default function HearthboardPage() {
       addToken({ label: payload.label, color: payload.color, x, y, hp: payload.hp ?? 20, maxHp: payload.maxHp ?? 20, fullName: payload.fullName, avatarUrl: payload.avatarUrl });
     } else {
       const item = COMPENDIUM[payload.idx];
-      const initials = item.name.split(' ').map(w => w[0]).slice(0, 2).join('');
-      addToken({ label: initials, color: item.color, x, y, hp: item.hp ?? 10, maxHp: item.hp ?? 10, fullName: item.name });
+      if (item) {
+        const initials = item.name.split(' ').map(w => w[0]).slice(0, 2).join('');
+        addToken({ label: initials, color: item.color, x, y, hp: item.hp ?? 10, maxHp: item.hp ?? 10, fullName: item.name });
+      }
     }
     dragPayloadRef.current = null;
   };
@@ -1922,17 +1932,29 @@ export default function HearthboardPage() {
 
             {/* Compendium pane */}
             <div className={`rp-pane${activePane === 'compendium' ? ' active' : ''}`}>
-              <div className="comp-search">
-                <input
-                  type="text"
-                  placeholder="Search monsters &amp; items…"
-                  value={compSearch}
-                  onChange={e => setCompSearch(e.target.value)}
-                />
+              <div className="res-bar">
+                <button
+                  type="button"
+                  className="all-resources-btn"
+                  onClick={() => setAllResourcesOpen(true)}
+                >
+                  All Resources
+                </button>
               </div>
+              {COMPENDIUM.length > 0 && (
+                <div className="comp-search">
+                  <input
+                    type="text"
+                    placeholder="Search monsters &amp; items…"
+                    value={compSearch}
+                    onChange={e => setCompSearch(e.target.value)}
+                  />
+                </div>
+              )}
               {/* Single scrollable container for all Resources content */}
               <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {/* Draggable compendium entries */}
+                {COMPENDIUM.length > 0 && (
                 <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {filteredCompendium.length === 0 ? (
                     <div style={{ color: 'var(--ink-text-2)', fontSize: 13, padding: 10 }}>No matches.</div>
@@ -1957,7 +1979,10 @@ export default function HearthboardPage() {
                     );
                   })}
                 </div>
-                <div className="comp-hint">Drag an entry onto the map to spawn it as a token.</div>
+                )}
+                {COMPENDIUM.length > 0 && (
+                  <div className="comp-hint">Drag an entry onto the map to spawn it as a token.</div>
+                )}
 
                 {/* Field Documents */}
                 <div style={{ padding: '4px 10px 10px' }}>
@@ -2340,6 +2365,17 @@ export default function HearthboardPage() {
             }}
           >✕</button>
         </div>
+      )}
+
+      {/* Party resource index — documents, artifacts and carried equipment */}
+      {allResourcesOpen && (
+        <AllResourcesModal
+          resources={allResources()}
+          onOpenImage={src => { setAllResourcesOpen(false); setLightboxSrc(src); }}
+          onOpenVideo={src => { setAllResourcesOpen(false); setVideoModalSrc(src); }}
+          onOpenModel={() => { setAllResourcesOpen(false); setReliefModalOpen(true); }}
+          onClose={() => setAllResourcesOpen(false)}
+        />
       )}
 
       {/* Full Call of Cthulhu skill list for the active investigator */}
