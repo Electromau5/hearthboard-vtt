@@ -26,17 +26,60 @@ export type ChatEvent = {
 };
 
 const STATE_PATH = "chat/feed.json";
+const CLEARED_PATH = "chat/cleared.json";
 const MAX_EVENTS = 100;
 const MAX_TEXT_LEN = 500;
 
+/**
+ * The feed is the durable record of the session: clients render it on load, so
+ * a refresh restores the log rather than starting an empty one. Only an admin
+ * can wipe it.
+ *
+ * `clearedAt` is a monotonic marker that survives the wipe. Clients keep the
+ * last value they saw, so when it moves they know the GM cleared the log and
+ * can drop their own copy — an empty feed alone cannot tell a fresh session
+ * apart from a cleared one.
+ */
 async function getFeed(): Promise<ChatEvent[]> {
   return readJSON<ChatEvent[]>(STATE_PATH, []);
 }
 
+async function getClearedAt(): Promise<number> {
+  const v = await readJSON<{ at: number }>(CLEARED_PATH, { at: 0 });
+  return typeof v?.at === "number" ? v.at : 0;
+}
+
+export type ChatFeed = { events: ChatEvent[]; clearedAt: number };
+
 export async function GET() {
   const session = await auth();
-  if (!session) return NextResponse.json([], { status: 401 });
-  return NextResponse.json(await getFeed());
+  if (!session) {
+    return NextResponse.json({ events: [], clearedAt: 0 }, { status: 401 });
+  }
+  const [events, clearedAt] = await Promise.all([getFeed(), getClearedAt()]);
+  return NextResponse.json({ events, clearedAt } satisfies ChatFeed);
+}
+
+/** Wipe the shared log. Admin only — players cannot erase each other's rolls. */
+export async function DELETE() {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.user.role !== "admin") {
+    return NextResponse.json({ error: "Only the GM can clear the log." }, { status: 403 });
+  }
+
+  const clearedAt = Date.now();
+  try {
+    await writeJSON(STATE_PATH, []);
+    await writeJSON(CLEARED_PATH, { at: clearedAt });
+  } catch (err) {
+    console.error("[chat DELETE] write failed:", err);
+    return NextResponse.json(
+      { error: "Could not clear — shared storage unavailable." },
+      { status: 503 }
+    );
+  }
+  return NextResponse.json({ ok: true, clearedAt });
 }
 
 export async function POST(req: NextRequest) {
