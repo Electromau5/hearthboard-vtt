@@ -14,8 +14,8 @@ A browser-based Virtual Tabletop (VTT) for the *Echoes of Darkness* Call of Cthu
 | Styling | Tailwind CSS v4 + custom CSS variables |
 | Language | TypeScript 5 / React 19 |
 | 3D | three.js (`three@^0.185`) — dice roller and relief viewer |
-| Shared state | Upstash Redis (prod) / `data/` (dev) — characters, board, chat |
-| Legacy (unprovisioned) | Vercel Blob — still imported by notes, effects, assignments, locations, assets |
+| Shared state | Upstash Redis (prod) / `data/` (dev) — all JSON state |
+| Binary uploads | Vercel Blob — **unprovisioned**; avatars, assets and location attachments |
 | Runtime | Node.js for API routes; Edge Runtime for `src/proxy.ts` |
 
 ## Running the App
@@ -83,8 +83,10 @@ src/
   lib/
     users.ts                      # Fixed accounts, role overrides, character assignments
     characters.ts                 # All 7 investigator character data (typed)
+    character-merge.ts            # Layers stored overrides onto compiled-in definitions
     character-storage.ts          # Redis (prod) / filesystem (dev) character persistence
-    blob-storage.ts               # Vercel Blob (prod) / filesystem (dev) helpers
+    redis-storage.ts              # Upstash Redis (prod) / data/ (dev) — shared JSON state
+    blob-storage.ts               # Vercel Blob binary uploads — unprovisioned, see gotchas
     campaign-defaults.ts          # Default location data
     vtt-types.ts                  # Shared TypeScript types
   types/
@@ -232,8 +234,15 @@ Defined in `src/app/globals.css`. Key CSS variables:
 - **`data/roles.json` is auto-created:** If `data/` doesn't exist on a fresh deployment, `setRole()` creates it. No manual setup required.
 - **Character storage uses Redis (prod) / filesystem (dev):** `src/lib/character-storage.ts` checks `NODE_ENV !== 'development'` before connecting to Upstash — local dev always uses the filesystem even if KV env vars are present.
 - **⚠️ Vercel Blob is no longer provisioned — do not add new state to it.** `BLOB_READ_WRITE_TOKEN` is unset, so `useBlob` in `src/lib/blob-storage.ts` is always false and every helper silently falls back to `LOCAL_DATA`. On Vercel that is `/tmp/data`, which is **private to one serverless instance** — so each player reads and writes their own copy and nothing is actually shared. It fails silently, which is what made chat rolls look player-local.
-- **Use `src/lib/redis-storage.ts` for anything shared.** It exposes the same `readJSON`/`writeJSON` signature as the blob helper (Upstash Redis in prod, `data/` in dev), so migrating a route is a one-line import swap. `character-storage.ts` and `api/board/route.ts` predate it and talk to Redis directly; `api/chat/route.ts` uses it.
-- **Still on the dead blob path:** `api/notes`, `api/notes/[id]`, `api/effects`, `api/admin/effects`, `api/characters/assignments`, `api/admin/locations`, `api/admin/assets`. These have the same cross-player desync bug as chat did and should be migrated to `redis-storage`.
+- **Use `src/lib/redis-storage.ts` for anything shared.** It exposes the same `readJSON`/`writeJSON` signature as the blob helper (Upstash Redis in prod, `data/` in dev), so migrating a route is a one-line import swap. `character-storage.ts` and `api/board/route.ts` predate it and talk to Redis directly.
+- **Every JSON route is now on `redis-storage`** — chat, notes, effects, admin effects, assignments, locations and assets all read and write through it. Nothing shared is left on `readJSON`/`writeJSON` from `blob-storage`.
+- **⚠️ Binary uploads are still broken on production.** Three routes call `uploadFile`/`deleteFile` from `blob-storage`:
+  - `api/admin/characters/[slug]/avatar/route.ts`
+  - `api/admin/assets/route.ts`
+  - `api/admin/locations/[id]/attachments/route.ts`
+
+  Their *index* is written to Redis and is shared correctly, but the bytes land in `/tmp/data` on whichever instance served the upload. Players therefore receive index entries pointing at files they cannot fetch — a different failure from the old chat desync, and one an import swap does not fix. It needs Blob to be provisioned (or an equivalent object store); `redis-storage` is not a substitute for binary payloads.
+- **Never keep this repo on a synced folder.** iCloud Drive evicted the contents of `node_modules/` and `.git/` in September 2026, producing silent short reads, SIGBUS crashes and a `git commit` that did nothing without erroring. The working copy belongs at `~/dev/` — see `docs/2026-09-16-icloud-file-eviction.md`.
 - **Campaign export:** `POST /api/campaign/export` generates a full Markdown document of the current campaign state including all characters, locations, briefings, and session journal — useful for AI GM tools.
 
 ---
