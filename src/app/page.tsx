@@ -5,6 +5,8 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
 import { CthulhuReliefModal } from './components/CthulhuReliefModal';
+import { AllSkillsModal } from './components/AllSkillsModal';
+import { resolveSkills } from '@/lib/coc-skills';
 import { InvestigationBoard } from './components/InvestigationBoard';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -263,6 +265,39 @@ type ChatItem =
       /** Present when the roll was a skill/characteristic check. */
       check?: { target: number; level: CheckLevel } };
 
+/** One entry as /api/chat serves it. */
+type ChatEventWire = {
+  id: string; type: 'roll' | 'text'; who: string; ts: number;
+  formula?: string; rolls?: number[]; total?: number; sides?: number; n?: number; text?: string;
+  target?: number; level?: string;
+};
+
+/**
+ * Turn a stored feed entry into a renderable chat item. Used both when
+ * restoring history on load and when appending live traffic, so a roll looks
+ * identical whether it arrived just now or was read back after a refresh.
+ */
+function toChatItem(e: ChatEventWire): ChatItem {
+  if (e.type === 'text') {
+    return { type: 'chat', who: e.who, text: e.text ?? '' };
+  }
+  const sides = e.sides ?? 0;
+  const n = e.n ?? 1;
+  const rolls = e.rolls ?? [];
+  const check = e.target !== undefined && isCheckLevel(e.level)
+    ? { target: e.target, level: e.level }
+    : undefined;
+  return {
+    type: 'roll',
+    who: e.who,
+    res: { formula: e.formula ?? '', rolls, mod: 0, sides, total: e.total ?? 0, n },
+    crit: check ? check.level === 'Critical' : sides === 20 && n === 1 && rolls[0] === 20,
+    fumble: check ? check.level === 'Fumble' : sides === 20 && n === 1 && rolls[0] === 1,
+    ts: e.ts,
+    check,
+  };
+}
+
 // ── Call of Cthulhu skill checks ─────────────────────────────────────
 // A check is d100 roll-under: beat the target, and beat it well enough for a
 // better degree of success. 01 always crits; 100 always fumbles, as does
@@ -344,6 +379,7 @@ export default function HearthboardPage() {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
+  const [allSkillsOpen, setAllSkillsOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [boardView, setBoardView] = useState<'map' | 'board'>('map');
   const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
@@ -357,6 +393,8 @@ export default function HearthboardPage() {
   // Set once the first poll has recorded the pre-existing backlog, so joining
   // mid-session does not replay old messages.
   const chatPrimed = useRef(false);
+  /** Last clear marker seen from the server; a bump means the GM wiped the log. */
+  const chatClearedAt = useRef(0);
   const [musicPos, setMusicPos] = useState<{ x: number; y: number } | null>(null);
   const musicDragRef = useRef<{ startX: number; startY: number; elemX: number; elemY: number } | null>(null);
 
@@ -624,17 +662,36 @@ export default function HearthboardPage() {
       try {
         const r = await fetch('/api/chat', { cache: 'no-store' });
         if (!r.ok) return;
-        const events: Array<{
-          id: string; type: 'roll' | 'text'; who: string; ts: number;
-          formula?: string; rolls?: number[]; total?: number; sides?: number; n?: number; text?: string;
-          target?: number; level?: string;
-        }> = await r.json();
+        const payload = await r.json();
+        const events: ChatEventWire[] = Array.isArray(payload) ? payload : payload.events ?? [];
+        const clearedAt: number = Array.isArray(payload) ? 0 : payload.clearedAt ?? 0;
 
-        // First poll only records what was already there — no clock comparison,
-        // so a player whose device clock is off still sees everyone's traffic.
-        if (!chatPrimed.current) {
+        // The GM cleared the log: drop everyone's local copy so all clients
+        // agree, and say so rather than letting messages silently vanish.
+        if (chatPrimed.current && clearedAt > chatClearedAt.current) {
+          chatClearedAt.current = clearedAt;
+          seenChatIds.current.clear();
           events.forEach(e => seenChatIds.current.add(e.id));
+          setChatItems([
+            { type: 'system', text: 'The Keeper cleared the log.' },
+            ...events.map(toChatItem),
+          ]);
+          return;
+        }
+
+        // First poll restores the session so far. The feed is the durable
+        // record — rendering it here is what makes a refresh keep the log
+        // instead of opening on an empty one.
+        if (!chatPrimed.current) {
           chatPrimed.current = true;
+          chatClearedAt.current = clearedAt;
+          events.forEach(e => seenChatIds.current.add(e.id));
+          if (events.length > 0) {
+            setChatItems([
+              { type: 'system', text: `Session resumed · ${events.length} earlier ${events.length === 1 ? 'entry' : 'entries'}.` },
+              ...events.map(toChatItem),
+            ]);
+          }
           return;
         }
 
@@ -642,29 +699,7 @@ export default function HearthboardPage() {
         if (fresh.length === 0) return;
         fresh.forEach(e => seenChatIds.current.add(e.id));
 
-        setChatItems(prev => [
-          ...prev,
-          ...fresh.map(e => {
-            if (e.type === 'text') {
-              return { type: 'chat' as const, who: e.who, text: e.text ?? '' };
-            }
-            const sides = e.sides ?? 0;
-            const n = e.n ?? 1;
-            const rolls = e.rolls ?? [];
-            const check = e.target !== undefined && isCheckLevel(e.level)
-              ? { target: e.target, level: e.level }
-              : undefined;
-            return {
-              type: 'roll' as const,
-              who: e.who,
-              res: { formula: e.formula ?? '', rolls, mod: 0, sides, total: e.total ?? 0, n },
-              crit: check ? check.level === 'Critical' : sides === 20 && n === 1 && rolls[0] === 20,
-              fumble: check ? check.level === 'Fumble' : sides === 20 && n === 1 && rolls[0] === 1,
-              ts: e.ts,
-              check,
-            };
-          }),
-        ]);
+        setChatItems(prev => [...prev, ...fresh.map(toChatItem)]);
         setRollCount(c => c + fresh.filter(e => e.type === 'roll').length);
       } catch {}
     };
@@ -860,6 +895,29 @@ export default function HearthboardPage() {
     showToast(`${label} ${target}% — rolled ${roll} · ${level}`);
   }, [pushRollToChat, showToast]);
 
+  /**
+   * Wipe the shared log for everyone. The server enforces admin-only; this
+   * button is hidden from players so they never hit that 403 by accident.
+   */
+  const clearChatLog = useCallback(async () => {
+    if (!window.confirm('Clear the chat log for every player? This cannot be undone.')) return;
+    try {
+      const r = await fetch('/api/chat', { method: 'DELETE' });
+      if (!r.ok) {
+        const msg = await r.json().catch(() => null);
+        showToast(msg?.error ?? 'Could not clear the log.');
+        return;
+      }
+      const { clearedAt } = await r.json();
+      chatClearedAt.current = clearedAt ?? Date.now();
+      seenChatIds.current.clear();
+      setChatItems([{ type: 'system', text: 'You cleared the log.' }]);
+      showToast('Chat log cleared.');
+    } catch {
+      showToast('Could not clear the log — you appear to be offline.');
+    }
+  }, [showToast]);
+
   const saveJournal = (value: string) => {
     setJournals(prev => ({ ...prev, [ECHOES_OF_DARKNESS.id]: value }));
     setJournalSaved('Saved just now');
@@ -931,6 +989,18 @@ export default function HearthboardPage() {
     return !q || c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q);
   });
   const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
+
+  // Which investigators this client may see in the Characters pane: admins get
+  // the whole party, players get only the one assigned to them. Derived here
+  // rather than inside the pane so the All Skills modal, which renders outside
+  // it, resolves the same investigator.
+  const visibleChars = useMemo(() => {
+    const myId = session?.user?.id ?? '';
+    const mySlug = Object.entries(assignments).find(([, uid]) => uid === myId)?.[0];
+    return isAdmin ? characters : characters.filter(c => c.slug === mySlug);
+  }, [characters, assignments, isAdmin, session?.user?.id]);
+
+  const displayChar = visibleChars.find(c => c.id === activeCharId) ?? visibleChars[0];
 
   // How this client is labelled in the shared feed. Everyone sees the same
   // string, so it must identify the author — never "You".
@@ -1683,7 +1753,14 @@ export default function HearthboardPage() {
                   <button key={d} className="die-btn" onClick={() => rollDie(d)}>d{d}</button>
                 ))}
               </div>
-              <div className="custom-roll-hint">Or type a formula below, e.g. 2d6+3</div>
+              <div className="chat-log-bar">
+                <span className="custom-roll-hint">Or type a formula below, e.g. 2d6+3</span>
+                {isAdmin && (
+                  <button type="button" className="clear-log-btn" onClick={clearChatLog}>
+                    Clear log
+                  </button>
+                )}
+              </div>
               <div className="chat-log" ref={chatLogRef}>
                 {chatItems.map((item, i) => {
                   if (item.type === 'system') {
@@ -1739,13 +1816,7 @@ export default function HearthboardPage() {
             {/* Characters pane */}
             <div className={`rp-pane${activePane === 'characters' ? ' active' : ''}`}>
               {(() => {
-                const myId = session?.user?.id ?? '';
-                const mySlug = Object.entries(assignments).find(([, uid]) => uid === myId)?.[0];
-                const visibleChars = isAdmin
-                  ? characters
-                  : characters.filter(c => c.slug === mySlug);
-
-                if (visibleChars.length === 0) {
+                if (!displayChar) {
                   return (
                     <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--ink-text-2)', fontSize: 13 }}>
                       <div style={{ fontSize: 24, marginBottom: 10, opacity: 0.4 }}>⬡</div>
@@ -1756,7 +1827,6 @@ export default function HearthboardPage() {
                   );
                 }
 
-                const displayChar = visibleChars.find(c => c.id === activeCharId) ?? visibleChars[0];
                 const charIdx = characters.findIndex(c => c.id === displayChar.id);
                 const color = TOKEN_COLORS[charIdx % TOKEN_COLORS.length];
 
@@ -1807,9 +1877,18 @@ export default function HearthboardPage() {
                           </button>
                         ))}
                       </div>
+                      <div className="inv-title inv-title-row">
+                        <span>Skills · click to roll</span>
+                        <button
+                          type="button"
+                          className="all-skills-btn"
+                          onClick={() => setAllSkillsOpen(true)}
+                        >
+                          All Skills
+                        </button>
+                      </div>
                       {displayChar.skills && displayChar.skills.length > 0 && (
                         <>
-                          <div className="inv-title">Skills · click to roll</div>
                           <div className="skill-roll-list">
                             {displayChar.skills.map((sk) => (
                               <button
@@ -2261,6 +2340,16 @@ export default function HearthboardPage() {
             }}
           >✕</button>
         </div>
+      )}
+
+      {/* Full Call of Cthulhu skill list for the active investigator */}
+      {allSkillsOpen && displayChar && (
+        <AllSkillsModal
+          charName={displayChar.name}
+          skills={resolveSkills(displayChar.skills, displayChar.abilities)}
+          onRoll={(label, target) => rollCheck(displayChar.name, label, target)}
+          onClose={() => setAllSkillsOpen(false)}
+        />
       )}
 
       {/* Cthulhu bas relief 3D modal + mild passive sanity effect */}

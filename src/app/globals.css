@@ -1129,3 +1129,132 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
   position: relative;
   z-index: 1;
 }
+
+/* ===================== ALL SKILLS MODAL ===================== */
+/* Opened from the "All Skills" button in the Characters pane. Every row is a
+   roll button wired to the same rollCheck as the pane itself. */
+
+.inv-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.all-skills-btn {
+  font: inherit; font-family: var(--font-mono); font-size: 10px;
+  text-transform: uppercase; letter-spacing: .6px;
+  background: var(--surface-2); border: 1px solid var(--brass-dim); border-radius: var(--r-sm);
+  color: var(--brass); padding: 4px 9px; cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.all-skills-btn:hover { border-color: var(--brass); background: rgba(201,148,79,0.1); }
+.all-skills-btn:active { background: rgba(201,148,79,0.18); }
+
+.skills-veil {
+  position: fixed; inset: 0; z-index: 240;
+  background: rgba(10,12,16,0.78); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  animation: fadeIn .15s ease;
+}
+
+/* A column box with a fixed header and a scrolling body: the header and search
+   stay put while the list scrolls, and the box never exceeds the viewport. */
+.skills-modal {
+  display: flex; flex-direction: column;
+  width: min(1560px, 96vw);
+  max-height: 93vh;
+  background: var(--surface); border: 1px solid var(--brass-dim); border-radius: var(--r-lg);
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.75), 0 0 0 1px rgba(201,148,79,0.12);
+  animation: riseIn .18s cubic-bezier(.2,.8,.3,1);
+  overflow: hidden;
+}
+
+.skills-head {
+  flex: 0 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 15px 22px 12px; border-bottom: 1px solid var(--line);
+}
+.skills-head h2 {
+  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  margin: 0 0 4px; color: var(--parchment);
+}
+.skills-head p { margin: 0; font-size: 12px; color: var(--ink-text-2); font-family: var(--font-mono); }
+.sm-close {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--parchment);
+  font-size: 14px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color .12s;
+}
+.sm-close:hover { border-color: var(--brass); }
+
+.skills-tools {
+  flex: 0 0 auto; display: flex; gap: 10px; padding: 10px 22px;
+  border-bottom: 1px solid var(--line); background: var(--surface-2);
+}
+.sm-search {
+  flex: 1; background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 8px 12px; color: var(--parchment); font-size: 13px; font-family: inherit;
+  transition: border-color .15s;
+}
+.sm-search:focus { outline: none; border-color: var(--brass); }
+.sm-search::placeholder { color: var(--ink-text-2); }
+.sm-filter {
+  flex: 0 0 auto; font: inherit; font-family: var(--font-mono); font-size: 11px;
+  background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-sm);
+  color: var(--ink-text-2); padding: 8px 12px; cursor: pointer;
+  transition: border-color .12s, color .12s;
+}
+.sm-filter:hover { border-color: var(--brass-dim); }
+.sm-filter.active { border-color: var(--brass); color: var(--brass); background: rgba(201,148,79,0.1); }
+
+/* The only scrolling region. Flex-min-height-0 is what lets it actually
+   shrink inside the column instead of pushing the modal past the viewport. */
+.skills-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 14px 22px 18px;
+  scrollbar-width: thin; scrollbar-color: var(--brass-dim) transparent;
+}
+.skills-body::-webkit-scrollbar { width: 10px; }
+.skills-body::-webkit-scrollbar-track { background: var(--ink); border-radius: 5px; }
+.skills-body::-webkit-scrollbar-thumb {
+  background: var(--brass-dim); border-radius: 5px;
+  border: 2px solid var(--ink); background-clip: padding-box;
+}
+.skills-body::-webkit-scrollbar-thumb:hover { background: var(--brass); background-clip: padding-box; }
+
+.sm-group { margin-bottom: 12px; }
+.sm-group:last-child { margin-bottom: 0; }
+.sm-group-title {
+  font-family: var(--font-display); font-size: 13px; font-weight: 600;
+  color: var(--brass); text-transform: uppercase; letter-spacing: 1.2px;
+  margin: 0 0 6px; padding-bottom: 4px;
+  border-bottom: 1px dotted var(--brass-dim);
+}
+.sm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 4px; }
+.sm-empty { color: var(--ink-text-2); font-size: 13px; text-align: center; padding: 30px 0; margin: 0; }
+
+/* Untrained skills roll their 7e base value — still rollable, visibly lesser. */
+.skills-body .skill-roll-btn { margin: 0; padding: 6px 9px; }
+.skill-roll-btn.untrained { opacity: 0.62; }
+.skill-roll-btn.untrained .sr-val { color: var(--ink-text-2); }
+.skill-roll-btn.untrained:hover { opacity: 1; border-color: var(--brass-dim); }
+
+@media (max-width: 580px) {
+  .sm-grid { grid-template-columns: 1fr; }
+  .skills-veil { padding: 10px; }
+  .skills-head, .skills-tools, .skills-body { padding-left: 14px; padding-right: 14px; }
+}
+
+/* Chat log header — hint on the left, GM-only clear on the right. */
+.chat-log-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 0 12px 10px; margin-top: -4px;
+}
+/* The hint carried the bar's padding before it gained a neighbour. */
+.chat-log-bar .custom-roll-hint { padding: 0; margin-top: 0; }
+.clear-log-btn {
+  flex: 0 0 auto; font: inherit; font-family: var(--font-mono); font-size: 10px;
+  text-transform: uppercase; letter-spacing: .6px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  color: var(--ink-text-2); padding: 4px 9px; cursor: pointer;
+  transition: border-color .12s, color .12s, background .12s;
+}
+.clear-log-btn:hover { border-color: var(--blood); color: var(--blood); background: rgba(158,42,43,0.08); }
+.clear-log-btn:active { background: rgba(158,42,43,0.16); }
