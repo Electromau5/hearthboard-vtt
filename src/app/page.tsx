@@ -275,6 +275,24 @@ const BRIEFINGS: Briefing[] = [
       },
     ],
   },
+  {
+    id: 'innsmouth-resident',
+    image: '/innsmouth-resident-1.jpeg',
+    badge: 'HOSTILE LOCAL',
+    title: 'Unwelcome in Innsmouth',
+    subtitle: 'Innsmouth Resident · Federal Quarantine Docks',
+    cardHint: 'Innsmouth Resident · Docks',
+    sections: [
+      {
+        audio: '/innsmouth-resident-1.mp3',
+        paragraphs: [
+          "Who's there? What do you want?",
+          "You're outsiders aren't ya? We don't like your kind round these parts - specially after what happened to our peaceful town.",
+          "You may as well go back from where ya came - there's nothing round here that's important to you ......especially today.",
+        ],
+      },
+    ],
+  },
 ];
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -1348,7 +1366,9 @@ export default function HearthboardPage() {
               const isBellevue = scene?.locationId === 'loc-bellevue';
               const isMiskatonic = scene?.locationId === 'loc-miskatonic';
               const isBlackArchive = scene?.locationId === 'loc-blackarchive';
+              const isInnsmouthDocks = scene?.locationId === 'loc-inn-docks';
               const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
+              const residentBriefing = BRIEFINGS.find(b => b.id === 'innsmouth-resident');
               const mobsterBriefing = BRIEFINGS.find(b => b.id === 'mobster');
               const attendantBriefing = BRIEFINGS.find(b => b.id === 'attendant');
               const armitageBriefing = BRIEFINGS.find(b => b.id === 'armitage');
@@ -1402,6 +1422,52 @@ export default function HearthboardPage() {
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
                             Anonymous · Innsmouth Harbour
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                            ▶ Click to open
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Hostile local — only shown on the Innsmouth map's Docks */}
+                  {isInnsmouthDocks && residentBriefing && (
+                    <>
+                      <div style={{ height: 1, background: 'var(--brass-dim)', opacity: 0.5 }} />
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+                        Local Resident
+                      </div>
+                      <div
+                        style={{
+                          position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                          cursor: 'pointer', border: '1px solid var(--brass-dim)',
+                          boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        }}
+                        onClick={() => openBriefing(residentBriefing)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => e.key === 'Enter' && openBriefing(residentBriefing)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={residentBriefing.image}
+                          alt={residentBriefing.title}
+                          style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', filter: 'brightness(0.7)' }}
+                        />
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          background: 'linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.25) 60%, transparent 100%)',
+                          padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                            {residentBriefing.badge}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                            {residentBriefing.title}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--brass)', marginTop: 3 }}>
+                            {residentBriefing.cardHint}
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
                             ▶ Click to open
@@ -2206,7 +2272,7 @@ export default function HearthboardPage() {
                 Mission Details
               </div>
 
-              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant' && b.id !== 'armitage' && b.id !== 'miles').map(b => (
+              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant' && b.id !== 'armitage' && b.id !== 'miles' && b.id !== 'innsmouth-resident').map(b => (
                 <div
                   key={b.id}
                   style={{ ...missionCard, marginBottom: 10 }}
