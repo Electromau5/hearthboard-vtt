@@ -63,6 +63,16 @@ const MEDIA: Resource[] = [
     note: 'Subjects logged for "hereditary degeneracy"; aliases tied to Innsmouth lineages.',
   },
   {
+    id: 'doc-marsh-dynasty',
+    name: 'The Marsh Dynasty of Innsmouth',
+    section: 'Documents',
+    kind: 'image',
+    status: 'active',
+    src: '/marsh-family-tree.jpeg',
+    detail: 'Project: Black Line · RESTRICTED',
+    note: "Obed Marsh (1783–1878) down to the final documented descendant — an urban runaway in hiding with the 1st Artifact, holding the 'Acoustic Keystave' needed for Phase I triangulation. One entry is redacted.",
+  },
+  {
     id: 'doc-tomb-footage',
     name: 'Tomb Excavation Footage',
     section: 'Documents',

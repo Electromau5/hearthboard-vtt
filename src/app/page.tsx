@@ -32,6 +32,25 @@ const SCENES = [
   { id: 's5', locationId: 'loc-docks',      name: 'Federal Quarantine Docks',             short: 'Fed. Docks', mapX: 70, mapY: 18 },
 ];
 
+/** Pins on the Innsmouth map — positions follow the red pins and arrows on /innsmouth-map.jpeg. */
+const INNSMOUTH_SCENES = [
+  { id: 'i1', locationId: 'loc-inn-refinery',    name: 'The Marsh Refinery',                  short: 'Marsh Refinery', mapX: 28, mapY: 13 },
+  { id: 'i2', locationId: 'loc-inn-cellars',     name: 'The Cellars',                         short: 'Cellars',        mapX: 48, mapY: 35 },
+  { id: 'i3', locationId: 'loc-inn-customhouse', name: 'Innsmouth Custom House',              short: 'Custom House',   mapX: 47, mapY: 45 },
+  { id: 'i4', locationId: 'loc-inn-docks',       name: 'Federal Quarantine Docks',            short: 'Fed. Docks',     mapX: 70, mapY: 31 },
+  { id: 'i6', locationId: 'loc-inn-reef',        name: 'Decrepit Coastal Reef & Breakwater',  short: 'Reef',           mapX: 46, mapY: 83 },
+  { id: 'i7', locationId: 'loc-inn-pylon',       name: 'Submerged Basalt Pylon / Tide-Gate',  short: 'Tide-Gate',      mapX: 72, mapY: 72 },
+  { id: 'i8', locationId: 'loc-inn-redacted',    name: 'Redacted Operational Area',           short: 'Redacted',       mapX: 29, mapY: 62 },
+];
+
+/** Board backdrops, each with its own set of scenes (top-bar chips and map pins). */
+const MAPS = [
+  { id: 'default',   label: 'Default',   src: '/map-v1.jpeg',         alt: 'Campaign map',  scenes: SCENES },
+  { id: 'innsmouth', label: 'Innsmouth', src: '/innsmouth-map.jpeg', alt: 'Innsmouth map', scenes: INNSMOUTH_SCENES },
+] as const;
+type MapId = typeof MAPS[number]['id'];
+const ALL_SCENES = MAPS.flatMap(m => m.scenes);
+
 /** A draggable Resources entry — drops onto the map as a token. */
 type CompendiumEntry = {
   name: string;
@@ -356,7 +375,9 @@ export default function HearthboardPage() {
   const [currentSceneId, setCurrentSceneId] = useState('s1');
   const [tool, setToolState] = useState('select');
   const [gridOn, setGridOn] = useState(true);
-  const [tokensByScene, setTokensByScene] = useState<Record<string, Token[]>>({ s1: [], s2: [], s3: [], s4: [], s5: [] });
+  const [tokensByScene, setTokensByScene] = useState<Record<string, Token[]>>(
+    () => Object.fromEntries(ALL_SCENES.map(s => [s.id, [] as Token[]])),
+  );
   const [mapZoomedTo, setMapZoomedTo] = useState<string | null>(null);
   const [locationImages, setLocationImages] = useState<Record<string, string>>({});
   const [initiative, setInitiative] = useState<InitEntry[]>([]);
@@ -390,6 +411,8 @@ export default function HearthboardPage() {
   const [allResourcesOpen, setAllResourcesOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [boardView, setBoardView] = useState<'map' | 'board'>('map');
+  const [activeMapId, setActiveMapId] = useState<MapId>('default');
+  const activeMap = MAPS.find(m => m.id === activeMapId) ?? MAPS[0];
   const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
@@ -1132,7 +1155,7 @@ export default function HearthboardPage() {
           <span className="gt-title">{currentGame?.name ?? '—'}</span>
           <span className="gt-sys">{currentGame?.system ?? '—'}</span>
           <div className="scene-switch">
-            {SCENES.map(s => (
+            {activeMap.scenes.map(s => (
               <button
                 key={s.id}
                 className={`scene-chip${s.id === currentSceneId ? ' active' : ''}`}
@@ -1154,6 +1177,23 @@ export default function HearthboardPage() {
           >
             ⬡ Case Board
           </button>
+          <div className="scene-switch" style={{ marginLeft: 8 }} title="Switch map">
+            {MAPS.map(m => (
+              <button
+                key={m.id}
+                className={`scene-chip${m.id === activeMapId ? ' active' : ''}`}
+                onClick={() => {
+                  setActiveMapId(m.id);
+                  setCurrentSceneId(m.scenes[0].id);
+                  setMapZoomedTo(null);
+                  setSelectedTokenId(null);
+                  setBoardView('map');
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
           <button className="btn btn-ghost btn-sm" onClick={() => showToast('Invite link copied')}>
             Invite players
           </button>
@@ -1267,19 +1307,19 @@ export default function HearthboardPage() {
                 className="map-zoom-inner"
                 style={{
                   transformOrigin: mapZoomedTo
-                    ? `${SCENES.find(s => s.id === mapZoomedTo)?.mapX ?? 50}% ${SCENES.find(s => s.id === mapZoomedTo)?.mapY ?? 50}%`
+                    ? `${ALL_SCENES.find(s => s.id === mapZoomedTo)?.mapX ?? 50}% ${ALL_SCENES.find(s => s.id === mapZoomedTo)?.mapY ?? 50}%`
                     : '50% 50%',
                   transform: mapZoomedTo ? 'scale(2.5)' : 'scale(1)',
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/map-v1.jpeg"
-                  alt="Campaign map"
+                  src={activeMap.src}
+                  alt={activeMap.alt}
                   className="map-bg-img"
                   draggable={false}
                 />
-                {SCENES.map(s => (
+                {activeMap.scenes.map(s => (
                   <button
                     key={s.id}
                     className={`loc-marker-btn${s.id === currentSceneId ? ' active' : ''}`}
@@ -1301,7 +1341,7 @@ export default function HearthboardPage() {
             <div className={`map-grid-overlay${gridOn ? '' : ' hidden'}`} id="map-grid-overlay" />
             <div className="map-vignette" />
             {mapZoomedTo && (() => {
-              const scene = SCENES.find(s => s.id === mapZoomedTo);
+              const scene = ALL_SCENES.find(s => s.id === mapZoomedTo);
               const img = scene ? locationImages[scene.locationId] : undefined;
               const isDocks = scene?.locationId === 'loc-docks';
               const isSpeakeasy = scene?.locationId === 'loc-underworld';
@@ -2012,6 +2052,21 @@ export default function HearthboardPage() {
                     src="/inmate-log.jpeg"
                     alt="Inmate Census & Observation List — Bellevue Psychiatric Isolation Ward"
                     onClick={() => setLightboxSrc('/inmate-log.jpeg')}
+                    style={{
+                      width: '100%', display: 'block',
+                      borderRadius: 'var(--r-md)',
+                      border: '1px solid var(--line)',
+                      boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+                      cursor: 'zoom-in',
+                      marginBottom: 8,
+                    }}
+                  />
+
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/marsh-family-tree.jpeg"
+                    alt="The Marsh Dynasty of Innsmouth — Project Black Line, restricted"
+                    onClick={() => setLightboxSrc('/marsh-family-tree.jpeg')}
                     style={{
                       width: '100%', display: 'block',
                       borderRadius: 'var(--r-md)',
