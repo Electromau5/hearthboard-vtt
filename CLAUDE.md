@@ -46,6 +46,7 @@ src/
       LoadingOverlay.tsx          # Full-screen GIF loader
       NavigationLoader.tsx        # Shows the overlay for one GIF cycle on route change
       InnsmouthTown3D.tsx         # 3D Innsmouth map (three.js) — the board's 2D/3D toggle on the Innsmouth map
+      WalkthroughModal.tsx        # First-person walkthrough of a Summer-built level (house, fishing vessel)
     characters/
       page.tsx                    # Investigator dossier grid — all 7 characters
       [slug]/page.tsx             # Individual character sheet page
@@ -89,6 +90,9 @@ src/
     redis-storage.ts              # Upstash Redis (prod) / data/ (dev) — shared JSON state
     blob-storage.ts               # Vercel Blob binary uploads — unprovisioned, see gotchas
     campaign-defaults.ts          # Default location data
+    walkthrough.ts                # WalkthroughLevel type + model contract for WalkthroughModal
+    innsmouth-house.ts            # HOUSE_LEVEL — the derelict house's clue text and atmosphere
+    fishing-vessel.ts             # VESSEL_LEVEL — the wrecked trawler "Esther Gilman"
     vtt-types.ts                  # Shared TypeScript types
   types/
     next-auth.d.ts                # Session/JWT type augmentation

@@ -1,7 +1,7 @@
 /**
- * The derelict Innsmouth house — a first-person walkthrough built in Summer
- * Engine (~/dev/my-summer-game) and exported to /innsmouth-house.glb by
- * `tools/export_house.sh` in that project.
+ * The derelict Innsmouth house — a first-person walkthrough level (see
+ * walkthrough.ts) built in Summer Engine (~/dev/my-summer-game) and exported
+ * to /innsmouth-house.glb by `tools/export_house.sh` in that project.
  *
  * The model marks every examinable object with a node named `Examine_<id>`;
  * the viewer looks the id up here. An `Examine_*` node with no entry below is
@@ -12,14 +12,9 @@
  * replace with the campaign's actual clues.
  */
 
-export const HOUSE_MODEL = '/innsmouth-house.glb';
+import type { Examinable, GazeHazard, WalkthroughLevel } from './walkthrough';
 
-export type Examinable = {
-  title: string;
-  text: string;
-};
-
-export const EXAMINABLES: Record<string, Examinable> = {
+const EXAMINABLES: Record<string, Examinable> = {
   console_table: {
     title: 'Hall Table',
     text: 'A narrow console table under a skin of dust. A brass oil lamp stands on it, the reservoir dry, the wick burned down to nothing.',
@@ -78,24 +73,29 @@ export const EXAMINABLES: Record<string, Examinable> = {
   },
 };
 
-/**
- * Objects that hurt to look at. While the investigator looks straight at one,
- * the view blurs, deepening the longer they stare; it clears once they look
- * away or walk off. Keyed like EXAMINABLES, on the model's `Examine_<id>` nodes.
- */
-export type GazeHazard = {
-  /** How far off-centre (beyond the object's own outline) still counts as looking at it. */
-  angleDeg: number;
-  /** Beyond this distance, in metres, it has no hold. */
-  range: number;
-  /** Blur at full strength, in CSS pixels. */
-  maxBlurPx: number;
-  /** Seconds of staring to reach full strength. */
-  onsetSec: number;
-  /** Seconds for the view to clear after looking away. */
-  recoverSec: number;
+/** Staring at the idol blurs the view — see GazeHazard. */
+const GAZE_HAZARDS: Record<string, GazeHazard> = {
+  dagon_idol: { angleDeg: 3, range: 5, maxBlurPx: 8, onsetSec: 2.5, recoverSec: 0.8 },
 };
 
-export const GAZE_HAZARDS: Record<string, GazeHazard> = {
-  dagon_idol: { angleDeg: 3, range: 5, maxBlurPx: 8, onsetSec: 2.5, recoverSec: 0.8 },
+export const HOUSE_LEVEL: WalkthroughLevel = {
+  model: '/innsmouth-house.glb',
+  title: 'The Derelict House · Innsmouth',
+  loadingText: 'Approaching the house…',
+  errorText: 'The house could not be loaded.',
+  enterText: 'Click to step inside',
+  leaveLabel: 'Leave the house',
+  examinables: EXAMINABLES,
+  gazeHazards: GAZE_HAZARDS,
+  atmosphere: {
+    background: 0x020202,
+    fogColor: 0x030303,
+    fogDensity: 0.07,
+    // Moonlight leaking through the boards — just enough to find the walls.
+    sky: 0x4a5670,
+    ground: 0x0c0906,
+    fill: 0.35,
+  },
+  // The hearth is lit. Give it light of its own.
+  fires: [{ examineId: 'fireplace', at: b => [b.max.x + 0.2, 0.5, (b.min.z + b.max.z) / 2] }],
 };

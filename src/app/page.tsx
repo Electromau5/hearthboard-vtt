@@ -5,7 +5,10 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
 import { CthulhuReliefModal } from './components/CthulhuReliefModal';
-import { InnsmouthHouseModal } from './components/InnsmouthHouseModal';
+import { WalkthroughModal } from './components/WalkthroughModal';
+import { HOUSE_LEVEL } from '@/lib/innsmouth-house';
+import { VESSEL_LEVEL } from '@/lib/fishing-vessel';
+import type { WalkthroughLevel } from '@/lib/walkthrough';
 import { InnsmouthTown3D } from './components/InnsmouthTown3D';
 import { AllSkillsModal } from './components/AllSkillsModal';
 import { AllResourcesModal } from './components/AllResourcesModal';
@@ -45,6 +48,12 @@ const INNSMOUTH_SCENES = [
   { id: 'i7', locationId: 'loc-inn-pylon',       name: 'Submerged Basalt Pylon / Tide-Gate',  short: 'Tide-Gate',      mapX: 72, mapY: 72 },
   { id: 'i8', locationId: 'loc-inn-redacted',    name: 'Redacted Operational Area',           short: 'Redacted',       mapX: 29, mapY: 62 },
 ];
+
+/** Locations whose info panel opens a first-person walkthrough, keyed by locationId. */
+const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; alt: string; cta: string; hint: string }> = {
+  'loc-inn-house':  { level: HOUSE_LEVEL,  preview: '/innsmouth-house-preview.jpeg', alt: "The derelict house's front hall", cta: 'Enter the house',  hint: 'Click to go inside' },
+  'loc-inn-vessel': { level: VESSEL_LEVEL, preview: '/fishing-vessel-preview.jpeg',  alt: "The wrecked trawler's deck",      cta: 'Board the vessel', hint: 'Click to climb aboard' },
+};
 
 /**
  * Board backdrops, each with its own set of scenes (top-bar chips and map pins).
@@ -432,7 +441,7 @@ export default function HearthboardPage() {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
-  const [houseOpen, setHouseOpen] = useState(false);
+  const [walkthrough, setWalkthrough] = useState<WalkthroughLevel | null>(null);
   const [allSkillsOpen, setAllSkillsOpen] = useState(false);
   const [allResourcesOpen, setAllResourcesOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -1404,7 +1413,7 @@ export default function HearthboardPage() {
               const isMiskatonic = scene?.locationId === 'loc-miskatonic';
               const isBlackArchive = scene?.locationId === 'loc-blackarchive';
               const isInnsmouthDocks = scene?.locationId === 'loc-inn-docks';
-              const isHouse = scene?.locationId === 'loc-inn-house';
+              const walk = scene ? WALKTHROUGHS[scene.locationId] : undefined;
               const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
               const residentBriefing = BRIEFINGS.find(b => b.id === 'innsmouth-resident');
               const mobsterBriefing = BRIEFINGS.find(b => b.id === 'mobster');
@@ -1516,7 +1525,7 @@ export default function HearthboardPage() {
                   )}
 
                   {/* First-person walkthrough — only on the Innsmouth map's house */}
-                  {isHouse && (
+                  {walk && (
                     <>
                       <div style={{ height: 1, background: 'var(--brass-dim)', opacity: 0.5 }} />
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
@@ -1528,15 +1537,15 @@ export default function HearthboardPage() {
                           cursor: 'pointer', border: '1px solid var(--brass-dim)',
                           boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
                         }}
-                        onClick={() => setHouseOpen(true)}
+                        onClick={() => setWalkthrough(walk.level)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={e => e.key === 'Enter' && setHouseOpen(true)}
+                        onKeyDown={e => e.key === 'Enter' && setWalkthrough(walk.level)}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src="/innsmouth-house-preview.jpeg"
-                          alt="The derelict house's front hall"
+                          src={walk.preview}
+                          alt={walk.alt}
                           style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', filter: 'brightness(0.75)' }}
                         />
                         <div style={{
@@ -1548,10 +1557,10 @@ export default function HearthboardPage() {
                             WALKTHROUGH
                           </div>
                           <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
-                            Enter the house
+                            {walk.cta}
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
-                            ▶ Click to go inside
+                            ▶ {walk.hint}
                           </div>
                         </div>
                       </div>
@@ -2601,9 +2610,10 @@ export default function HearthboardPage() {
       )}
 
       {/* Derelict Innsmouth house — first-person walkthrough */}
-      {houseOpen && (
-        <InnsmouthHouseModal
-          onClose={() => setHouseOpen(false)}
+      {walkthrough && (
+        <WalkthroughModal
+          level={walkthrough}
+          onClose={() => setWalkthrough(null)}
           onShare={text => pushTextToChat(myDisplayName, text)}
         />
       )}
