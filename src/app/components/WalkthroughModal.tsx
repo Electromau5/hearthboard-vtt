@@ -5,9 +5,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import { HOUSE_MODEL, EXAMINABLES, GAZE_HAZARDS, type Examinable, type GazeHazard } from '@/lib/innsmouth-house';
+import type { Examinable, GazeHazard, WalkthroughLevel } from '@/lib/walkthrough';
 
 interface Props {
+  /** Which place to explore — HOUSE_LEVEL, VESSEL_LEVEL, … */
+  level: WalkthroughLevel;
   onClose: () => void;
   /** Posts what the investigator found to the shared chat. */
   onShare: (text: string) => void;
@@ -23,7 +25,13 @@ const LOOK = 0.0022;       // radians per pixel of mouse movement
 
 type Target = { id: string; entry: Examinable; box: THREE.Box3 };
 
-export function InnsmouthHouseModal({ onClose, onShare }: Props) {
+/**
+ * First-person exploration of a Summer-built level: walk with WASD and mouse
+ * look under a torch, bump into walls and furniture, examine marked objects and
+ * share findings to the party chat. What the level contains, and how it is lit,
+ * comes from `level` (see src/lib/walkthrough.ts).
+ */
+export function WalkthroughModal({ level, onClose, onShare }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -62,7 +70,7 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
     setShared(prev => new Set(prev).add(t.id));
   }, [onShare]);
 
-  // Escape closes the reading card first, then the house. Pressing Escape to
+  // Escape closes the reading card first, then the level. Pressing Escape to
   // leave pointer lock must not also close the modal, so a key arriving just
   // after the lock was released is ignored.
   useEffect(() => {
@@ -104,15 +112,25 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
 
     // ── Scene ───────────────────────────────────────────────────────
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020202);
-    scene.fog = new THREE.FogExp2(0x030303, 0.07);
+    const atmo = level.atmosphere;
+    scene.background = new THREE.Color(atmo.background);
+    scene.fog = new THREE.FogExp2(atmo.fogColor, atmo.fogDensity);
 
     const camera = new THREE.PerspectiveCamera(70, width / height, 0.05, 60);
     camera.rotation.order = 'YXZ';
     scene.add(camera);
 
-    // Moonlight leaking through the boards — just enough to find the walls.
-    scene.add(new THREE.HemisphereLight(0x4a5670, 0x0c0906, 0.35));
+    scene.add(new THREE.HemisphereLight(atmo.sky, atmo.ground, atmo.fill));
+    if (atmo.moon) {
+      const moon = new THREE.DirectionalLight(atmo.moon.color, atmo.moon.intensity);
+      moon.position.set(...atmo.moon.position);
+      moon.castShadow = true;
+      moon.shadow.mapSize.set(2048, 2048);
+      Object.assign(moon.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 80 });
+      moon.shadow.bias = -0.0005;
+      moon.shadow.normalBias = 0.04;
+      scene.add(moon);
+    }
 
     // The investigator's flashlight rides on the camera.
     const torch = new THREE.SpotLight(0xffe0b0, 40, 16, 0.52, 0.55, 2);
@@ -134,7 +152,7 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
     const blockers: THREE.Box3[] = [];
     const targets: Target[] = [];
     const hazards: { hazard: GazeHazard; box: THREE.Box3; center: THREE.Vector3; radius: number }[] = [];
-    let fire: THREE.PointLight | null = null;
+    const fires: THREE.PointLight[] = [];
     let model: THREE.Object3D | null = null;
     let disposed = false;
     let animId = 0;
@@ -187,11 +205,11 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
       return true;
     };
 
-    // ── Load the house ──────────────────────────────────────────────
+    // ── Load the level ──────────────────────────────────────────────
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
     loader.load(
-      HOUSE_MODEL,
+      level.model,
       (gltf) => {
         if (disposed) return;
         model = gltf.scene;
@@ -217,9 +235,9 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
           const tall = box.max.y - box.min.y;
           if (tall > 0.12 && box.min.y < 1.2) blockers.push(box);   // skip rugs and wall-hung frames
           const id = piece.name.startsWith('Examine_') ? piece.name.slice('Examine_'.length) : null;
-          const entry = id ? EXAMINABLES[id] : undefined;
+          const entry = id ? level.examinables[id] : undefined;
           if (id && entry) targets.push({ id, entry, box });
-          const hazard = id ? GAZE_HAZARDS[id] : undefined;
+          const hazard = id ? level.gazeHazards?.[id] : undefined;
           if (hazard) {
             const sphere = box.getBoundingSphere(new THREE.Sphere());
             hazards.push({ hazard, box, center: sphere.center, radius: sphere.radius });
@@ -232,21 +250,23 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
           const q = start.getWorldQuaternion(new THREE.Quaternion());
           yaw = new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
         }
-        feet.y = Math.max(0, groundAt(feet.x, feet.z, 0));
+        // Stand on whatever is under the start (a deck can sit above or below y = 0).
+        const floor = groundAt(feet.x, feet.z, feet.y);
+        if (floor !== -Infinity) feet.y = floor;
 
-        // The hearth is lit. Give it light of its own.
-        const hearth = targets.find(t => t.id === 'fireplace');
-        if (hearth) {
-          const c = hearth.box.getCenter(new THREE.Vector3());
-          fire = new THREE.PointLight(0xff7a30, 6, 6, 2);
-          fire.position.set(hearth.box.max.x + 0.2, 0.5, c.z);
+        for (const f of level.fires ?? []) {
+          const anchor = targets.find(t => t.id === f.examineId);
+          if (!anchor) continue;
+          const fire = new THREE.PointLight(0xff7a30, 6, 6, 2);
+          fire.position.set(...f.at(anchor.box));
           scene.add(fire);
+          fires.push(fire);
         }
 
         setLoaded(true);
       },
       (ev) => { if (ev.lengthComputable) setProgress(ev.loaded / ev.total); },
-      (err) => { console.error('House GLB load error:', err); if (!disposed) setLoadError(true); },
+      (err) => { console.error('Walkthrough GLB load error:', level.model, err); if (!disposed) setLoadError(true); },
     );
 
     // ── Input ───────────────────────────────────────────────────────
@@ -296,7 +316,7 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
       const t = clock.elapsedTime;
 
       if (model && !readingRef.current) {
-        // Arrow keys turn, so the house is walkable without pointer lock too.
+        // Arrow keys turn, so the level is walkable without pointer lock too.
         if (keys.has('ArrowLeft')) yaw += 1.8 * dt;
         if (keys.has('ArrowRight')) yaw -= 1.8 * dt;
 
@@ -329,7 +349,7 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
       } else {
         torch.intensity = 0;
       }
-      if (fire) fire.intensity = 5 + Math.sin(t * 9) * 0.8 + Math.sin(t * 23) * 0.5 + Math.random() * 0.6;
+      for (const fire of fires) fire.intensity = 5 + Math.sin(t * 9) * 0.8 + Math.sin(t * 23) * 0.5 + Math.random() * 0.6;
 
       // What is the investigator looking at?
       if (model) {
@@ -422,10 +442,10 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
       canvasRef.current = null;
       if (el.contains(canvas)) el.removeChild(canvas);
     };
-  }, [openReading, webgl]);
+  }, [openReading, webgl, level]);
 
   const hint = !webgl ? '3D unavailable' : !loaded
-    ? loadError ? 'The house could not be loaded' : `Approaching the house… ${Math.round(progress * 100)}%`
+    ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
       ? 'WASD move · Shift run · Mouse look · E / click examine · F torch · Esc release'
       : 'Click the view to look around · arrow keys also move and turn';
@@ -469,12 +489,12 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
               EXPLORATION
             </span>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--parchment)' }}>
-              The Derelict House · Innsmouth
+              {level.title}
             </span>
           </div>
           <button
             onClick={onClose}
-            aria-label="Leave the house"
+            aria-label={level.leaveLabel}
             style={{
               background: 'rgba(0,0,0,0.5)', border: '1px solid var(--line)',
               borderRadius: '50%', width: 28, height: 28,
@@ -517,7 +537,7 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
               <div style={{ color: 'var(--blood)', letterSpacing: '1px' }}>3D is unavailable in this browser</div>
               <div style={{ maxWidth: 440, lineHeight: 1.6 }}>
                 WebGL is turned off. Enable hardware / graphics acceleration in the browser&apos;s settings and relaunch it,
-                then try the house again.
+                then try again.
               </div>
             </div>
           )}
@@ -528,7 +548,7 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
               fontFamily: 'var(--font-mono)', fontSize: 11, color: loadError ? 'var(--blood)' : 'var(--ink-text-2)',
               letterSpacing: '1px',
             }}>
-              {loadError ? 'The house could not be loaded.' : `Approaching the house… ${Math.round(progress * 100)}%`}
+              {loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`}
             </div>
           )}
 
@@ -540,7 +560,7 @@ export function InnsmouthHouseModal({ onClose, onShare }: Props) {
               background: 'rgba(0,0,0,0.6)', border: '1px solid var(--brass-dim)', padding: '6px 12px',
               borderRadius: 'var(--r-sm)',
             }}>
-              Click to step inside
+              {level.enterText}
             </div>
           )}
 
