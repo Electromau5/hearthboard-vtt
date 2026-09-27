@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
 import { CthulhuReliefModal } from './components/CthulhuReliefModal';
 import { InnsmouthHouseModal } from './components/InnsmouthHouseModal';
+import { InnsmouthTown3D } from './components/InnsmouthTown3D';
 import { AllSkillsModal } from './components/AllSkillsModal';
 import { AllResourcesModal } from './components/AllResourcesModal';
 import { allResources } from '@/lib/resources';
@@ -44,10 +45,14 @@ const INNSMOUTH_SCENES = [
   { id: 'i8', locationId: 'loc-inn-redacted',    name: 'Redacted Operational Area',           short: 'Redacted',       mapX: 29, mapY: 62 },
 ];
 
-/** Board backdrops, each with its own set of scenes (top-bar chips and map pins). */
+/**
+ * Board backdrops, each with its own set of scenes (top-bar chips and map pins).
+ * `model3d` is an optional 3D version of the map — a Summer-built .glb whose
+ * `Pin_<sceneId>` nodes sit at the same spots as the 2D pins.
+ */
 const MAPS = [
-  { id: 'default',   label: 'Default',   src: '/map-v1.jpeg',         alt: 'Campaign map',  scenes: SCENES },
-  { id: 'innsmouth', label: 'Innsmouth', src: '/innsmouth-map.jpeg', alt: 'Innsmouth map', scenes: INNSMOUTH_SCENES },
+  { id: 'default',   label: 'Default',   src: '/map-v1.jpeg',         alt: 'Campaign map',  scenes: SCENES,           model3d: null },
+  { id: 'innsmouth', label: 'Innsmouth', src: '/innsmouth-map.jpeg', alt: 'Innsmouth map', scenes: INNSMOUTH_SCENES, model3d: '/innsmouth-town.glb' },
 ] as const;
 type MapId = typeof MAPS[number]['id'];
 const ALL_SCENES = MAPS.flatMap(m => m.scenes);
@@ -433,6 +438,8 @@ export default function HearthboardPage() {
   const [boardView, setBoardView] = useState<'map' | 'board'>('map');
   const [activeMapId, setActiveMapId] = useState<MapId>('default');
   const activeMap = MAPS.find(m => m.id === activeMapId) ?? MAPS[0];
+  const [mapMode, setMapMode] = useState<'2d' | '3d'>('2d');
+  const show3d = mapMode === '3d' && !!activeMap.model3d;
   const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
@@ -1214,6 +1221,19 @@ export default function HearthboardPage() {
               </button>
             ))}
           </div>
+          {activeMap.model3d && (
+            <div className="scene-switch" style={{ marginLeft: 8 }} title="Flat map or 3D town">
+              {(['2d', '3d'] as const).map(mode => (
+                <button
+                  key={mode}
+                  className={`scene-chip${mapMode === mode ? ' active' : ''}`}
+                  onClick={() => { setMapMode(mode); setBoardView('map'); }}
+                >
+                  {mode.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
           <button className="btn btn-ghost btn-sm" onClick={() => showToast('Invite link copied')}>
             Invite players
           </button>
@@ -1322,6 +1342,19 @@ export default function HearthboardPage() {
               }
             }}
           >
+            {show3d && activeMap.model3d ? (
+              <InnsmouthTown3D
+                src={activeMap.model3d}
+                scenes={activeMap.scenes}
+                activeId={currentSceneId}
+                focusedId={mapZoomedTo}
+                onSelect={id => {
+                  setCurrentSceneId(id);
+                  setMapZoomedTo(prev => prev === id ? null : id);
+                  setSelectedTokenId(null);
+                }}
+              />
+            ) : (
             <div className="map-canvas" id="map-canvas">
               <div
                 className="map-zoom-inner"
@@ -1358,7 +1391,8 @@ export default function HearthboardPage() {
                 ))}
               </div>
             </div>
-            <div className={`map-grid-overlay${gridOn ? '' : ' hidden'}`} id="map-grid-overlay" />
+            )}
+            <div className={`map-grid-overlay${gridOn && !show3d ? '' : ' hidden'}`} id="map-grid-overlay" />
             <div className="map-vignette" />
             {mapZoomedTo && (() => {
               const scene = ALL_SCENES.find(s => s.id === mapZoomedTo);
@@ -1713,12 +1747,13 @@ export default function HearthboardPage() {
                 </div>
               );
             })()}
-            {currentTokens.length === 0 && (
+            {/* Tokens and notes live in flat board space, so they stay on the 2D map. */}
+            {!show3d && currentTokens.length === 0 && (
               <div className="map-empty-hint">Drag a token from the left tray onto the map to begin</div>
             )}
 
             {/* Tokens */}
-            {currentTokens.map(tok => {
+            {!show3d && currentTokens.map(tok => {
               const pos = getTokenPos(tok);
               const hpPct = Math.max(0, Math.round(100 * tok.hp / tok.maxHp));
               return (
@@ -1748,7 +1783,7 @@ export default function HearthboardPage() {
             })}
 
             {/* Token popover */}
-            {selectedToken && popoverPos && (
+            {!show3d && selectedToken && popoverPos && (
               <div className="token-popover" style={{ left: popoverPos.left, top: popoverPos.top }}>
                 <h4>{selectedToken.fullName}</h4>
                 <div className="hp-row">
@@ -1773,7 +1808,7 @@ export default function HearthboardPage() {
             )}
 
             {/* Sticky Notes */}
-            {stickyNotes.filter(n => n.sceneId === currentSceneId).map(note => {
+            {!show3d && stickyNotes.filter(n => n.sceneId === currentSceneId).map(note => {
               const livePos = dragNotePos?.id === note.id ? dragNotePos : null;
               const nx = livePos ? livePos.x : note.x;
               const ny = livePos ? livePos.y : note.y;

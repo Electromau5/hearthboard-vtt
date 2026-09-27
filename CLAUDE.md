@@ -45,6 +45,7 @@ src/
       InvestigationBoard.tsx      # Corkboard — draggable notes/images, polls /api/board every 5s
       LoadingOverlay.tsx          # Full-screen GIF loader
       NavigationLoader.tsx        # Shows the overlay for one GIF cycle on route change
+      InnsmouthTown3D.tsx         # 3D Innsmouth map (three.js) — the board's 2D/3D toggle on the Innsmouth map
     characters/
       page.tsx                    # Investigator dossier grid — all 7 characters
       [slug]/page.tsx             # Individual character sheet page
