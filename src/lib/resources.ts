@@ -9,10 +9,10 @@ import { CHARACTERS } from '@/lib/characters';
  * likewise read from the character record, so a rename propagates.
  */
 
-export type ResourceSection = 'Documents' | 'Artifacts' | 'Weapons & Hardware' | 'Medical';
+export type ResourceSection = 'Documents' | 'Patient Files' | 'Artifacts' | 'Weapons & Hardware' | 'Medical';
 
 export const RESOURCE_SECTIONS: ResourceSection[] = [
-  'Documents', 'Artifacts', 'Weapons & Hardware', 'Medical',
+  'Documents', 'Patient Files', 'Artifacts', 'Weapons & Hardware', 'Medical',
 ];
 
 /** How opening the entry behaves. `item` is a catalogue row with no viewer. */
@@ -92,6 +92,86 @@ const MEDIA: Resource[] = [
     detail: 'Pre-human stonework · 3D walkthrough',
     note: 'Psychic hazard — drains sanity while viewed. Secured in excelsior crates in cold storage until field decryption requires it.',
   },
+];
+
+/**
+ * Bellevue Psychiatric Isolation Ward admission cards, all dated Oct. 26, 1932.
+ * Names and admission numbers are as typed on the cards — several share a
+ * number (32-094, 32-111), which is the cards' own, not a transcription slip.
+ */
+const PATIENT_FILES: Resource[] = [
+  { id: 'pf-robert-coltrane', name: 'Robert Coltrane', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/01-robert-coltrane.webp', detail: 'Ad. No. 32-094 · Dr. H. Wexler',
+    note: 'Acute paranoia; mutters to himself. Believes he is watched through the walls; refuses food and medication.' },
+  { id: 'pf-abner-smith', name: 'Abner Smith', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/02-abner-smith.webp', detail: 'Ad. No. 32-011 · Dr. R. Holloway',
+    note: 'Manic, rapid speech, sibilant whispering. Keeps to himself. Room 7B.' },
+  { id: 'pf-eleanor-vance', name: 'Eleanor Vance', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/03-eleanor-vance.webp', detail: 'Ad. No. 32-045 · Dr. H. Lindeman',
+    note: 'Melancholic and catatonic; will not speak. No food taken in 48 hours. Room 7.' },
+  { id: 'pf-arthur-jermyn', name: 'Arthur Jermyn', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/04-arthur-jermyn.webp', detail: 'Ad. No. 32-111 · Dr. H. Langley',
+    note: 'Obsessive; claims hereditary degeneracy in his family. Sleepless, disturbed by nightmares. Room 12B.' },
+  { id: 'pf-zadok-allen', name: 'Zadok Allen', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/05-zadok-allen.webp', detail: 'Ad. No. 32-105 · Dr. L. Hartmann',
+    note: 'Delirium tremens. Believes he is aboard a vessel; hears voices at sea. No visitors permitted.' },
+  { id: 'pf-francis-wayland-thurston', name: 'Francis Wayland Thurston', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/06-francis-wayland-thurston.webp', detail: 'Ad. No. 32-120 · Dr. L. Marlowe',
+    note: 'Anxiety and hysterical episodes. Hears an unseen presence in the dark; sleepless three days.' },
+  { id: 'pf-wiltur-jermyn', name: 'Wiltur Jermyn', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/07-wiltur-jermyn.webp', detail: 'Ad. No. 32-111 · Dr. H. Calder',
+    note: 'Catatonic; refuses food and water. Found unresponsive in a cold apartment.' },
+  { id: 'pf-henner-france', name: 'Henner France', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/08-henner-france.webp', detail: 'Ad. No. 32-034 · Dr. W. Sloane',
+    note: 'Melancholia, hysteria. Withdrawn, avoids eye contact; reports nightmares and tremors.' },
+  { id: 'pf-tamath-salton', name: 'Tamath Salton', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/09-tamath-salton.webp', detail: 'Ad. No. 32-043 · Dr. L. Harrow',
+    note: 'Manic, restless. Reports seeing figures in the dark. Room 7.' },
+  { id: 'pf-jenesr-richard', name: 'Jenesr Richard', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/10-jenesr-richard.webp', detail: 'Ad. No. 32-094 · Dr. H. Whitcombe',
+    note: 'Manic; hears “hissing, serpentine” whispers at night. No sleep in 72 hours; restraint ordered.' },
+  { id: 'pf-toma-welington', name: 'Toma Welington', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/11-toma-welington.webp', detail: 'Ad. No. 32-047 · Dr. H. Greer',
+    note: 'Delirious; reports visions, restless through the night, muttering incoherently.' },
+  { id: 'pf-arthur-jortane', name: 'Arthur Jortane', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/12-arthur-jortane.webp', detail: 'Ad. No. 32-094 · Ward 3B',
+    note: 'Obsessive; hereditary degeneracy. Intrusive thoughts; family history of mental illness.' },
+  { id: 'pf-herhard-jermyn', name: 'Herhard Jermyn', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/13-herhard-jermyn.webp', detail: 'Ad. No. 32-111 · Dr. L.K. Morrison',
+    note: 'Delirium tremens; hallucinations and tremors. Address: 122 E. 30th St., New York.' },
+  { id: 'pf-kamara-olmover', name: 'Kamara Olmover', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/14-kamara-olmover.webp', detail: 'Ad. No. 32-015 · Dr. H. L. Varnum',
+    note: 'Alcoholic hysteria; visual and auditory distress. Locked observation, Isolation 4B.' },
+  { id: 'pf-taylor-garrier', name: 'Taylor Garrier', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/15-taylor-garrier.webp', detail: 'Ad. No. 32-046 · Dr. H. L. Morrison',
+    note: 'Manic, anxious; racing thoughts. Sedated and observed overnight.' },
+  { id: 'pf-jamies-martnee', name: 'Jamies Martnee', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/16-jamies-martnee.webp', detail: 'Ad. No. 32-057 · Dr. R. Cole',
+    note: 'Manic, hysterical outbursts; claims voices. Sedated 20:30. Room 4B, no visitors.' },
+  { id: 'pf-einon-warnene', name: 'Einon. Warnene', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/17-einon-warnene.webp', detail: 'Ad. No. 32-089 · Dr. H. L. Morse',
+    note: 'Fixated on hats — claims they “speak to him”; believes staff are altering them. Ward 3.' },
+  { id: 'pf-robert-colmane', name: 'Robert Colmane', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/18-robert-colmane.webp', detail: 'Ad. No. 32-099 · Dr. H. Stein',
+    note: 'Catatonic stupor, waxy flexibility; no reaction to stimuli. Ward 4B.' },
+  { id: 'pf-marcis-wayland', name: 'Marcis Wayland', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/19-marcis-wayland.webp', detail: 'Ad. No. 32-121 · Dr. H. L. Kline',
+    note: 'Delusions and auditory hallucinations; responds to unseen voices. Isolation Ward No. 4.' },
+  { id: 'pf-taylor-salvace', name: 'Taylor Salvace', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/20-taylor-salvace.webp', detail: 'Ad. No. 32-126 · Dr. H. Calloway',
+    note: 'Withdrawn; visual disturbances, unresponsive to speech. Locked, restricted access.' },
+  { id: 'pf-leiran-bentin', name: 'Leiran Bentin', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/21-leiran-bentin.webp', detail: 'Ad. No. 32-111 · Dr. H. Kline',
+    note: 'Hears whispers from the walls; mutters of “shadows moving in the corner”. Room 7B.' },
+  { id: 'pf-carryenn-milon', name: 'Carryenn Milon', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/22-carryenn-milon.webp', detail: 'Ad. No. 32-109 · L. H. Kerr, M.D.',
+    note: 'Brought in by the NYPD 23rd Precinct, screaming; claims she is watched and followed.' },
+  { id: 'pf-panicura-cheone', name: 'Panicura Cheone', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/23-panicura-cheone.webp', detail: 'Ad. No. 32-194 · Dr. H. Morrow',
+    note: 'Acute paranoia; insists the walls whisper at night, food is poisoned. Cell 7B.' },
+  { id: 'pf-natthens-wallen', name: 'Natthens Wallen', section: 'Patient Files', kind: 'image', status: 'active',
+    src: '/patient-files/24-natthens-wallen.webp', detail: 'Ad. No. 32-101 · Room 4B',
+    note: 'Believes he is watched through the walls and that staff are conspiring.' },
 ];
 
 /**
@@ -229,7 +309,7 @@ function carriedResources(): Resource[] {
 
 /** The full index, rebuilt from the current character data on each call. */
 export function allResources(): Resource[] {
-  return [...MEDIA, ...carriedResources()];
+  return [...MEDIA, ...PATIENT_FILES, ...carriedResources()];
 }
 
 /** Just the field kit. */
