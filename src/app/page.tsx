@@ -5,6 +5,7 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
 import { CthulhuReliefModal } from './components/CthulhuReliefModal';
+import { InnsmouthHouseModal } from './components/InnsmouthHouseModal';
 import { AllSkillsModal } from './components/AllSkillsModal';
 import { AllResourcesModal } from './components/AllResourcesModal';
 import { allResources } from '@/lib/resources';
@@ -36,7 +37,7 @@ const SCENES = [
 const INNSMOUTH_SCENES = [
   { id: 'i1', locationId: 'loc-inn-refinery',    name: 'The Marsh Refinery',                  short: 'Marsh Refinery', mapX: 28, mapY: 13 },
   { id: 'i2', locationId: 'loc-inn-cellars',     name: 'The Cellars',                         short: 'Cellars',        mapX: 48, mapY: 35 },
-  { id: 'i3', locationId: 'loc-inn-customhouse', name: 'Innsmouth Custom House',              short: 'Custom House',   mapX: 47, mapY: 45 },
+  { id: 'i9', locationId: 'loc-inn-house',       name: 'The Derelict House',                  short: 'Derelict House', mapX: 47, mapY: 45 },
   { id: 'i4', locationId: 'loc-inn-docks',       name: 'Federal Quarantine Docks',            short: 'Fed. Docks',     mapX: 70, mapY: 31 },
   { id: 'i6', locationId: 'loc-inn-reef',        name: 'Decrepit Coastal Reef & Breakwater',  short: 'Reef',           mapX: 46, mapY: 83 },
   { id: 'i7', locationId: 'loc-inn-pylon',       name: 'Submerged Basalt Pylon / Tide-Gate',  short: 'Tide-Gate',      mapX: 72, mapY: 72 },
@@ -425,6 +426,7 @@ export default function HearthboardPage() {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
+  const [houseOpen, setHouseOpen] = useState(false);
   const [allSkillsOpen, setAllSkillsOpen] = useState(false);
   const [allResourcesOpen, setAllResourcesOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -1367,6 +1369,7 @@ export default function HearthboardPage() {
               const isMiskatonic = scene?.locationId === 'loc-miskatonic';
               const isBlackArchive = scene?.locationId === 'loc-blackarchive';
               const isInnsmouthDocks = scene?.locationId === 'loc-inn-docks';
+              const isHouse = scene?.locationId === 'loc-inn-house';
               const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
               const residentBriefing = BRIEFINGS.find(b => b.id === 'innsmouth-resident');
               const mobsterBriefing = BRIEFINGS.find(b => b.id === 'mobster');
@@ -1471,6 +1474,49 @@ export default function HearthboardPage() {
                           </div>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
                             ▶ Click to open
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* First-person walkthrough — only on the Innsmouth map's house */}
+                  {isHouse && (
+                    <>
+                      <div style={{ height: 1, background: 'var(--brass-dim)', opacity: 0.5 }} />
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+                        Exploration
+                      </div>
+                      <div
+                        style={{
+                          position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                          cursor: 'pointer', border: '1px solid var(--brass-dim)',
+                          boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+                        }}
+                        onClick={() => setHouseOpen(true)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => e.key === 'Enter' && setHouseOpen(true)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/innsmouth-house-preview.jpeg"
+                          alt="The derelict house's front hall"
+                          style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover', filter: 'brightness(0.75)' }}
+                        />
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          background: 'linear-gradient(to top, rgba(10,8,6,0.92) 0%, rgba(10,8,6,0.25) 60%, transparent 100%)',
+                          padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2px', color: 'var(--blood)', border: '1px solid var(--blood)', display: 'inline-block', padding: '1px 5px', marginBottom: 4, width: 'fit-content' }}>
+                            WALKTHROUGH
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--parchment)', lineHeight: 1.2 }}>
+                            Enter the house
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', marginTop: 4, letterSpacing: '0.5px' }}>
+                            ▶ Click to go inside
                           </div>
                         </div>
                       </div>
@@ -2516,6 +2562,14 @@ export default function HearthboardPage() {
           <div className="eff-sanity-mild" />
           <CthulhuReliefModal onClose={() => setReliefModalOpen(false)} />
         </>
+      )}
+
+      {/* Derelict Innsmouth house — first-person walkthrough */}
+      {houseOpen && (
+        <InnsmouthHouseModal
+          onClose={() => setHouseOpen(false)}
+          onShare={text => pushTextToChat(myDisplayName, text)}
+        />
       )}
 
       {/* Video modal */}
