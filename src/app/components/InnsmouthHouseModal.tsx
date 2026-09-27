@@ -1,0 +1,610 @@
+'use client';
+
+import { useRef, useEffect, useCallback, useState } from 'react';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
+import { HOUSE_MODEL, EXAMINABLES, GAZE_HAZARDS, type Examinable, type GazeHazard } from '@/lib/innsmouth-house';
+
+interface Props {
+  onClose: () => void;
+  /** Posts what the investigator found to the shared chat. */
+  onShare: (text: string) => void;
+}
+
+const EYE = 1.6;           // camera height above the feet
+const RADIUS = 0.28;       // investigator's footprint
+const STEP = 0.42;         // tallest ledge that can be stepped onto (stairs rise 0.19)
+const WALK = 1.7;          // m/s
+const RUN = 3.0;
+const REACH = 2.3;         // how far away something can be examined from
+const LOOK = 0.0022;       // radians per pixel of mouse movement
+
+type Target = { id: string; entry: Examinable; box: THREE.Box3 };
+
+export function InnsmouthHouseModal({ onClose, onShare }: Props) {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const [progress, setProgress] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [focus, setFocus] = useState<Target | null>(null);
+  const [reading, setReading] = useState<Target | null>(null);
+  const [shared, setShared] = useState<Set<string>>(() => new Set());
+  const [torchOn, setTorchOn] = useState(true);
+  // Checked up front: a browser with WebGL disabled (hardware acceleration off,
+  // or the GPU process given up after crashes) makes WebGLRenderer throw.
+  const [webgl] = useState(() => WebGL.isWebGL2Available());
+
+  // Refs the animation loop reads without re-registering.
+  const readingRef = useRef<Target | null>(null);
+  const focusRef = useRef<Target | null>(null);
+  const torchRef = useRef(true);
+  const unlockedAtRef = useRef(0);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => { readingRef.current = reading; }, [reading]);
+  useEffect(() => { torchRef.current = torchOn; }, [torchOn]);
+
+  const openReading = useCallback((t: Target) => {
+    setReading(t);
+    document.exitPointerLock?.();
+  }, []);
+
+  const closeReading = useCallback(() => {
+    setReading(null);
+    canvasRef.current?.requestPointerLock?.();
+  }, []);
+
+  const share = useCallback((t: Target) => {
+    onShare(`examined the ${t.entry.title.toLowerCase()} — ${t.entry.text}`);
+    setShared(prev => new Set(prev).add(t.id));
+  }, [onShare]);
+
+  // Escape closes the reading card first, then the house. Pressing Escape to
+  // leave pointer lock must not also close the modal, so a key arriving just
+  // after the lock was released is ignored.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (readingRef.current) { setReading(null); return; }
+        if (document.pointerLockElement || performance.now() - unlockedAtRef.current < 300) return;
+        onClose();
+        return;
+      }
+      if (e.code === 'KeyE') {
+        if (readingRef.current) closeReading();
+        else if (focusRef.current) openReading(focusRef.current);
+      }
+      if (e.code === 'KeyF') setTorchOn(v => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, openReading, closeReading]);
+
+  useEffect(() => {
+    const el = mountRef.current;
+    if (!el || !webgl) return;
+
+    const width = el.clientWidth || 960;
+    const height = el.clientHeight || 540;
+
+    // ── Renderer ────────────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    el.appendChild(renderer.domElement);
+    const canvas = renderer.domElement;
+    canvasRef.current = canvas;
+
+    // ── Scene ───────────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x020202);
+    scene.fog = new THREE.FogExp2(0x030303, 0.07);
+
+    const camera = new THREE.PerspectiveCamera(70, width / height, 0.05, 60);
+    camera.rotation.order = 'YXZ';
+    scene.add(camera);
+
+    // Moonlight leaking through the boards — just enough to find the walls.
+    scene.add(new THREE.HemisphereLight(0x4a5670, 0x0c0906, 0.35));
+
+    // The investigator's flashlight rides on the camera.
+    const torch = new THREE.SpotLight(0xffe0b0, 40, 16, 0.52, 0.55, 2);
+    torch.position.set(0.15, -0.2, 0);
+    torch.castShadow = true;
+    torch.shadow.mapSize.set(1024, 1024);
+    torch.shadow.camera.near = 0.1;
+    torch.shadow.bias = -0.0004;
+    camera.add(torch);
+    camera.add(torch.target);
+    torch.target.position.set(0, -0.1, -1);
+
+    // ── State ───────────────────────────────────────────────────────
+    const feet = new THREE.Vector3(-0.3, 0, 4.2);
+    let yaw = 0;
+    let pitch = 0;
+    const keys = new Set<string>();
+    const walls: THREE.Object3D[] = [];
+    const blockers: THREE.Box3[] = [];
+    const targets: Target[] = [];
+    const hazards: { hazard: GazeHazard; box: THREE.Box3; center: THREE.Vector3; radius: number }[] = [];
+    let fire: THREE.PointLight | null = null;
+    let model: THREE.Object3D | null = null;
+    let disposed = false;
+    let animId = 0;
+
+    const ray = new THREE.Raycaster();
+    const tmpV = new THREE.Vector3();
+    const down = new THREE.Vector3(0, -1, 0);
+
+    /** Distance to the nearest wall along `dir` from `origin`, or Infinity. */
+    const wallDist = (origin: THREE.Vector3, dir: THREE.Vector3, far: number) => {
+      ray.set(origin, dir);
+      ray.far = far;
+      const hit = ray.intersectObjects(walls, false)[0];
+      return hit ? hit.distance : Infinity;
+    };
+
+    /** Height of the floor beneath (x, z), searched from just above the feet. */
+    const groundAt = (x: number, z: number, from: number) => {
+      ray.set(tmpV.set(x, from + STEP + 0.05, z), down);
+      ray.far = 6;
+      const hit = ray.intersectObjects(walls, false)[0];
+      return hit ? hit.point.y : -Infinity;
+    };
+
+    const hitsFurniture = (x: number, z: number, y: number) => {
+      for (const b of blockers) {
+        if (b.max.y < y + 0.3 || b.min.y > y + 1.7) continue;
+        if (x > b.min.x - RADIUS && x < b.max.x + RADIUS && z > b.min.z - RADIUS && z < b.max.z + RADIUS) return true;
+      }
+      return false;
+    };
+
+    /** Tries to move the feet by (dx, dz); returns whether it moved. */
+    const tryMove = (dx: number, dz: number) => {
+      const len = Math.hypot(dx, dz);
+      if (len === 0) return false;
+      const dir = tmpV.set(dx / len, 0, dz / len).clone();
+      // Two rays: one clears stair risers (which sit below it), one catches walls and beams.
+      for (const h of [0.45, 1.3]) {
+        const origin = new THREE.Vector3(feet.x, feet.y + h, feet.z);
+        if (wallDist(origin, dir, RADIUS + len + 0.01) < RADIUS + len) return false;
+      }
+      const nx = feet.x + dx;
+      const nz = feet.z + dz;
+      const g = groundAt(nx, nz, feet.y);
+      if (g === -Infinity || g > feet.y + STEP) return false;
+      if (hitsFurniture(nx, nz, Math.max(g, feet.y))) return false;
+      feet.x = nx;
+      feet.z = nz;
+      return true;
+    };
+
+    // ── Load the house ──────────────────────────────────────────────
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.load(
+      HOUSE_MODEL,
+      (gltf) => {
+        if (disposed) return;
+        model = gltf.scene;
+        scene.add(model);
+        model.updateMatrixWorld(true);
+
+        model.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+          }
+        });
+
+        const arch = model.getObjectByName('Architecture');
+        arch?.traverse((o) => { if ((o as THREE.Mesh).isMesh) walls.push(o); });
+
+        // Furniture blocks as boxes: cheaper than its triangles, and it never snags on chair legs.
+        const furniture = model.getObjectByName('Furniture');
+        furniture?.children.forEach((piece) => {
+          const box = new THREE.Box3().setFromObject(piece);
+          if (box.isEmpty()) return;
+          const tall = box.max.y - box.min.y;
+          if (tall > 0.12 && box.min.y < 1.2) blockers.push(box);   // skip rugs and wall-hung frames
+          const id = piece.name.startsWith('Examine_') ? piece.name.slice('Examine_'.length) : null;
+          const entry = id ? EXAMINABLES[id] : undefined;
+          if (id && entry) targets.push({ id, entry, box });
+          const hazard = id ? GAZE_HAZARDS[id] : undefined;
+          if (hazard) {
+            const sphere = box.getBoundingSphere(new THREE.Sphere());
+            hazards.push({ hazard, box, center: sphere.center, radius: sphere.radius });
+          }
+        });
+
+        const start = model.getObjectByName('PlayerStart');
+        if (start) {
+          start.getWorldPosition(feet);
+          const q = start.getWorldQuaternion(new THREE.Quaternion());
+          yaw = new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+        }
+        feet.y = Math.max(0, groundAt(feet.x, feet.z, 0));
+
+        // The hearth is lit. Give it light of its own.
+        const hearth = targets.find(t => t.id === 'fireplace');
+        if (hearth) {
+          const c = hearth.box.getCenter(new THREE.Vector3());
+          fire = new THREE.PointLight(0xff7a30, 6, 6, 2);
+          fire.position.set(hearth.box.max.x + 0.2, 0.5, c.z);
+          scene.add(fire);
+        }
+
+        setLoaded(true);
+      },
+      (ev) => { if (ev.lengthComputable) setProgress(ev.loaded / ev.total); },
+      (err) => { console.error('House GLB load error:', err); if (!disposed) setLoadError(true); },
+    );
+
+    // ── Input ───────────────────────────────────────────────────────
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+        keys.add(e.code);
+        if (e.code.startsWith('Arrow')) e.preventDefault();
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => { keys.delete(e.code); };
+    const onBlur = () => keys.clear();
+    const onMouseMove = (e: MouseEvent) => {
+      if (document.pointerLockElement !== canvas) return;
+      yaw -= e.movementX * LOOK;
+      pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * LOOK));
+    };
+    const onCanvasClick = () => {
+      if (readingRef.current) return;
+      if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
+      else if (focusRef.current) openReading(focusRef.current);
+    };
+    const onLockChange = () => {
+      const isLocked = document.pointerLockElement === canvas;
+      if (!isLocked) { unlockedAtRef.current = performance.now(); keys.clear(); }
+      setLocked(isLocked);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('pointerlockchange', onLockChange);
+    canvas.addEventListener('click', onCanvasClick);
+
+    // ── Animate ─────────────────────────────────────────────────────
+    const clock = new THREE.Clock();
+    const lookDir = new THREE.Vector3();
+    let flickerUntil = 0;
+    let lastFocusId: string | null = null;
+    const toHazard = new THREE.Vector3();
+    let dread = 0;          // 0..1 — how far the gaze blur has taken hold
+    let dreadHazard: GazeHazard | null = null;
+    let shownBlur = -1;
+
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const t = clock.elapsedTime;
+
+      if (model && !readingRef.current) {
+        // Arrow keys turn, so the house is walkable without pointer lock too.
+        if (keys.has('ArrowLeft')) yaw += 1.8 * dt;
+        if (keys.has('ArrowRight')) yaw -= 1.8 * dt;
+
+        let f = 0, s = 0;
+        if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1;
+        if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
+        if (keys.has('KeyD')) s += 1;
+        if (keys.has('KeyA')) s -= 1;
+        if (f || s) {
+          const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK) * dt;
+          const n = Math.hypot(f, s);
+          const sin = Math.sin(yaw), cos = Math.cos(yaw);
+          const dx = (-sin * f + cos * s) / n * speed;
+          const dz = (-cos * f - sin * s) / n * speed;
+          // Slide along walls: if the full step is blocked, try each axis alone.
+          if (!tryMove(dx, dz)) { tryMove(dx, 0); tryMove(0, dz); }
+        }
+        // Settle onto whatever is underfoot (stairs up, or a drop).
+        const g = groundAt(feet.x, feet.z, feet.y);
+        if (g !== -Infinity) feet.y = g > feet.y ? g : Math.max(g, feet.y - 4 * dt);
+      }
+
+      camera.position.set(feet.x, feet.y + EYE + Math.sin(t * 1.3) * 0.004, feet.z);
+      camera.rotation.set(pitch, yaw, 0);
+
+      // The torch stutters now and then.
+      if (torchRef.current) {
+        if (t > flickerUntil && Math.random() < 0.002) flickerUntil = t + 0.25 + Math.random() * 0.4;
+        torch.intensity = t < flickerUntil ? (Math.random() < 0.5 ? 4 : 30) : 40;
+      } else {
+        torch.intensity = 0;
+      }
+      if (fire) fire.intensity = 5 + Math.sin(t * 9) * 0.8 + Math.sin(t * 23) * 0.5 + Math.random() * 0.6;
+
+      // What is the investigator looking at?
+      if (model) {
+        camera.getWorldDirection(lookDir);
+        ray.set(camera.position, lookDir);
+        let best: Target | null = null;
+        let bestD = REACH;
+        for (const tg of targets) {
+          const hit = ray.ray.intersectBox(tg.box, tmpV);
+          if (!hit) continue;
+          const d = hit.distanceTo(camera.position);
+          if (d < bestD) { bestD = d; best = tg; }
+        }
+        if (best && wallDist(camera.position.clone(), lookDir, bestD) < bestD - 0.05) best = null;
+        focusRef.current = best;
+        const id = best?.id ?? null;
+        if (id !== lastFocusId) { lastFocusId = id; setFocus(best); }
+
+        // Staring straight at a gaze hazard blurs the view; looking away lets it clear.
+        let gazing: GazeHazard | null = null;
+        for (const h of hazards) {
+          toHazard.subVectors(h.center, camera.position);
+          const d = toHazard.length();
+          if (d > h.hazard.range || d < 0.01) continue;
+          const off = lookDir.angleTo(toHazard);
+          const allowed = Math.atan(h.radius / d) + THREE.MathUtils.degToRad(h.hazard.angleDeg);
+          if (off > allowed) continue;
+          if (wallDist(camera.position.clone(), toHazard.normalize(), d) < d - h.radius) continue;
+          gazing = h.hazard;
+          break;
+        }
+        if (gazing) {
+          dreadHazard = gazing;
+          dread = Math.min(1, dread + dt / gazing.onsetSec);
+        } else if (dreadHazard) {
+          dread = Math.max(0, dread - dt / dreadHazard.recoverSec);
+        }
+      }
+
+      // Ease in, and let the blur swell and ebb a little so it feels alive.
+      const eased = dread * dread * (3 - 2 * dread);
+      const blur = dreadHazard ? eased * dreadHazard.maxBlurPx * (1 + 0.15 * Math.sin(t * 2.3)) : 0;
+      const rounded = Math.round(blur * 10) / 10;
+      if (rounded !== shownBlur) {
+        shownBlur = rounded;
+        canvas.style.filter = rounded > 0
+          ? `blur(${rounded}px) saturate(${1 - eased * 0.4}) hue-rotate(${eased * 18}deg)`
+          : '';
+      }
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // ── Resize ──────────────────────────────────────────────────────
+    const onResize = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (!w || !h) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(animId);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('pointerlockchange', onLockChange);
+      canvas.removeEventListener('click', onCanvasClick);
+      canvas.style.filter = '';
+      window.removeEventListener('resize', onResize);
+      if (document.pointerLockElement === canvas) document.exitPointerLock();
+      model?.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.geometry.dispose();
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) {
+          for (const v of Object.values(m)) if (v instanceof THREE.Texture) v.dispose();
+          m.dispose();
+        }
+      });
+      torch.shadow.map?.dispose();
+      renderer.dispose();
+      canvasRef.current = null;
+      if (el.contains(canvas)) el.removeChild(canvas);
+    };
+  }, [openReading, webgl]);
+
+  const hint = !webgl ? '3D unavailable' : !loaded
+    ? loadError ? 'The house could not be loaded' : `Approaching the house… ${Math.round(progress * 100)}%`
+    : locked
+      ? 'WASD move · Shift run · Mouse look · E / click examine · F torch · Esc release'
+      : 'Click the view to look around · arrow keys also move and turn';
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 300,
+        background: 'rgba(5,4,3,0.94)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          width: 'min(1100px, 94vw)',
+          borderRadius: 'var(--r-lg)',
+          border: '1px solid var(--brass-dim)',
+          boxShadow: '0 0 0 1px rgba(201,148,79,0.12), 0 32px 100px rgba(0,0,0,0.95)',
+          background: '#050403',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 16px 9px',
+          borderBottom: '1px solid rgba(201,148,79,0.18)',
+          background: 'rgba(201,148,79,0.04)',
+        }}>
+          <div>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '2.5px',
+              color: 'var(--blood)', border: '1px solid var(--blood)',
+              padding: '2px 6px', marginRight: 10,
+            }}>
+              EXPLORATION
+            </span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--parchment)' }}>
+              The Derelict House · Innsmouth
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Leave the house"
+            style={{
+              background: 'rgba(0,0,0,0.5)', border: '1px solid var(--line)',
+              borderRadius: '50%', width: 28, height: 28,
+              color: 'var(--ink-text-2)', fontSize: 14, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >✕</button>
+        </div>
+
+        {/* Three.js canvas mount + overlays */}
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
+          <div ref={mountRef} style={{ position: 'absolute', inset: 0, cursor: locked ? 'none' : 'pointer' }} />
+
+          {loaded && locked && !reading && (
+            <div style={{
+              position: 'absolute', left: '50%', top: '50%', width: 6, height: 6,
+              marginLeft: -3, marginTop: -3, borderRadius: '50%', pointerEvents: 'none',
+              background: focus ? 'var(--brass)' : 'rgba(232,220,200,0.45)',
+              boxShadow: focus ? '0 0 8px var(--brass)' : 'none',
+            }} />
+          )}
+
+          {loaded && focus && !reading && (
+            <div style={{
+              position: 'absolute', left: '50%', top: 'calc(50% + 22px)', transform: 'translateX(-50%)',
+              pointerEvents: 'none', whiteSpace: 'nowrap',
+              fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.5px',
+              color: 'var(--parchment)', textShadow: '0 1px 4px #000',
+            }}>
+              <span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}
+            </div>
+          )}
+
+          {!webgl && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', gap: 8,
+              alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center',
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-text-2)', letterSpacing: '0.5px',
+            }}>
+              <div style={{ color: 'var(--blood)', letterSpacing: '1px' }}>3D is unavailable in this browser</div>
+              <div style={{ maxWidth: 440, lineHeight: 1.6 }}>
+                WebGL is turned off. Enable hardware / graphics acceleration in the browser&apos;s settings and relaunch it,
+                then try the house again.
+              </div>
+            </div>
+          )}
+
+          {webgl && !loaded && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: loadError ? 'var(--blood)' : 'var(--ink-text-2)',
+              letterSpacing: '1px',
+            }}>
+              {loadError ? 'The house could not be loaded.' : `Approaching the house… ${Math.round(progress * 100)}%`}
+            </div>
+          )}
+
+          {webgl && loaded && !locked && !reading && (
+            <div style={{
+              position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
+              pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.5px',
+              textTransform: 'uppercase', color: 'var(--brass)',
+              background: 'rgba(0,0,0,0.6)', border: '1px solid var(--brass-dim)', padding: '6px 12px',
+              borderRadius: 'var(--r-sm)',
+            }}>
+              Click to step inside
+            </div>
+          )}
+
+          {reading && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.55)',
+            }}>
+              <div style={{
+                width: 'min(440px, 86%)', padding: '16px 18px',
+                background: 'rgba(14,11,8,0.96)', border: '1px solid var(--brass-dim)',
+                borderRadius: 'var(--r-md)', boxShadow: '0 12px 40px rgba(0,0,0,0.8)',
+              }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+                  Examined
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--parchment)', margin: '4px 0 10px' }}>
+                  {reading.entry.title}
+                </div>
+                <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--parchment)', margin: 0 }}>
+                  {reading.entry.text}
+                </p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+                  <button
+                    onClick={() => share(reading)}
+                    disabled={shared.has(reading.id)}
+                    style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                      padding: '5px 10px', borderRadius: 'var(--r-sm)', cursor: shared.has(reading.id) ? 'default' : 'pointer',
+                      background: 'rgba(201,148,79,0.08)', border: '1px solid var(--brass-dim)',
+                      color: shared.has(reading.id) ? 'var(--ink-text-2)' : 'var(--brass)',
+                    }}
+                  >
+                    {shared.has(reading.id) ? 'Shared with party' : 'Share with party'}
+                  </button>
+                  <button
+                    onClick={closeReading}
+                    style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                      padding: '5px 10px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                      background: 'transparent', border: '1px solid var(--line)', color: 'var(--ink-text-2)',
+                    }}
+                  >
+                    Back [E]
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer — controls */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+          padding: '8px 16px', borderTop: '1px solid rgba(201,148,79,0.12)',
+        }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', letterSpacing: '0.4px', minWidth: 0 }}>
+            {hint}
+          </span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: torchOn ? 'var(--brass)' : 'var(--ink-text-2)', whiteSpace: 'nowrap' }}>
+            Torch {torchOn ? 'on' : 'off'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
