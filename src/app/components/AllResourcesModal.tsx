@@ -9,6 +9,8 @@ interface Props {
   onOpenImage: (src: string) => void;
   /** Open a video in the player modal. */
   onOpenVideo: (src: string) => void;
+  /** Play a recording alongside its transcript. */
+  onOpenAudio: (src: string) => void;
   /** Open the 3D artifact viewer. */
   onOpenModel: () => void;
   onClose: () => void;
@@ -17,6 +19,7 @@ interface Props {
 const KIND_LABEL: Record<Resource['kind'], string> = {
   image: 'Document',
   video: 'Footage',
+  audio: 'Recording',
   model: '3D',
   item: 'Carried',
 };
@@ -27,7 +30,7 @@ const KIND_LABEL: Record<Resource['kind'], string> = {
  * "does anyone have a crowbar" without opening seven sheets.
  */
 export function AllResourcesModal({
-  resources, onOpenImage, onOpenVideo, onOpenModel, onClose,
+  resources, onOpenImage, onOpenVideo, onOpenAudio, onOpenModel, onClose,
 }: Props) {
   const [query, setQuery] = useState('');
   // Field kit first: what the party is actually carrying is the common case.
@@ -62,6 +65,7 @@ export function AllResourcesModal({
   const open = (r: Resource) => {
     if (r.kind === 'image' && r.src) onOpenImage(r.src);
     else if (r.kind === 'video' && r.src) onOpenVideo(r.src);
+    else if (r.kind === 'audio' && r.src) onOpenAudio(r.src);
     else if (r.kind === 'model') onOpenModel();
   };
 

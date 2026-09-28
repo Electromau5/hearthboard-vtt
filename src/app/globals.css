@@ -1337,6 +1337,7 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
 }
 .res-kind.k-image { color: var(--brass); border-color: var(--brass-dim); }
 .res-kind.k-video { color: var(--blood); border-color: rgba(158,42,43,0.5); }
+.res-kind.k-audio { color: var(--forest); border-color: var(--forest); }
 .res-kind.k-model { color: var(--arcane); border-color: rgba(125,95,184,0.5); }
 
 @media (max-width: 580px) {

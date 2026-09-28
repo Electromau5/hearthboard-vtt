@@ -120,7 +120,8 @@ type BriefingSection = {
 
 type Briefing = {
   id: string;
-  image: string;
+  /** Speaker portrait. Omitted for recordings with no known speaker. */
+  image?: string;
   badge: string;
   title: string;
   subtitle: string;
@@ -305,6 +306,27 @@ const BRIEFINGS: Briefing[] = [
           "Who's there? What do you want?",
           "You're outsiders aren't ya? We don't like your kind round these parts - specially after what happened to our peaceful town.",
           "You may as well go back from where ya came - there's nothing round here that's important to you ......especially today.",
+        ],
+      },
+    ],
+  },
+  {
+    // Opened from All Resources (the "Federal Raid Report" recording), not the
+    // Mission Details pane. No portrait — the investigator is unnamed.
+    id: 'fed-detective',
+    badge: 'FEDERAL RECORDING',
+    title: 'Innsmouth Raid Report',
+    subtitle: 'Federal Investigator · Field Recording',
+    sections: [
+      {
+        audio: '/fed-detective-1.mp3',
+        paragraphs: [
+          'Black Archive. Innsmouth raid, February 17th, 1926.',
+          'Task force breached Dagon Hall at moonrise. Approximately 60 Order members chanting around a subterranean seawater pool.',
+          'Fully formed fish-like men rose from the surf at Devil Reef. Tall, gill-slitted, unblinking. Townspeople waded out to meet them willingly.',
+          'Three attendants seized mid-rite showed early deformity — wide unblinking eyes, nascent gill slits, scaly skin. Committed to Bellevue Isolation Ward.',
+          'Town evacuated February 21st.',
+          'Recommend permanent quarantine.',
         ],
       },
     ],
@@ -2363,7 +2385,7 @@ export default function HearthboardPage() {
                 Mission Details
               </div>
 
-              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant' && b.id !== 'armitage' && b.id !== 'miles' && b.id !== 'innsmouth-resident').map(b => (
+              {BRIEFINGS.filter(b => b.id !== 'old-man' && b.id !== 'mobster' && b.id !== 'attendant' && b.id !== 'armitage' && b.id !== 'miles' && b.id !== 'innsmouth-resident' && b.id !== 'fed-detective').map(b => (
                 <div
                   key={b.id}
                   style={{ ...missionCard, marginBottom: 10 }}
@@ -2405,15 +2427,27 @@ export default function HearthboardPage() {
             <div style={butlerOverlay} onClick={e => e.stopPropagation()}>
               {/* Left: photograph */}
               <div style={butlerPhotoCol}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={activeBriefing.image}
-                  alt={activeBriefing.title}
-                  style={butlerPhoto}
-                  onClick={replayBriefing}
-                  title="Click to replay"
-                />
-                <div style={butlerPhotoCaption}>Click photograph to replay</div>
+                {activeBriefing.image ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={activeBriefing.image}
+                      alt={activeBriefing.title}
+                      style={butlerPhoto}
+                      onClick={replayBriefing}
+                      title="Click to replay"
+                    />
+                    <div style={butlerPhotoCaption}>Click photograph to replay</div>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" style={recordingTile} onClick={replayBriefing} title="Click to replay">
+                      <span style={recordingReel}>◉ ◉</span>
+                      <span style={recordingLabel}>Recorded Testimony</span>
+                    </button>
+                    <div style={butlerPhotoCaption}>Click reel to replay</div>
+                  </>
+                )}
               </div>
 
               {/* Right: briefing text */}
@@ -2585,6 +2619,14 @@ export default function HearthboardPage() {
           resources={allResources()}
           onOpenImage={src => { setAllResourcesOpen(false); setLightboxSrc(src); }}
           onOpenVideo={src => { setAllResourcesOpen(false); setVideoModalSrc(src); }}
+          onOpenAudio={src => {
+            // Recordings play through the briefing overlay, which already
+            // pairs an audio track with its transcript.
+            const b = BRIEFINGS.find(x => x.sections.some(sec => sec.audio === src));
+            if (!b) return;
+            setAllResourcesOpen(false);
+            openBriefing(b);
+          }}
           onOpenModel={() => { setAllResourcesOpen(false); setReliefModalOpen(true); }}
           onClose={() => setAllResourcesOpen(false)}
         />
@@ -2714,6 +2756,19 @@ const butlerPhotoCol: React.CSSProperties = {
 const butlerPhoto: React.CSSProperties = {
   width: '100%', flex: 1, objectFit: 'cover', display: 'block',
   filter: 'sepia(0.25) brightness(0.9)', cursor: 'pointer',
+};
+// Stand-in for the portrait when a briefing is a recording with no photograph.
+const recordingTile: React.CSSProperties = {
+  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+  gap: 14, border: 'none', cursor: 'pointer',
+  background: 'radial-gradient(circle at 50% 45%, #2a1f14 0%, #0d0905 75%)',
+};
+const recordingReel: React.CSSProperties = {
+  fontSize: 64, letterSpacing: 18, color: 'var(--brass)', lineHeight: 1,
+};
+const recordingLabel: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '3px',
+  textTransform: 'uppercase', color: 'var(--ink-text-2)',
 };
 const butlerPhotoCaption: React.CSSProperties = {
   padding: '8px 12px', background: 'var(--surface-2)',

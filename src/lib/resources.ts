@@ -16,7 +16,7 @@ export const RESOURCE_SECTIONS: ResourceSection[] = [
 ];
 
 /** How opening the entry behaves. `item` is a catalogue row with no viewer. */
-export type ResourceKind = 'image' | 'video' | 'model' | 'item';
+export type ResourceKind = 'image' | 'video' | 'audio' | 'model' | 'item';
 
 /**
  * `active` is what the party is carrying in the field. `archived` is held at
@@ -81,6 +81,16 @@ const MEDIA: Resource[] = [
     src: '/tomb-1.mp4',
     detail: 'Project Deep Bedrock · recovered reel',
     note: 'Subterranean site footage, irrelevant to urban tracking. Held at the Black Archive until the dig begins.',
+  },
+  {
+    id: 'doc-fed-raid-recording',
+    name: 'Federal Raid Report — Innsmouth',
+    section: 'Documents',
+    kind: 'audio',
+    status: 'active',
+    src: '/fed-detective-1.mp3',
+    detail: 'Federal investigator · field recording',
+    note: 'Dictated report on the task-force raid on Dagon Hall and the evacuation of Innsmouth.',
   },
   {
     id: 'art-cthulhu-relief',
