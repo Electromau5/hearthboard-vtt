@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { Examinable, GazeHazard, WalkthroughLevel } from '@/lib/walkthrough';
+import type { Examinable, GazeHazard, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 
 interface Props {
   /** Which place to explore — HOUSE_LEVEL, VESSEL_LEVEL, … */
@@ -41,6 +41,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   const [reading, setReading] = useState<Target | null>(null);
   const [shared, setShared] = useState<Set<string>>(() => new Set());
   const [torchOn, setTorchOn] = useState(true);
+  const [radiosOn, setRadiosOn] = useState<Set<string>>(() => new Set());
   // Checked up front: a browser with WebGL disabled (hardware acceleration off,
   // or the GPU process given up after crashes) makes WebGLRenderer throw.
   const [webgl] = useState(() => WebGL.isWebGL2Available());
@@ -51,6 +52,8 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   const torchRef = useRef(true);
   const unlockedAtRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Set by the scene once the level loads; switches a radio on or off.
+  const toggleRadioRef = useRef<((id: string) => void) | null>(null);
 
   useEffect(() => { readingRef.current = reading; }, [reading]);
   useEffect(() => { torchRef.current = torchOn; }, [torchOn]);
@@ -82,14 +85,16 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
         return;
       }
       if (e.code === 'KeyE') {
+        const target = focusRef.current;
         if (readingRef.current) closeReading();
-        else if (focusRef.current) openReading(focusRef.current);
+        else if (target && level.radios?.[target.id]) { if (!e.repeat) toggleRadioRef.current?.(target.id); }
+        else if (target) openReading(target);
       }
       if (e.code === 'KeyF') setTorchOn(v => !v);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openReading, closeReading]);
+  }, [onClose, openReading, closeReading, level]);
 
   useEffect(() => {
     const el = mountRef.current;
@@ -153,6 +158,8 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
     const targets: Target[] = [];
     const hazards: { hazard: GazeHazard; box: THREE.Box3; center: THREE.Vector3; radius: number }[] = [];
     const fires: THREE.PointLight[] = [];
+    const radios = new Map<string, { set: RadioSet; el: HTMLAudioElement; glow: THREE.PointLight; center: THREE.Vector3; sound: THREE.PositionalAudio | null }>();
+    let listener: THREE.AudioListener | null = null;
     let model: THREE.Object3D | null = null;
     let disposed = false;
     let animId = 0;
@@ -263,11 +270,65 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
           fires.push(fire);
         }
 
+        for (const tg of targets) {
+          const set = level.radios?.[tg.id];
+          if (!set) continue;
+          const el = new Audio(set.src);
+          el.loop = true;
+          el.preload = 'none';
+          const center = tg.box.getCenter(new THREE.Vector3());
+          // The dial's warm glow while the set is on.
+          const glow = new THREE.PointLight(0xffb060, 0, 1.4, 2);
+          glow.position.set(center.x, tg.box.max.y, center.z);
+          scene.add(glow);
+          radios.set(tg.id, { set, el, glow, center, sound: null });
+        }
+
         setLoaded(true);
       },
       (ev) => { if (ev.lengthComputable) setProgress(ev.loaded / ev.total); },
       (err) => { console.error('Walkthrough GLB load error:', level.model, err); if (!disposed) setLoadError(true); },
     );
+
+    // Audio is wired up on the first switch-on: browsers only let an
+    // AudioContext start from a user gesture, and that key press is one.
+    toggleRadioRef.current = (id) => {
+      const r = radios.get(id);
+      if (!r) return;
+      if (!listener) {
+        listener = new THREE.AudioListener();
+        camera.add(listener);
+      }
+      if (!r.sound) {
+        const sound = new THREE.PositionalAudio(listener);
+        sound.setMediaElementSource(r.el);
+        sound.setRefDistance(r.set.refDistance);
+        sound.setRolloffFactor(1.4);
+        sound.setVolume(r.set.volume);
+        // Cut the lows and highs: a 1930s cabinet speaker, not a gramophone.
+        const ctx = listener.context;
+        const low = ctx.createBiquadFilter();
+        low.type = 'highpass';
+        low.frequency.value = 250;
+        const high = ctx.createBiquadFilter();
+        high.type = 'lowpass';
+        high.frequency.value = 3800;
+        sound.setFilters([low, high]);
+        sound.position.copy(r.center);
+        scene.add(sound);
+        r.sound = sound;
+      }
+      void listener.context.resume();
+      const on = r.el.paused;
+      if (on) r.el.play().catch(() => {});
+      else r.el.pause();
+      r.glow.intensity = on ? 0.6 : 0;
+      setRadiosOn(prev => {
+        const next = new Set(prev);
+        if (on) next.add(id); else next.delete(id);
+        return next;
+      });
+    };
 
     // ── Input ───────────────────────────────────────────────────────
     const onKeyDown = (e: KeyboardEvent) => {
@@ -349,6 +410,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       } else {
         torch.intensity = 0;
       }
+      for (const r of radios.values()) if (!r.el.paused) r.glow.intensity = 0.55 + Math.random() * 0.1;
       for (const fire of fires) fire.intensity = 5 + Math.sin(t * 9) * 0.8 + Math.sin(t * 23) * 0.5 + Math.random() * 0.6;
 
       // What is the investigator looking at?
@@ -426,6 +488,13 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       canvas.removeEventListener('click', onCanvasClick);
       canvas.style.filter = '';
       window.removeEventListener('resize', onResize);
+      toggleRadioRef.current = null;
+      for (const r of radios.values()) {
+        r.el.pause();
+        r.el.removeAttribute('src');
+        r.sound?.disconnect();
+      }
+      setRadiosOn(new Set());
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       model?.traverse((o) => {
         const mesh = o as THREE.Mesh;
@@ -447,7 +516,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? 'WASD move · Shift run · Mouse look · E / click examine · F torch · Esc release'
+      ? 'WASD move · Shift run · Mouse look · E / click examine · E use radio · F torch · Esc release'
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -524,7 +593,14 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
               fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.5px',
               color: 'var(--parchment)', textShadow: '0 1px 4px #000',
             }}>
-              <span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}
+              {level.radios?.[focus.id] ? (
+                <>
+                  <span style={{ color: 'var(--brass)' }}>[E]</span> Turn {radiosOn.has(focus.id) ? 'off' : 'on'} {focus.entry.title}
+                  <span style={{ color: 'var(--ink-text-2)' }}> · click to examine</span>
+                </>
+              ) : (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}</>
+              )}
             </div>
           )}
 

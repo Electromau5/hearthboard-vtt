@@ -12,7 +12,7 @@
  * replace with the campaign's actual clues.
  */
 
-import type { Examinable, GazeHazard, WalkthroughLevel } from './walkthrough';
+import type { Examinable, GazeHazard, RadioSet, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   console_table: {
@@ -78,6 +78,11 @@ const GAZE_HAZARDS: Record<string, GazeHazard> = {
   dagon_idol: { angleDeg: 3, range: 5, maxBlurPx: 8, onsetSec: 2.5, recoverSec: 0.8 },
 };
 
+/** The parlor radio still works — it plays the campaign's second theme. */
+const RADIOS: Record<string, RadioSet> = {
+  radio: { src: '/soundtrack-2.mp3', volume: 0.8, refDistance: 1.5 },
+};
+
 export const HOUSE_LEVEL: WalkthroughLevel = {
   model: '/innsmouth-house.glb',
   title: 'The Derelict House · Innsmouth',
@@ -87,6 +92,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   leaveLabel: 'Leave the house',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
+  radios: RADIOS,
   atmosphere: {
     background: 0x020202,
     fogColor: 0x030303,

@@ -34,6 +34,21 @@ export type GazeHazard = {
   recoverSec: number;
 };
 
+/**
+ * An examinable that plays music: E switches it on and off (clicking still
+ * examines it). The sound comes from the object, fading with distance, and is
+ * band-limited so it sounds like it is coming out of an old speaker. Keyed
+ * like `examinables`.
+ */
+export type RadioSet = {
+  /** Audio file under public/, looped while the set is on. */
+  src: string;
+  /** 0..1 at the reference distance. */
+  volume: number;
+  /** Metres at which the sound is at full volume; it falls off beyond. */
+  refDistance: number;
+};
+
 type Vec3 = [number, number, number];
 
 export type WalkthroughLevel = {
@@ -49,6 +64,7 @@ export type WalkthroughLevel = {
   leaveLabel: string;
   examinables: Record<string, Examinable>;
   gazeHazards?: Record<string, GazeHazard>;
+  radios?: Record<string, RadioSet>;
   atmosphere: {
     background: number;
     fogColor: number;
