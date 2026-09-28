@@ -8,7 +8,7 @@
  * is physical description only — the GM's to replace with the campaign's clues.
  */
 
-import type { Examinable, GazeHazard, WalkthroughLevel } from './walkthrough';
+import type { Examinable, GazeHazard, RadioSet, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   // Deck
@@ -96,6 +96,11 @@ const GAZE_HAZARDS: Record<string, GazeHazard> = {
   sigil: { angleDeg: 3, range: 4, maxBlurPx: 7, onsetSec: 3, recoverSec: 1 },
 };
 
+/** The wheelhouse wireless still picks up a news bulletin. */
+const RADIOS: Record<string, RadioSet> = {
+  wireless: { src: '/newsguy-1.mp3', volume: 0.9, refDistance: 1.5, loop: false },
+};
+
 export const VESSEL_LEVEL: WalkthroughLevel = {
   model: '/fishing-vessel.glb',
   title: 'The Esther Gilman · Innsmouth Reef',
@@ -105,6 +110,7 @@ export const VESSEL_LEVEL: WalkthroughLevel = {
   leaveLabel: 'Leave the vessel',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
+  radios: RADIOS,
   atmosphere: {
     background: 0x070b10,
     fogColor: 0x070b10,

@@ -43,8 +43,11 @@ export type GazeHazard = {
  * like `examinables`.
  */
 export type RadioSet = {
-  /** Audio file under public/, looped while the set is on. */
+  /** Audio file under public/, looped while the set is on unless `loop` is false. */
   src: string;
+  /** false for a one-off broadcast: it plays from the start each time the set
+   *  is switched on, and the set switches itself off when it ends. Default true. */
+  loop?: boolean;
   /** 0..1 at the reference distance. */
   volume: number;
   /** Metres at which the sound is at full volume; it falls off beyond. */

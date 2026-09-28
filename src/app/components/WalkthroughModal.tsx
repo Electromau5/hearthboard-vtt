@@ -295,13 +295,22 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
           const set = level.radios?.[tg.id];
           if (!set) continue;
           const el = new Audio(set.src);
-          el.loop = true;
+          el.loop = set.loop ?? true;
           el.preload = 'none';
           const center = tg.box.getCenter(new THREE.Vector3());
           // The dial's warm glow while the set is on.
           const glow = new THREE.PointLight(0xffb060, 0, 1.4, 2);
           glow.position.set(center.x, tg.box.max.y, center.z);
           scene.add(glow);
+          // A one-off broadcast switches the set off when it finishes.
+          el.addEventListener('ended', () => {
+            glow.intensity = 0;
+            setRadiosOn(prev => {
+              const next = new Set(prev);
+              next.delete(tg.id);
+              return next;
+            });
+          });
           radios.set(tg.id, { set, el, glow, center, sound: null });
         }
 
@@ -341,6 +350,8 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       }
       void listener.context.resume();
       const on = r.el.paused;
+      // A broadcast starts over each time, so nobody hears it from the middle.
+      if (on && !r.el.loop) r.el.currentTime = 0;
       if (on) r.el.play().catch(() => {});
       else r.el.pause();
       r.glow.intensity = on ? 0.6 : 0;
