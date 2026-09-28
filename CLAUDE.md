@@ -47,6 +47,7 @@ src/
       NavigationLoader.tsx        # Shows the overlay for one GIF cycle on route change
       InnsmouthTown3D.tsx         # 3D Innsmouth map (three.js) — the board's 2D/3D toggle on the Innsmouth map
       WalkthroughModal.tsx        # First-person walkthrough of a Summer-built level (house, fishing vessel)
+      deep-one.ts                 # Procedural Deep One head — peers through the house's back-door peephole
     characters/
       page.tsx                    # Investigator dossier grid — all 7 characters
       [slug]/page.tsx             # Individual character sheet page

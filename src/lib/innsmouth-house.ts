@@ -12,7 +12,7 @@
  * replace with the campaign's actual clues.
  */
 
-import type { Examinable, GazeHazard, RadioSet, WalkthroughLevel } from './walkthrough';
+import type { Examinable, GazeHazard, Peeper, RadioSet, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   console_table: {
@@ -83,6 +83,9 @@ const RADIOS: Record<string, RadioSet> = {
   radio: { src: '/soundtrack-2.mp3', volume: 0.8, refDistance: 1.5 },
 };
 
+/** A Deep One at the hole in the boarded back door, at the end of the hall. */
+const PEEPER: Peeper = { gapSec: [3, 7], holdSec: [1.2, 2.4], shyWithin: 0.8 };
+
 export const HOUSE_LEVEL: WalkthroughLevel = {
   model: '/innsmouth-house.glb',
   title: 'The Derelict House · Innsmouth',
@@ -93,6 +96,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
+  peeper: PEEPER,
   atmosphere: {
     background: 0x020202,
     fogColor: 0x030303,

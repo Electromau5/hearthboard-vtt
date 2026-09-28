@@ -8,6 +8,8 @@
  *   * each child of "Furniture" is an obstacle; one named "Examine_<id>" is
  *     examinable, its text looked up in `examinables[id]`
  *   * "PlayerStart" marks where the investigator enters, facing its -Z
+ *   * "Peephole" (optional) marks a hole something can look through, facing
+ *     its -Z into the level — see `peeper`
  * Anything else in the model renders but never collides.
  */
 
@@ -49,6 +51,20 @@ export type RadioSet = {
   refDistance: number;
 };
 
+/**
+ * Something outside that keeps looking in through the model's "Peephole": it
+ * slides into view behind the hole, its eye following the investigator, then
+ * withdraws, and comes back a few seconds later.
+ */
+export type Peeper = {
+  /** Seconds between looks, [min, max]. */
+  gapSec: [number, number];
+  /** Seconds each look lasts once it is in place, [min, max]. */
+  holdSec: [number, number];
+  /** It stays away while the investigator is closer to the hole than this, in metres. */
+  shyWithin: number;
+};
+
 type Vec3 = [number, number, number];
 
 export type WalkthroughLevel = {
@@ -65,6 +81,7 @@ export type WalkthroughLevel = {
   examinables: Record<string, Examinable>;
   gazeHazards?: Record<string, GazeHazard>;
   radios?: Record<string, RadioSet>;
+  peeper?: Peeper;
   atmosphere: {
     background: number;
     fogColor: number;

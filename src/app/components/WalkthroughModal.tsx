@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
 import type { Examinable, GazeHazard, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import { createDeepOneHead } from './deep-one';
 
 interface Props {
   /** Which place to explore — HOUSE_LEVEL, VESSEL_LEVEL, … */
@@ -160,6 +161,10 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
     const fires: THREE.PointLight[] = [];
     const radios = new Map<string, { set: RadioSet; el: HTMLAudioElement; glow: THREE.PointLight; center: THREE.Vector3; sound: THREE.PositionalAudio | null }>();
     let listener: THREE.AudioListener | null = null;
+    // The watcher at the peephole: where its eye rests behind the hole, and the
+    // state of its current look.
+    let peeper: { head: ReturnType<typeof createDeepOneHead>; rest: THREE.Vector3; side: THREE.Vector3; hole: THREE.Vector3 } | null = null;
+    const peek = { phase: 'away' as 'away' | 'in' | 'hold' | 'out', t: 0, next: 0, hold: 0, from: 1 };
     let model: THREE.Object3D | null = null;
     let disposed = false;
     let animId = 0;
@@ -268,6 +273,22 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
           fire.position.set(...f.at(anchor.box));
           scene.add(fire);
           fires.push(fire);
+        }
+
+        const hole = level.peeper ? model.getObjectByName('Peephole') : undefined;
+        if (hole) {
+          const head = createDeepOneHead();
+          const holePos = hole.getWorldPosition(new THREE.Vector3());
+          const inward = new THREE.Vector3(0, 0, -1).applyQuaternion(hole.getWorldQuaternion(new THREE.Quaternion()));
+          // The eye rests just behind the door's outer face, looking in; the
+          // head trails off outside, where the door hides it.
+          head.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), inward);
+          const rest = holePos.clone().addScaledVector(inward, -0.065);
+          const side = new THREE.Vector3(1, 0, 0).applyQuaternion(head.group.quaternion);
+          head.group.visible = false;
+          scene.add(head.group);
+          peeper = { head, rest, side, hole: holePos };
+          peek.next = 2 + Math.random() * 2;
         }
 
         for (const tg of targets) {
@@ -410,6 +431,38 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       } else {
         torch.intensity = 0;
       }
+      // The Deep One: slide in behind the hole from one side, stare, withdraw.
+      if (peeper && level.peeper) {
+        const cfg = level.peeper;
+        const shy = camera.position.distanceTo(peeper.hole) < cfg.shyWithin;
+        const rand = ([lo, hi]: [number, number]) => lo + Math.random() * (hi - lo);
+        peek.t += dt;
+        if (peek.phase === 'away') {
+          if (peek.t >= peek.next && !shy) {
+            Object.assign(peek, { phase: 'in', t: 0, hold: rand(cfg.holdSec), from: Math.random() < 0.5 ? -1 : 1 });
+          }
+        } else if (peek.phase === 'in' && peek.t >= 0.7) {
+          Object.assign(peek, { phase: 'hold', t: 0 });
+        } else if (peek.phase === 'hold' && (peek.t >= peek.hold || shy)) {
+          Object.assign(peek, { phase: 'out', t: 0 });
+        } else if (peek.phase === 'out' && peek.t >= 0.22) {
+          Object.assign(peek, { phase: 'away', t: 0, next: rand(cfg.gapSec) });
+        }
+        // 0 = eye on the hole, 1 = hidden behind the door beside it.
+        const off = peek.phase === 'in' ? 1 - THREE.MathUtils.smoothstep(peek.t, 0, 0.7)
+          : peek.phase === 'hold' ? 0
+          : peek.phase === 'out' ? peek.t / 0.22
+          : 1;
+        const { group, eye } = peeper.head;
+        group.visible = off < 1;
+        if (group.visible) {
+          group.position.copy(peeper.rest)
+            .addScaledVector(peeper.side, peek.from * off * 0.26)
+            .add(tmpV.set(0, Math.sin(t * 1.7) * 0.004, 0));   // breathing
+          eye.lookAt(camera.position);
+        }
+      }
+
       for (const r of radios.values()) if (!r.el.paused) r.glow.intensity = 0.55 + Math.random() * 0.1;
       for (const fire of fires) fire.intensity = 5 + Math.sin(t * 9) * 0.8 + Math.sin(t * 23) * 0.5 + Math.random() * 0.6;
 
@@ -489,6 +542,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       canvas.style.filter = '';
       window.removeEventListener('resize', onResize);
       toggleRadioRef.current = null;
+      peeper?.head.dispose();
       for (const r of radios.values()) {
         r.el.pause();
         r.el.removeAttribute('src');
