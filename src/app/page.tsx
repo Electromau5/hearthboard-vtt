@@ -19,6 +19,11 @@ import { InvestigationBoard } from './components/InvestigationBoard';
 // ── Constants ────────────────────────────────────────────────────────
 const TOKEN_COLORS = ['#c9944f', '#4f9b92', '#b1483f', '#8a72c9', '#5f8fc9', '#c9b04f'];
 const QUICK_DICE = [4, 6, 8, 10, 12, 20, 100];
+// Background music for the admin player — the first entry plays by default
+const MUSIC_TRACKS = [
+  { src: '/soundtrack-1.mp3', title: 'Main Theme' },
+  { src: '/soundtrack-2.mp3', title: 'Second Theme' },
+];
 
 const ECHOES_OF_DARKNESS = {
   id: 'echoes',
@@ -451,6 +456,7 @@ export default function HearthboardPage() {
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.4);
+  const [musicTrackIdx, setMusicTrackIdx] = useState(0);
   const [briefingBgActive, setBriefingBgActive] = useState(false);
   const [briefingBgVolume, setBriefingBgVolume] = useState(0.75);
   const [activeBriefing, setActiveBriefing] = useState<Briefing | null>(null);
@@ -598,7 +604,7 @@ export default function HearthboardPage() {
     } else {
       audio.pause();
     }
-  }, [musicPlaying, musicVolume, briefingBgActive]);
+  }, [musicPlaying, musicVolume, briefingBgActive, musicTrackIdx]);
 
   // Play briefing background song (e.g. Speakeasy) when a briefing with bgSong opens
   useEffect(() => {
@@ -2528,7 +2534,7 @@ export default function HearthboardPage() {
       {/* Music Player — Admin only */}
       {isAdmin && (
         <>
-          <audio ref={audioRef} src="/soundtrack-1.mp3" loop preload="metadata" />
+          <audio ref={audioRef} src={MUSIC_TRACKS[musicTrackIdx].src} loop preload="metadata" />
           <div style={{
             ...musicBarStyle,
             ...(musicPos ? { top: musicPos.y, left: musicPos.x, bottom: 'auto', right: 'auto' } : {}),
@@ -2547,8 +2553,21 @@ export default function HearthboardPage() {
               <span style={musicNote}>{musicPlaying ? '♫' : '♩'}</span>
               <div>
                 <div style={musicTitle}>Echoes of Darkness</div>
-                <div style={musicSub}>Campaign Soundtrack</div>
+                <div style={musicSub}>{MUSIC_TRACKS[musicTrackIdx].title}</div>
               </div>
+            </div>
+            <div style={trackRow}>
+              {MUSIC_TRACKS.map((track, i) => (
+                <button
+                  key={track.src}
+                  className="btn btn-sm"
+                  style={i === musicTrackIdx ? trackBtnActive : trackBtn}
+                  onClick={() => setMusicTrackIdx(i)}
+                  title={`Switch to ${track.title}`}
+                >
+                  {i + 1}
+                </button>
+              ))}
             </div>
             <button
               className="btn btn-sm"
@@ -2849,6 +2868,16 @@ const musicTitle: React.CSSProperties = {
 };
 const musicSub: React.CSSProperties = {
   fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brass)', letterSpacing: '0.8px', marginTop: 2,
+};
+const trackRow: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 4,
+};
+const trackBtn: React.CSSProperties = {
+  background: 'var(--surface-2)', borderColor: 'var(--line)', color: 'var(--ink-text-2)',
+  fontFamily: 'var(--font-mono)', fontSize: 11, minWidth: 28, padding: '2px 8px',
+};
+const trackBtnActive: React.CSSProperties = {
+  ...trackBtn, background: 'rgba(201,148,79,0.15)', borderColor: 'var(--brass-dim)', color: 'var(--brass)',
 };
 const playBtn: React.CSSProperties = {
   background: 'var(--surface-2)', borderColor: 'var(--line)', color: 'var(--parchment)',
