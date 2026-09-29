@@ -467,6 +467,8 @@ export default function HearthboardPage() {
   const [characters, setCharacters] = useState(DEFAULT_CHARACTERS);
   const [screenEffect, setScreenEffect] = useState<{ id: string; label: string; duration: number; triggeredAt: number; data?: Record<string, unknown> } | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  // Images the lightbox can step through with ←/→. Empty for a lone image.
+  const [lightboxGallery, setLightboxGallery] = useState<string[]>([]);
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
   const [walkthrough, setWalkthrough] = useState<WalkthroughLevel | null>(null);
@@ -649,6 +651,29 @@ export default function HearthboardPage() {
     const iv = setInterval(load, 5000);
     return () => clearInterval(iv);
   }, []);
+
+  const closeLightbox = () => { setLightboxSrc(null); setLightboxGallery([]); };
+
+  const stepLightbox = (dir: 1 | -1) => {
+    setLightboxSrc(cur => {
+      const i = cur ? lightboxGallery.indexOf(cur) : -1;
+      if (i < 0 || lightboxGallery.length < 2) return cur;
+      return lightboxGallery[(i + dir + lightboxGallery.length) % lightboxGallery.length];
+    });
+  };
+
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setLightboxSrc(null); setLightboxGallery([]); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); stepLightbox(1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); stepLightbox(-1); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // stepLightbox only reads lightboxGallery, which is listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxSrc, lightboxGallery]);
 
   useEffect(() => {
     if (reliefModalOpen) {
@@ -2596,9 +2621,18 @@ export default function HearthboardPage() {
       )}
 
       {/* Lightbox */}
-      {lightboxSrc && (
+      {lightboxSrc && (() => {
+        const idx = lightboxGallery.indexOf(lightboxSrc);
+        const canStep = idx >= 0 && lightboxGallery.length > 1;
+        const arrow = (side: 'left' | 'right'): React.CSSProperties => ({
+          position: 'absolute', top: '50%', [side]: 20, transform: 'translateY(-50%)',
+          width: 44, height: 44, borderRadius: '50%',
+          background: 'rgba(0,0,0,0.5)', border: '1px solid var(--line)',
+          color: 'var(--parchment)', fontSize: 22, lineHeight: 1, cursor: 'pointer',
+        });
+        return (
         <div
-          onClick={() => setLightboxSrc(null)}
+          onClick={closeLightbox}
           style={{
             position: 'fixed', inset: 0, zIndex: 200,
             background: 'rgba(0,0,0,0.88)',
@@ -2620,8 +2654,28 @@ export default function HearthboardPage() {
               objectFit: 'contain',
             }}
           />
+          {canStep && (
+            <>
+              <button
+                aria-label="Previous image"
+                onClick={e => { e.stopPropagation(); stepLightbox(-1); }}
+                style={arrow('left')}
+              >‹</button>
+              <button
+                aria-label="Next image"
+                onClick={e => { e.stopPropagation(); stepLightbox(1); }}
+                style={arrow('right')}
+              >›</button>
+              <div style={{
+                position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)',
+                fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-text-2)',
+              }}>
+                {idx + 1} / {lightboxGallery.length}
+              </div>
+            </>
+          )}
           <button
-            onClick={() => setLightboxSrc(null)}
+            onClick={closeLightbox}
             style={{
               position: 'absolute', top: 20, right: 24,
               background: 'none', border: 'none',
@@ -2630,23 +2684,26 @@ export default function HearthboardPage() {
             }}
           >✕</button>
         </div>
-      )}
+        );
+      })()}
 
       {/* Party resource index — documents, artifacts and carried equipment */}
       {allResourcesOpen && (
         <AllResourcesModal
           resources={allResources()}
-          onOpenImage={src => { setAllResourcesOpen(false); setLightboxSrc(src); }}
-          onOpenVideo={src => { setAllResourcesOpen(false); setVideoModalSrc(src); }}
+          // Viewers open on top of the index rather than replacing it: the
+          // modal stays mounted (keeping its tab and search) and reappears as
+          // soon as the viewer closes.
+          hidden={!!(lightboxSrc || videoModalSrc || reliefModalOpen || activeBriefing)}
+          onOpenImage={(src, gallery) => { setLightboxGallery(gallery); setLightboxSrc(src); }}
+          onOpenVideo={src => setVideoModalSrc(src)}
           onOpenAudio={src => {
             // Recordings play through the briefing overlay, which already
             // pairs an audio track with its transcript.
             const b = BRIEFINGS.find(x => x.sections.some(sec => sec.audio === src));
-            if (!b) return;
-            setAllResourcesOpen(false);
-            openBriefing(b);
+            if (b) openBriefing(b);
           }}
-          onOpenModel={() => { setAllResourcesOpen(false); setReliefModalOpen(true); }}
+          onOpenModel={() => setReliefModalOpen(true)}
           onClose={() => setAllResourcesOpen(false)}
         />
       )}

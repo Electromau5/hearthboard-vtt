@@ -38,6 +38,27 @@ export type Resource = {
   detail?: string;
   /** Why it is where it is — the GM's standing note on this item. */
   note?: string;
+  /** Sub-section within its tab; see RESOURCE_GROUPS for the order. */
+  group?: string;
+  /**
+   * For a multi-image entry (a portrait series, a paged report): every image
+   * in reading order. Opening the entry starts the lightbox on the first.
+   */
+  pages?: string[];
+};
+
+/**
+ * Sub-sections per tab, in display order. Groups name where material came
+ * from or what it is, never what it means — "Federal Files", not "Order
+ * Members" — so the index cannot spoil a connection the players should make.
+ * An active item with no group lists under "Other" at the end of its tab.
+ */
+export const RESOURCE_GROUPS: Record<ResourceSection, string[]> = {
+  'Documents': ['Historical Records', 'Federal Files', 'Photographs', 'On Your Person'],
+  'Patient Files': ['Ward Records', 'Admission Cards', 'Bestiary'],
+  'Artifacts': [],
+  'Weapons & Hardware': ['Firearms & Blades', 'Tools & Entry', 'Clothing'],
+  'Medical': [],
 };
 
 /** GM-held material: the documents, footage and artifacts in `public/`. */
@@ -45,7 +66,8 @@ const MEDIA: Resource[] = [
   {
     id: 'doc-journal',
     name: 'Patient Journal',
-    section: 'Documents',
+    section: 'Patient Files',
+    group: 'Ward Records',
     kind: 'image',
     status: 'active',
     src: '/journal-1.jpeg',
@@ -55,7 +77,8 @@ const MEDIA: Resource[] = [
   {
     id: 'doc-inmate-log',
     name: 'Inmate Census & Observation List',
-    section: 'Documents',
+    section: 'Patient Files',
+    group: 'Ward Records',
     kind: 'image',
     status: 'active',
     src: '/inmate-log.jpeg',
@@ -66,6 +89,7 @@ const MEDIA: Resource[] = [
     id: 'doc-marsh-dynasty',
     name: 'The Marsh Dynasty of Innsmouth',
     section: 'Documents',
+    group: 'Historical Records',
     kind: 'image',
     status: 'active',
     src: '/marsh-family-tree.jpeg',
@@ -73,24 +97,43 @@ const MEDIA: Resource[] = [
     note: "Obed Marsh (1783–1878) down to the final documented descendant — an urban runaway in hiding with the 1st Artifact, holding the 'Acoustic Keystave' needed for Phase I triangulation. One entry is redacted.",
   },
   {
-    id: 'doc-tomb-footage',
-    name: 'Tomb Excavation Footage',
+    id: 'doc-innsmouth-post-1838',
+    name: 'The Innsmouth Post — Capt. Obed Marsh Returned',
     section: 'Documents',
-    kind: 'video',
-    status: 'archived',
-    src: '/tomb-1.mp4',
-    detail: 'Project Deep Bedrock · recovered reel',
-    note: 'Subterranean site footage, irrelevant to urban tracking. Held at the Black Archive until the dig begins.',
+    group: 'Historical Records',
+    kind: 'image',
+    status: 'active',
+    src: '/innsmouth-post-1838.jpeg',
+    detail: 'The Innsmouth Post · Friday, June 22, 1838',
+    note: 'Marsh returns from the Carolines with islanders "much given to the water" and talk of gold-like ornaments; announces Marsh & Co. and a new seamen\'s society.',
   },
   {
-    id: 'doc-fed-raid-recording',
-    name: 'Federal Raid Report — Innsmouth',
+    // The 24 names are the Bellevue admission cards' (PATIENT_FILES). The note
+    // deliberately does not say so — that is the players' connection to make.
+    id: 'doc-seized-order-ledger',
+    name: 'Seized Order Ledger — Oath Roll',
     section: 'Documents',
-    kind: 'audio',
+    group: 'Federal Files',
+    kind: 'image',
     status: 'active',
-    src: '/fed-detective-1.mp3',
-    detail: 'Federal investigator · field recording',
-    note: 'Dictated report on the task-force raid on Dagon Hall and the evacuation of Innsmouth.',
+    src: '/seized-order-ledger.webp',
+    detail: 'Esoteric Order of Dagon · Seized, U.S. Treasury Dept., Feb. 1926',
+    note: 'Twenty-four sworn names, most struck through. Beneath them: "the sea keeps what is crossed —"',
+  },
+  // One family, one studio sitting a year. The father turns further from the
+  // lens each year and the plate decays around him. The note describes only
+  // what is visible; the family is unnamed in the source material.
+  {
+    id: 'doc-family-portraits',
+    name: 'Family Portraits, 1911–1914',
+    section: 'Documents',
+    group: 'Photographs',
+    kind: 'image',
+    status: 'active',
+    src: '/family-portraits/1911.webp',
+    pages: [1911, 1912, 1913, 1914].map(y => `/family-portraits/${y}.webp`),
+    detail: '4 studio portraits · one sitting a year',
+    note: 'A father, mother, son and daughter, photographed yearly. Each year the father turns further from the lens, and the plate decays around him.',
   },
   {
     id: 'art-cthulhu-relief',
@@ -109,7 +152,7 @@ const MEDIA: Resource[] = [
  * Names and admission numbers are as typed on the cards — several share a
  * number (32-094, 32-111), which is the cards' own, not a transcription slip.
  */
-const PATIENT_FILES: Resource[] = [
+const ADMISSION_CARDS: Resource[] = [
   { id: 'pf-robert-coltrane', name: 'Robert Coltrane', section: 'Patient Files', kind: 'image', status: 'active',
     src: '/patient-files/01-robert-coltrane.webp', detail: 'Ad. No. 32-094 · Dr. H. Wexler',
     note: 'Acute paranoia; mutters to himself. Believes he is watched through the walls; refuses food and medication.' },
@@ -184,6 +227,13 @@ const PATIENT_FILES: Resource[] = [
     note: 'Believes he is watched through the walls and that staff are conspiring.' },
 ];
 
+const surname = (name: string) => name.trim().split(/\s+/).pop()!.toLowerCase();
+
+/** Admission cards, filed A–Z by surname so a name can be found by eye. */
+const PATIENT_FILES: Resource[] = ADMISSION_CARDS
+  .map(r => ({ ...r, group: 'Admission Cards' }))
+  .sort((x, y) => surname(x.name).localeCompare(surname(y.name)) || x.name.localeCompare(y.name));
+
 /**
  * Per-item placement: which section it files under, whether the party carries
  * it or it sits at base, and the standing note explaining why.
@@ -198,6 +248,7 @@ const PATIENT_FILES: Resource[] = [
  */
 type Placement = {
   section: ResourceSection;
+  group?: string;
   status: ResourceStatus;
   note?: string;
   /** Reassigns the item, for kit handed to another investigator or the pool. */
@@ -214,23 +265,23 @@ const EQUIPMENT: Record<string, Placement> = {
     note: 'Bulky mortuary barrier. Black Archive dissection room until anomalous cadaver work begins.' },
   '3 glass jars of formaldehyde-saline concentrate': { section: 'Medical', status: 'archived',
     note: 'Fragile liquid containers — kept at the base laboratory to prevent breakage in transit.' },
-  'Mortuary bypass credentials': { section: 'Documents', status: 'active',
+  'Mortuary bypass credentials': { section: 'Documents', group: 'On Your Person', status: 'active',
     note: 'Safehouse sanitation, off-record transit, bypassing municipal medical oversight.' },
 
   // ── Thomas "Mack" Callahan (active) ──────────────────────────────
-  'Colt M1911 .45 ACP pistol (3 spare magazines)': { section: 'Weapons & Hardware', status: 'active',
+  'Colt M1911 .45 ACP pistol (3 spare magazines)': { section: 'Weapons & Hardware', group: 'Firearms & Blades', status: 'active',
     note: 'Primary firearm (80%) against underworld ambushes.' },
-  'Trench knife with brass knuckle grip': { section: 'Weapons & Hardware', status: 'active',
+  'Trench knife with brass knuckle grip': { section: 'Weapons & Hardware', group: 'Firearms & Blades', status: 'active',
     note: 'Concealed silent weapon (75%); enables his free reaction.' },
-  'Worn trench coat': { section: 'Weapons & Hardware', status: 'active',
+  'Worn trench coat': { section: 'Weapons & Hardware', group: 'Clothing', status: 'active',
     note: 'Conceals firearm and knife on public streets without raising alarm.' },
-  'PI badge': { section: 'Documents', status: 'active',
+  'PI badge': { section: 'Documents', group: 'On Your Person', status: 'active',
     note: 'Street-level identity tracing, questioning municipal staff, door-to-door canvassing under cover.' },
   'Scarred silver lighter with unknown initials': { section: 'Artifacts', status: 'active',
     note: 'Pocket tool — revealing invisible ink, lighting cigarettes for bribes. Ties to his amnesia thread.' },
 
   // ── Arthur Wright (active) ───────────────────────────────────────
-  'Solid brass drafting compass': { section: 'Weapons & Hardware', status: 'active',
+  'Solid brass drafting compass': { section: 'Weapons & Hardware', group: 'Tools & Entry', status: 'active',
     note: 'Pocket-portable — quick spatial measurements and structural checks.' },
   "Surveyor's theodolite": { section: 'Weapons & Hardware', status: 'archived',
     note: 'Heavy tripod survey device; unnecessary for tracking a person through urban alleys.' },
@@ -242,7 +293,7 @@ const EQUIPMENT: Record<string, Placement> = {
     note: 'Bulky drafting roll for cyclopean structures; archived until subterranean sites are breached.' },
 
   // ── Silas "The Great" Vance (off-roster) ─────────────────────────
-  'Concealed brass lockpick kit': { section: 'Weapons & Hardware', status: 'active',
+  'Concealed brass lockpick kit': { section: 'Weapons & Hardware', group: 'Tools & Entry', status: 'active',
     carriedBy: 'Party pool (Callahan)',
     note: 'Transferred — the active trio has no dedicated burglar. Compact enough for covert entry.' },
   '4 smoke/flash pellets': { section: 'Weapons & Hardware', status: 'archived',
@@ -308,6 +359,7 @@ function carriedResources(): Resource[] {
         id: `kit-${c.slug}-${slug(item)}`,
         name: item,
         section: place.section,
+        group: place.group,
         kind: 'item' as ResourceKind,
         status: place.status,
         carriedBy: place.carriedBy ?? c.name,

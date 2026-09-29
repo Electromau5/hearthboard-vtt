@@ -1291,7 +1291,11 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
 /* Resource rows are wider than skill rows — names run long and carry an owner. */
 /* Wider than the skills modal's default so a fourth column fits at the same
    ~380px column width — measured as the point where no resource name clips. */
-.res-modal { width: min(1560px, 96vw); }
+/* Fixed height, not content height: switching category tabs must not resize
+   the box, so a one-item page keeps the same frame as Patient Files. The
+   reserved gutter stops the grid shifting when a page starts to scroll. */
+.res-modal { width: min(1560px, 96vw); height: 93vh; }
+.res-modal .skills-body { scrollbar-gutter: stable; }
 .res-grid { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
 
 .res-row {
@@ -1327,7 +1331,26 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
 .res-row.archived { opacity: 0.72; border-left: 2px solid var(--brass-dim); }
 .res-row.archived:hover { opacity: 1; }
 
-.res-views { display: flex; gap: 6px; flex: 0 0 auto; }
+/* Top-level category nav. The Archive tab sits apart at the far end: it holds
+   every category's stored kit rather than being a category of its own. Scrolls
+   sideways inside itself on narrow screens rather than wrapping. */
+.res-nav {
+  flex: 0 0 auto; display: flex; gap: 2px;
+  padding: 0 22px; border-bottom: 1px solid var(--line);
+  overflow-x: auto; scrollbar-width: none;
+}
+.res-nav::-webkit-scrollbar { display: none; }
+.res-tab {
+  flex: 0 0 auto; font: inherit; font-family: var(--font-mono); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .7px; white-space: nowrap;
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--ink-text-2); padding: 10px 12px 9px; margin-bottom: -1px; cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.res-tab:hover { color: var(--parchment); }
+.res-tab.active { color: var(--brass); border-bottom-color: var(--brass); }
+.res-tab-count { opacity: 0.6; margin-left: 4px; }
+.res-tab-archive { margin-left: auto; }
 
 .res-kind {
   flex: 0 0 auto; font-family: var(--font-mono); font-size: 8.5px;
@@ -1342,4 +1365,5 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
 
 @media (max-width: 580px) {
   .res-grid { grid-template-columns: 1fr; }
+  .res-nav { padding: 0 14px; }
 }
