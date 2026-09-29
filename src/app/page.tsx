@@ -8,6 +8,8 @@ import { CthulhuReliefModal } from './components/CthulhuReliefModal';
 import { WalkthroughModal } from './components/WalkthroughModal';
 import { HOUSE_LEVEL } from '@/lib/innsmouth-house';
 import { VESSEL_LEVEL } from '@/lib/fishing-vessel';
+import { ARCHIVE_LEVEL } from '@/lib/black-archive';
+import { INNSMOUTH_SCENES } from '@/lib/innsmouth-scenes';
 import type { WalkthroughLevel } from '@/lib/walkthrough';
 import { InnsmouthTown3D } from './components/InnsmouthTown3D';
 import { AllSkillsModal } from './components/AllSkillsModal';
@@ -42,22 +44,11 @@ const SCENES = [
   { id: 's5', locationId: 'loc-docks',      name: 'Federal Quarantine Docks',             short: 'Fed. Docks', mapX: 70, mapY: 18 },
 ];
 
-/** Pins on the Innsmouth map — positions follow the red pins and arrows on /innsmouth-map.jpeg. */
-const INNSMOUTH_SCENES = [
-  { id: 'i1', locationId: 'loc-inn-refinery',    name: 'The Marsh Refinery',                  short: 'Marsh Refinery', mapX: 28, mapY: 13 },
-  { id: 'i2', locationId: 'loc-inn-cellars',     name: 'The Cellars',                         short: 'Cellars',        mapX: 48, mapY: 35 },
-  { id: 'i9', locationId: 'loc-inn-house',       name: 'The Derelict House',                  short: 'Derelict House', mapX: 47, mapY: 45 },
-  { id: 'i4', locationId: 'loc-inn-docks',       name: 'Federal Quarantine Docks',            short: 'Fed. Docks',     mapX: 70, mapY: 31 },
-  { id: 'i6', locationId: 'loc-inn-reef',        name: 'Decrepit Coastal Reef & Breakwater',  short: 'Reef',           mapX: 46, mapY: 83 },
-  { id: 'i10', locationId: 'loc-inn-vessel',     name: 'Fishing Vessel',                      short: 'Fishing Vessel', mapX: 50, mapY: 79 },
-  { id: 'i7', locationId: 'loc-inn-pylon',       name: 'Submerged Basalt Pylon / Tide-Gate',  short: 'Tide-Gate',      mapX: 72, mapY: 72 },
-  { id: 'i8', locationId: 'loc-inn-redacted',    name: 'Redacted Operational Area',           short: 'Redacted',       mapX: 29, mapY: 62 },
-];
-
 /** Locations whose info panel opens a first-person walkthrough, keyed by locationId. */
 const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; alt: string; cta: string; hint: string }> = {
   'loc-inn-house':  { level: HOUSE_LEVEL,  preview: '/innsmouth-house-preview.jpeg', alt: "The derelict house's front hall", cta: 'Enter the house',  hint: 'Click to go inside' },
   'loc-inn-vessel': { level: VESSEL_LEVEL, preview: '/fishing-vessel-preview.jpeg',  alt: "The wrecked trawler's deck",      cta: 'Board the vessel', hint: 'Click to climb aboard' },
+  'loc-blackarchive': { level: ARCHIVE_LEVEL, preview: '/black-archive-preview.jpeg', alt: "The Black Archive's warehouse floor", cta: 'Enter the archive', hint: 'Click to step inside' },
 };
 
 /**
