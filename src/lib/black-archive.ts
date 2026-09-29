@@ -93,8 +93,23 @@ function toDoc(r: Resource): ArchiveDoc {
   return doc;
 }
 
+/**
+ * A multi-image entry (a paged report, a portrait series) becomes one archive
+ * entry per image, so ↑/↓ reads through it rather than showing only page 1.
+ */
+function toDocs(r: Resource): ArchiveDoc[] {
+  if (!r.pages || r.pages.length < 2) return [toDoc(r)];
+  const base = toDoc(r);
+  return r.pages.map((src, i) => ({
+    ...base,
+    id: `${r.id}-${i + 1}`,
+    title: `${r.name} (${i + 1}/${r.pages!.length})`,
+    image: src,
+  }));
+}
+
 const section = (...sections: ResourceSection[]) => async () =>
-  allResources().filter(r => sections.includes(r.section)).map(toDoc);
+  allResources().filter(r => sections.includes(r.section)).flatMap(toDocs);
 
 type BoardItem = {
   id: string; type: 'note' | 'image'; x: number; y: number; rotation?: number;
