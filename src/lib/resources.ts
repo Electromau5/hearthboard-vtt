@@ -61,6 +61,36 @@ export const RESOURCE_GROUPS: Record<ResourceSection, string[]> = {
   'Medical': [],
 };
 
+const report = (slug: string, pageCount: number) =>
+  Array.from({ length: pageCount }, (_, i) => `/bestiary/${slug}-${i + 1}.jpeg`);
+
+/**
+ * Black Archive Xenobiology Memoranda Nos. 7–10, each a paged entry. Pages
+ * are rendered from the Drive PDFs (1200px JPEG). Classifications are as
+ * printed on each cover.
+ */
+const BESTIARY_REPORTS: Resource[] = ([
+  { id: 'best-deep-one', name: 'Deep One', slug: 'deep-one', pageCount: 5, memo: 7,
+    note: 'Homo abyssalis (provisional). Anatomy, biology & tactical vulnerabilities.' },
+  { id: 'best-elder-thing', name: 'Elder Thing', slug: 'elder-thing', pageCount: 4, memo: 8,
+    note: 'Archaeocyte antarctica (provisional). From Lake expedition salvage.' },
+  { id: 'best-shoggoth', name: 'Shoggoth', slug: 'shoggoth', pageCount: 5, memo: 9,
+    note: 'Proteus gigas (provisional). Filed cry, associated with all encounters: "Tekeli-li."' },
+  { id: 'best-shub-niggurath', name: 'Shub-Niggurath', slug: 'shub-niggurath', pageCount: 4, memo: 10,
+    note: 'The Black Goat of the Woods with a Thousand Young. Outer God — engagement not advised.' },
+] as const).map(({ id, name, slug, pageCount, memo, note }) => {
+  const pages = report(slug, pageCount);
+  return {
+    id, name, note, pages,
+    src: pages[0],
+    section: 'Patient Files' as ResourceSection,
+    group: 'Bestiary',
+    kind: 'image' as ResourceKind,
+    status: 'active' as ResourceStatus,
+    detail: `Xenobiology Memorandum No. ${memo} · ${pageCount} pages`,
+  };
+});
+
 /** GM-held material: the documents, footage and artifacts in `public/`. */
 const MEDIA: Resource[] = [
   {
@@ -135,6 +165,8 @@ const MEDIA: Resource[] = [
     detail: '4 studio portraits · one sitting a year',
     note: 'A father, mother, son and daughter, photographed yearly. Each year the father turns further from the lens, and the plate decays around him.',
   },
+  // Xenobiology reports, rendered page by page from the source PDFs.
+  ...BESTIARY_REPORTS,
   {
     id: 'art-cthulhu-relief',
     name: 'Cthulhu Bas Relief',
