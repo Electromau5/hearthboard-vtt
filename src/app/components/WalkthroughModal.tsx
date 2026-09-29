@@ -5,8 +5,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { Examinable, GazeHazard, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Collection, Examinable, GazeHazard, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { createDeepOneHead } from './deep-one';
+import { createPinboard } from './pinboard';
+import { createInteractMarkers } from './interact-markers';
+import { ArchiveBrowser } from './ArchiveBrowser';
 
 interface Props {
   /** Which place to explore — HOUSE_LEVEL, VESSEL_LEVEL, … */
@@ -24,7 +27,12 @@ const RUN = 3.0;
 const REACH = 2.3;         // how far away something can be examined from
 const LOOK = 0.0022;       // radians per pixel of mouse movement
 
-type Target = { id: string; entry: Examinable; box: THREE.Box3 };
+type Target = {
+  id: string; entry: Examinable; box: THREE.Box3; collection?: Collection;
+  /** A map pin: its head swells in focus, and it needs no floating marker — the pin is one. */
+  pinHead?: THREE.Object3D;
+};
+type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
 
 /**
  * First-person exploration of a Summer-built level: walk with WASD and mouse
@@ -40,8 +48,11 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   const [locked, setLocked] = useState(false);
   const [focus, setFocus] = useState<Target | null>(null);
   const [reading, setReading] = useState<Target | null>(null);
+  const [browsing, setBrowsing] = useState<Browsing | null>(null);
   const [shared, setShared] = useState<Set<string>>(() => new Set());
+  const [sharedDocs, setSharedDocs] = useState<Set<string>>(() => new Set());
   const [torchOn, setTorchOn] = useState(true);
+  const [markersOn, setMarkersOn] = useState(true);
   const [radiosOn, setRadiosOn] = useState<Set<string>>(() => new Set());
   // Checked up front: a browser with WebGL disabled (hardware acceleration off,
   // or the GPU process given up after crashes) makes WebGLRenderer throw.
@@ -49,15 +60,19 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
 
   // Refs the animation loop reads without re-registering.
   const readingRef = useRef<Target | null>(null);
+  const browsingRef = useRef<Browsing | null>(null);
   const focusRef = useRef<Target | null>(null);
   const torchRef = useRef(true);
+  const markersRef = useRef(true);
   const unlockedAtRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Set by the scene once the level loads; switches a radio on or off.
   const toggleRadioRef = useRef<((id: string) => void) | null>(null);
 
   useEffect(() => { readingRef.current = reading; }, [reading]);
+  useEffect(() => { browsingRef.current = browsing; }, [browsing]);
   useEffect(() => { torchRef.current = torchOn; }, [torchOn]);
+  useEffect(() => { markersRef.current = markersOn; }, [markersOn]);
 
   const openReading = useCallback((t: Target) => {
     setReading(t);
@@ -68,6 +83,30 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
     setReading(null);
     canvasRef.current?.requestPointerLock?.();
   }, []);
+
+  // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
+  // each time; anything else opens the reading card.
+  const openTarget = useCallback((t: Target) => {
+    if (!t.collection) { openReading(t); return; }
+    const opened: Browsing = { target: t, docs: null, error: false };
+    setBrowsing(opened);
+    document.exitPointerLock?.();
+    t.collection.load().then(
+      docs => setBrowsing(b => (b?.target === t ? { ...b, docs } : b)),
+      () => setBrowsing(b => (b?.target === t ? { ...b, error: true } : b)),
+    );
+  }, [openReading]);
+
+  const closeBrowsing = useCallback(() => {
+    setBrowsing(null);
+    canvasRef.current?.requestPointerLock?.();
+  }, []);
+
+  const shareDoc = useCallback((t: Target, doc: ArchiveDoc) => {
+    const detail = doc.text ? ` — ${doc.text}` : '';
+    onShare(`pulled "${doc.title}" from the ${t.entry.title.toLowerCase()}${detail}`);
+    setSharedDocs(prev => new Set(prev).add(`${t.id}/${doc.id}`));
+  }, [onShare]);
 
   const share = useCallback((t: Target) => {
     onShare(`examined the ${t.entry.title.toLowerCase()} — ${t.entry.text}`);
@@ -81,21 +120,29 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (readingRef.current) { setReading(null); return; }
+        if (browsingRef.current) { setBrowsing(null); return; }
         if (document.pointerLockElement || performance.now() - unlockedAtRef.current < 300) return;
         onClose();
         return;
       }
       if (e.code === 'KeyE') {
         const target = focusRef.current;
+        if (e.repeat) return;
         if (readingRef.current) closeReading();
-        else if (target && level.radios?.[target.id]) { if (!e.repeat) toggleRadioRef.current?.(target.id); }
-        else if (target) openReading(target);
+        else if (browsingRef.current) closeBrowsing();
+        else if (target && level.radios?.[target.id]) toggleRadioRef.current?.(target.id);
+        else if (target) openTarget(target);
       }
       if (e.code === 'KeyF') setTorchOn(v => !v);
+      // Tab shows or hides the markers over interactive objects (and must not move browser focus).
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        if (!e.repeat) setMarkersOn(v => !v);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openReading, closeReading, level]);
+  }, [onClose, openTarget, closeReading, closeBrowsing, level]);
 
   useEffect(() => {
     const el = mountRef.current;
@@ -165,6 +212,11 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
     // state of its current look.
     let peeper: { head: ReturnType<typeof createDeepOneHead>; rest: THREE.Vector3; side: THREE.Vector3; hole: THREE.Vector3 } | null = null;
     const peek = { phase: 'away' as 'away' | 'in' | 'hold' | 'out', t: 0, next: 0, hold: 0, from: 1 };
+    const lamps: { light: THREE.PointLight; base: number; dipUntil: number }[] = [];
+    let pinboard: ReturnType<typeof createPinboard> | null = null;
+    let markers: ReturnType<typeof createInteractMarkers> | null = null;
+    const owned: { dispose: () => void }[] = [];
+    let pinTimer = 0;
     let model: THREE.Object3D | null = null;
     let disposed = false;
     let animId = 0;
@@ -248,7 +300,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
           if (tall > 0.12 && box.min.y < 1.2) blockers.push(box);   // skip rugs and wall-hung frames
           const id = piece.name.startsWith('Examine_') ? piece.name.slice('Examine_'.length) : null;
           const entry = id ? level.examinables[id] : undefined;
-          if (id && entry) targets.push({ id, entry, box });
+          if (id && entry) targets.push({ id, entry, box, collection: level.collections?.[id] });
           const hazard = id ? level.gazeHazards?.[id] : undefined;
           if (hazard) {
             const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -273,6 +325,31 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
           fire.position.set(...f.at(anchor.box));
           scene.add(fire);
           fires.push(fire);
+        }
+
+        if (level.lamps) {
+          const { color, intensity, distance } = level.lamps;
+          model.traverse((o) => {
+            if (!o.name.startsWith('Lamp_')) return;
+            const light = new THREE.PointLight(color, intensity, distance, 2);
+            o.getWorldPosition(light.position);
+            scene.add(light);
+            lamps.push({ light, base: intensity, dipUntil: 0 });
+          });
+        }
+
+        // Live notes on the corkboard, refetched while the level is open.
+        const boardNode = level.pinboard ? model.getObjectByName('Pinboard') : undefined;
+        if (boardNode && level.pinboard) {
+          const cfg = level.pinboard;
+          const pb = createPinboard(cfg.size);
+          boardNode.add(pb.group);
+          pinboard = pb;
+          const refresh = () => {
+            cfg.load().then(d => { if (!disposed) pb.update(d.notes, d.threads); }).catch(() => {});
+          };
+          refresh();
+          pinTimer = window.setInterval(refresh, cfg.refreshSec * 1000);
         }
 
         const hole = level.peeper ? model.getObjectByName('Peephole') : undefined;
@@ -313,6 +390,35 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
           });
           radios.set(tg.id, { set, el, glow, center, sound: null });
         }
+
+        // Pins in the wall map, one per location, each examinable on its own.
+        const mapFace = level.mapPins ? model.getObjectByName('MapFace') : undefined;
+        if (mapFace && level.mapPins) {
+          const [W, H] = level.mapPins.size;
+          const headGeo = new THREE.SphereGeometry(0.03, 12, 8);
+          const needleGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.06, 5).rotateX(Math.PI / 2);
+          const headMat = new THREE.MeshStandardMaterial({ color: 0xb01e16, roughness: 0.35, emissive: 0x3a0503 });
+          const needleMat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, metalness: 0.8, roughness: 0.3 });
+          owned.push(headGeo, needleGeo, headMat, needleMat);
+          for (const p of level.mapPins.pins) {
+            // The node's -Z faces the room; facing the map, its -X is on the right.
+            const pin = new THREE.Group();
+            pin.position.set(-(p.u - 0.5) * W, (0.5 - p.v) * H, 0);
+            const needle = new THREE.Mesh(needleGeo, needleMat);
+            needle.position.z = -0.03;
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.z = -0.065;
+            pin.add(needle, head);
+            mapFace.add(pin);
+            pin.updateMatrixWorld(true);
+            // A generous box, so a pin is easy to aim at from arm's length.
+            const box = new THREE.Box3().setFromObject(head).expandByScalar(0.05);
+            targets.push({ id: `pin-${p.id}`, entry: { title: p.title, text: p.text }, box, pinHead: head });
+          }
+        }
+
+        markers = createInteractMarkers(targets.filter(t => !t.pinHead));
+        scene.add(markers.group);
 
         setLoaded(true);
       },
@@ -377,9 +483,9 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * LOOK));
     };
     const onCanvasClick = () => {
-      if (readingRef.current) return;
+      if (readingRef.current || browsingRef.current) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
-      else if (focusRef.current) openReading(focusRef.current);
+      else if (focusRef.current) openTarget(focusRef.current);
     };
     const onLockChange = () => {
       const isLocked = document.pointerLockElement === canvas;
@@ -408,7 +514,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
-      if (model && !readingRef.current) {
+      if (model && !readingRef.current && !browsingRef.current) {
         // Arrow keys turn, so the level is walkable without pointer lock too.
         if (keys.has('ArrowLeft')) yaw += 1.8 * dt;
         if (keys.has('ArrowRight')) yaw -= 1.8 * dt;
@@ -475,6 +581,11 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       }
 
       for (const r of radios.values()) if (!r.el.paused) r.glow.intensity = 0.55 + Math.random() * 0.1;
+      // Old wiring: now and then a bulb browns out for a moment.
+      for (const l of lamps) {
+        if (t > l.dipUntil && Math.random() < 0.0008) l.dipUntil = t + 0.08 + Math.random() * 0.25;
+        l.light.intensity = t < l.dipUntil ? l.base * (0.25 + Math.random() * 0.3) : l.base;
+      }
       for (const fire of fires) fire.intensity = 5 + Math.sin(t * 9) * 0.8 + Math.sin(t * 23) * 0.5 + Math.random() * 0.6;
 
       // What is the investigator looking at?
@@ -492,7 +603,16 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
         if (best && wallDist(camera.position.clone(), lookDir, bestD) < bestD - 0.05) best = null;
         focusRef.current = best;
         const id = best?.id ?? null;
-        if (id !== lastFocusId) { lastFocusId = id; setFocus(best); }
+        if (id !== lastFocusId) {
+          for (const tg of targets) tg.pinHead?.scale.setScalar(tg === best ? 1.6 : 1);
+          lastFocusId = id;
+          setFocus(best);
+        }
+
+        if (markers) {
+          markers.group.visible = markersRef.current;
+          if (markersRef.current) markers.update(camera.position, t, id);
+        }
 
         // Staring straight at a gaze hazard blurs the view; looking away lets it clear.
         let gazing: GazeHazard | null = null;
@@ -553,6 +673,10 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       canvas.style.filter = '';
       window.removeEventListener('resize', onResize);
       toggleRadioRef.current = null;
+      window.clearInterval(pinTimer);
+      pinboard?.dispose();
+      markers?.dispose();
+      for (const o of owned) o.dispose();
       peeper?.head.dispose();
       for (const r of radios.values()) {
         r.el.pause();
@@ -576,12 +700,12 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       canvasRef.current = null;
       if (el.contains(canvas)) el.removeChild(canvas);
     };
-  }, [openReading, webgl, level]);
+  }, [openTarget, webgl, level]);
 
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? 'WASD move · Shift run · Mouse look · E / click examine · E use radio · F torch · Esc release'
+      ? 'WASD move · Shift run · Mouse look · E / click examine · F torch · Tab markers · Esc release'
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -642,7 +766,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
         <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
           <div ref={mountRef} style={{ position: 'absolute', inset: 0, cursor: locked ? 'none' : 'pointer' }} />
 
-          {loaded && locked && !reading && (
+          {loaded && locked && !reading && !browsing && (
             <div style={{
               position: 'absolute', left: '50%', top: '50%', width: 6, height: 6,
               marginLeft: -3, marginTop: -3, borderRadius: '50%', pointerEvents: 'none',
@@ -651,14 +775,16 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
             }} />
           )}
 
-          {loaded && focus && !reading && (
+          {loaded && focus && !reading && !browsing && (
             <div style={{
               position: 'absolute', left: '50%', top: 'calc(50% + 22px)', transform: 'translateX(-50%)',
               pointerEvents: 'none', whiteSpace: 'nowrap',
               fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.5px',
               color: 'var(--parchment)', textShadow: '0 1px 4px #000',
             }}>
-              {level.radios?.[focus.id] ? (
+              {focus.collection ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Open {focus.entry.title}</>
+              ) : level.radios?.[focus.id] ? (
                 <>
                   <span style={{ color: 'var(--brass)' }}>[E]</span> Turn {radiosOn.has(focus.id) ? 'off' : 'on'} {focus.entry.title}
                   <span style={{ color: 'var(--ink-text-2)' }}> · click to examine</span>
@@ -693,7 +819,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
             </div>
           )}
 
-          {webgl && loaded && !locked && !reading && (
+          {webgl && loaded && !locked && !reading && !browsing && (
             <div style={{
               position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
               pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.5px',
@@ -703,6 +829,19 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
             }}>
               {level.enterText}
             </div>
+          )}
+
+          {browsing && (
+            <ArchiveBrowser
+              title={browsing.target.entry.title}
+              intro={browsing.target.entry.text}
+              docs={browsing.docs}
+              error={browsing.error}
+              emptyText={browsing.target.collection?.emptyText ?? ''}
+              shared={new Set([...sharedDocs].filter(k => k.startsWith(`${browsing.target.id}/`)).map(k => k.slice(browsing.target.id.length + 1)))}
+              onShare={doc => shareDoc(browsing.target, doc)}
+              onClose={closeBrowsing}
+            />
           )}
 
           {reading && (
@@ -761,8 +900,9 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', letterSpacing: '0.4px', minWidth: 0 }}>
             {hint}
           </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: torchOn ? 'var(--brass)' : 'var(--ink-text-2)', whiteSpace: 'nowrap' }}>
-            Torch {torchOn ? 'on' : 'off'}
+          <span style={{ display: 'flex', gap: 14, fontFamily: 'var(--font-mono)', fontSize: 9, whiteSpace: 'nowrap' }}>
+            <span style={{ color: markersOn ? 'var(--brass)' : 'var(--ink-text-2)' }}>Markers {markersOn ? 'on' : 'off'} [Tab]</span>
+            <span style={{ color: torchOn ? 'var(--brass)' : 'var(--ink-text-2)' }}>Torch {torchOn ? 'on' : 'off'}</span>
           </span>
         </div>
       </div>

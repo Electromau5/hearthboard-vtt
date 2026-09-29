@@ -10,6 +10,11 @@
  *   * "PlayerStart" marks where the investigator enters, facing its -Z
  *   * "Peephole" (optional) marks a hole something can look through, facing
  *     its -Z into the level — see `peeper`
+ *   * "Lamp_<n>" (optional) empties are where `lamps` hangs a light
+ *   * "Pinboard" (optional) marks the centre of a board, facing its -Z out of
+ *     the wall, that `pinboard` covers with live notes
+ *   * "MapFace" (optional) marks the centre of a wall map, facing its -Z out of
+ *     the wall, that `mapPins` sticks pins into
  * Anything else in the model renders but never collides.
  */
 
@@ -68,6 +73,71 @@ export type Peeper = {
   shyWithin: number;
 };
 
+/** One entry in a collection: a document, file, photograph or piece of kit. */
+export type ArchiveDoc = {
+  id: string;
+  title: string;
+  /** Provenance, or who is carrying it. */
+  meta?: string;
+  text?: string;
+  image?: string;
+  video?: string;
+  audio?: string;
+};
+
+/**
+ * An examinable that holds many things — a filing cabinet, a shelf of boxes, a
+ * gun rack. E opens a browser of its contents instead of the reading card; the
+ * examinable's own text becomes the browser's introduction. Keyed like
+ * `examinables`.
+ */
+export type Collection = {
+  /** Called every time it is opened, so it shows the campaign as it is now. */
+  load: () => Promise<ArchiveDoc[]>;
+  /** Shown when `load` returns nothing. */
+  emptyText: string;
+};
+
+/** A note pinned to the level's "Pinboard". `x`/`y` are in any units — the layout is scaled to fit. */
+export type PinNote = {
+  id: string;
+  x: number;
+  y: number;
+  /** A typed heading: the note is drawn as an index card instead of a handwritten note. */
+  title?: string;
+  text?: string;
+  image?: string;
+  caption?: string;
+  /** Paper colour, CSS. */
+  color?: string;
+  rotation?: number;
+  /** Size in the same units as x/y; defaults to the case board's note or picture size. */
+  w?: number;
+  h?: number;
+};
+
+/**
+ * A board in the level that shows notes kept elsewhere (the case board): they
+ * are fetched when the level opens and refetched while it stays open, so a note
+ * added on the board appears on the wall.
+ */
+export type Pinboard = {
+  /** Width and height of the pinnable area, in metres. */
+  size: [number, number];
+  load: () => Promise<{ notes: PinNote[]; threads: { from: string; to: string; color: string }[] }>;
+  refreshSec: number;
+};
+
+/** A pin in a wall map: examining it (E) reads out that place's summary. */
+export type MapPin = {
+  id: string;
+  title: string;
+  text: string;
+  /** Position on the map, 0..1 from its left and top edges. */
+  u: number;
+  v: number;
+};
+
 type Vec3 = [number, number, number];
 
 export type WalkthroughLevel = {
@@ -85,6 +155,12 @@ export type WalkthroughLevel = {
   gazeHazards?: Record<string, GazeHazard>;
   radios?: Record<string, RadioSet>;
   peeper?: Peeper;
+  collections?: Record<string, Collection>;
+  pinboard?: Pinboard;
+  /** Pins stuck into the map at the "MapFace" node; `size` is the map's width and height in metres. */
+  mapPins?: { size: [number, number]; pins: MapPin[] };
+  /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
+  lamps?: { color: number; intensity: number; distance: number };
   atmosphere: {
     background: number;
     fogColor: number;
