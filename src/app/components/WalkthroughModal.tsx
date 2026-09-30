@@ -10,6 +10,7 @@ import { createDeepOneHead } from './deep-one';
 import { createPinboard } from './pinboard';
 import { createInteractMarkers } from './interact-markers';
 import { ArchiveBrowser } from './ArchiveBrowser';
+import { TypewriterPane } from './TypewriterPane';
 
 interface Props {
   /** Which place to explore — HOUSE_LEVEL, VESSEL_LEVEL, … */
@@ -17,6 +18,8 @@ interface Props {
   onClose: () => void;
   /** Posts what the investigator found to the shared chat. */
   onShare: (text: string) => void;
+  /** Who is exploring — signs anything they type at a typewriter. */
+  author: string;
 }
 
 const EYE = 1.6;           // camera height above the feet
@@ -40,7 +43,7 @@ type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
  * share findings to the party chat. What the level contains, and how it is lit,
  * comes from `level` (see src/lib/walkthrough.ts).
  */
-export function WalkthroughModal({ level, onClose, onShare }: Props) {
+export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -49,6 +52,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   const [focus, setFocus] = useState<Target | null>(null);
   const [reading, setReading] = useState<Target | null>(null);
   const [browsing, setBrowsing] = useState<Browsing | null>(null);
+  const [typing, setTyping] = useState<Target | null>(null);
   const [shared, setShared] = useState<Set<string>>(() => new Set());
   const [sharedDocs, setSharedDocs] = useState<Set<string>>(() => new Set());
   const [torchOn, setTorchOn] = useState(true);
@@ -61,6 +65,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   // Refs the animation loop reads without re-registering.
   const readingRef = useRef<Target | null>(null);
   const browsingRef = useRef<Browsing | null>(null);
+  const typingRef = useRef<Target | null>(null);
   const focusRef = useRef<Target | null>(null);
   const torchRef = useRef(true);
   const markersRef = useRef(true);
@@ -68,9 +73,12 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Set by the scene once the level loads; switches a radio on or off.
   const toggleRadioRef = useRef<((id: string) => void) | null>(null);
+  // Set by the scene when the level has a pinboard; refetches its notes now.
+  const refreshPinsRef = useRef<(() => void) | null>(null);
 
   useEffect(() => { readingRef.current = reading; }, [reading]);
   useEffect(() => { browsingRef.current = browsing; }, [browsing]);
+  useEffect(() => { typingRef.current = typing; }, [typing]);
   useEffect(() => { torchRef.current = torchOn; }, [torchOn]);
   useEffect(() => { markersRef.current = markersOn; }, [markersOn]);
 
@@ -85,8 +93,14 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   }, []);
 
   // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
-  // each time; anything else opens the reading card.
+  // each time; a typewriter opens a sheet to type on; anything else opens the
+  // reading card.
   const openTarget = useCallback((t: Target) => {
+    if (level.typewriters?.[t.id]) {
+      setTyping(t);
+      document.exitPointerLock?.();
+      return;
+    }
     if (!t.collection) { openReading(t); return; }
     const opened: Browsing = { target: t, docs: null, error: false };
     setBrowsing(opened);
@@ -95,7 +109,12 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       docs => setBrowsing(b => (b?.target === t ? { ...b, docs } : b)),
       () => setBrowsing(b => (b?.target === t ? { ...b, error: true } : b)),
     );
-  }, [openReading]);
+  }, [openReading, level]);
+
+  const closeTyping = useCallback(() => {
+    setTyping(null);
+    canvasRef.current?.requestPointerLock?.();
+  }, []);
 
   const closeBrowsing = useCallback(() => {
     setBrowsing(null);
@@ -118,6 +137,12 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
   // after the lock was released is ignored.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // At the typewriter every key is typing (the textarea keeps its own keys
+      // from reaching here); only Escape, from a focused button, backs out.
+      if (typingRef.current) {
+        if (e.key === 'Escape') setTyping(null);
+        return;
+      }
       if (e.key === 'Escape') {
         if (readingRef.current) { setReading(null); return; }
         if (browsingRef.current) { setBrowsing(null); return; }
@@ -350,6 +375,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
           };
           refresh();
           pinTimer = window.setInterval(refresh, cfg.refreshSec * 1000);
+          refreshPinsRef.current = refresh;
         }
 
         const hole = level.peeper ? model.getObjectByName('Peephole') : undefined;
@@ -483,7 +509,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * LOOK));
     };
     const onCanvasClick = () => {
-      if (readingRef.current || browsingRef.current) return;
+      if (readingRef.current || browsingRef.current || typingRef.current) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
       else if (focusRef.current) openTarget(focusRef.current);
     };
@@ -514,7 +540,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
-      if (model && !readingRef.current && !browsingRef.current) {
+      if (model && !readingRef.current && !browsingRef.current && !typingRef.current) {
         // Arrow keys turn, so the level is walkable without pointer lock too.
         if (keys.has('ArrowLeft')) yaw += 1.8 * dt;
         if (keys.has('ArrowRight')) yaw -= 1.8 * dt;
@@ -673,6 +699,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
       canvas.style.filter = '';
       window.removeEventListener('resize', onResize);
       toggleRadioRef.current = null;
+      refreshPinsRef.current = null;
       window.clearInterval(pinTimer);
       pinboard?.dispose();
       markers?.dispose();
@@ -766,7 +793,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
         <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
           <div ref={mountRef} style={{ position: 'absolute', inset: 0, cursor: locked ? 'none' : 'pointer' }} />
 
-          {loaded && locked && !reading && !browsing && (
+          {loaded && locked && !reading && !browsing && !typing && (
             <div style={{
               position: 'absolute', left: '50%', top: '50%', width: 6, height: 6,
               marginLeft: -3, marginTop: -3, borderRadius: '50%', pointerEvents: 'none',
@@ -775,7 +802,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
             }} />
           )}
 
-          {loaded && focus && !reading && !browsing && (
+          {loaded && focus && !reading && !browsing && !typing && (
             <div style={{
               position: 'absolute', left: '50%', top: 'calc(50% + 22px)', transform: 'translateX(-50%)',
               pointerEvents: 'none', whiteSpace: 'nowrap',
@@ -784,6 +811,8 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
             }}>
               {focus.collection ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Open {focus.entry.title}</>
+              ) : level.typewriters?.[focus.id] ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Type at the {focus.entry.title}</>
               ) : level.radios?.[focus.id] ? (
                 <>
                   <span style={{ color: 'var(--brass)' }}>[E]</span> Turn {radiosOn.has(focus.id) ? 'off' : 'on'} {focus.entry.title}
@@ -819,7 +848,7 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
             </div>
           )}
 
-          {webgl && loaded && !locked && !reading && !browsing && (
+          {webgl && loaded && !locked && !reading && !browsing && !typing && (
             <div style={{
               position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
               pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.5px',
@@ -841,6 +870,16 @@ export function WalkthroughModal({ level, onClose, onShare }: Props) {
               shared={new Set([...sharedDocs].filter(k => k.startsWith(`${browsing.target.id}/`)).map(k => k.slice(browsing.target.id.length + 1)))}
               onShare={doc => shareDoc(browsing.target, doc)}
               onClose={closeBrowsing}
+            />
+          )}
+
+          {typing && level.typewriters?.[typing.id] && (
+            <TypewriterPane
+              title={typing.entry.title}
+              typewriter={level.typewriters[typing.id]}
+              author={author}
+              onPinned={() => refreshPinsRef.current?.()}
+              onClose={closeTyping}
             />
           )}
 

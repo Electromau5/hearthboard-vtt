@@ -2724,6 +2724,7 @@ export default function HearthboardPage() {
           level={walkthrough}
           onClose={() => setWalkthrough(null)}
           onShare={text => pushTextToChat(myDisplayName, text)}
+          author={session?.user?.name ?? 'Unknown'}
         />
       )}
 

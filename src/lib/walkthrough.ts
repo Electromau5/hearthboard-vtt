@@ -128,6 +128,20 @@ export type Pinboard = {
   refreshSec: number;
 };
 
+/**
+ * An examinable the investigator can type at — the Archive's typewriter. E
+ * opens a sheet of paper; what is typed on it is handed to `pin` along with
+ * who typed it. Keyed like `examinables`.
+ */
+export type Typewriter = {
+  /** Longest note it takes, in characters. */
+  maxLength: number;
+  /** Files the typed note; rejects if it could not be saved. */
+  pin: (text: string, author: string) => Promise<void>;
+  /** Button label, e.g. "Pin to case board". */
+  pinLabel: string;
+};
+
 /** A pin in a wall map: examining it (E) reads out that place's summary. */
 export type MapPin = {
   id: string;
@@ -157,6 +171,7 @@ export type WalkthroughLevel = {
   peeper?: Peeper;
   collections?: Record<string, Collection>;
   pinboard?: Pinboard;
+  typewriters?: Record<string, Typewriter>;
   /** Pins stuck into the map at the "MapFace" node; `size` is the map's width and height in metres. */
   mapPins?: { size: [number, number]; pins: MapPin[] };
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */

@@ -14,7 +14,7 @@
 import { allResources, type Resource, type ResourceSection } from './resources';
 import { RECAP_ACT, SESSION_RECAPS } from './session-recaps';
 import { INNSMOUTH_SCENES } from './innsmouth-scenes';
-import type { ArchiveDoc, Collection, Examinable, MapPin, PinNote, RadioSet, WalkthroughLevel } from './walkthrough';
+import type { ArchiveDoc, Collection, Examinable, MapPin, PinNote, RadioSet, Typewriter, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   // The nave
@@ -206,6 +206,42 @@ async function boardPins() {
   return { notes: [...recaps, ...live], threads };
 }
 
+// ── The case room's typewriter ─────────────────────────────────────────────
+
+/**
+ * A typed note, pinned to the case board in a grid of typed notes below the
+ * players' own arrangement, so it never lands on top of anything they placed.
+ */
+async function pinTypedNote(text: string, author: string): Promise<void> {
+  const board = await fetchBoard();
+  const { w, h } = NOTE_SIZE.note;
+  const theirs = board.items.filter(i => !i.id.startsWith('tw'));
+  const typed = board.items.length - theirs.length;
+  const bottom = theirs.length ? Math.max(...theirs.map(i => i.y + NOTE_SIZE[i.type].h)) : 0;
+  const left = theirs.length ? Math.min(...theirs.map(i => i.x)) : 40;
+  const item: BoardItem = {
+    id: 'tw' + Date.now(),
+    type: 'note',
+    x: left + (typed % 5) * (w + 20),
+    y: bottom + 40 + Math.floor(typed / 5) * (h + 30),
+    rotation: (Math.random() - 0.5) * 4,
+    // Typing paper, not a sticky note.
+    color: '#f5f0e0',
+    text,
+    author,
+  };
+  const res = await fetch('/api/board', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ op: 'add-item', item }),
+  });
+  if (!res.ok) throw new Error(`board ${res.status}`);
+}
+
+const TYPEWRITERS: Record<string, Typewriter> = {
+  typewriter_desk: { maxLength: 400, pin: pinTypedNote, pinLabel: 'Pin to case board' },
+};
+
 // ── The map room's wall chart ──────────────────────────────────────────────
 
 /**
@@ -252,6 +288,7 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
   examinables: EXAMINABLES,
   collections: COLLECTIONS,
   radios: RADIOS,
+  typewriters: TYPEWRITERS,
   pinboard: { size: [5.1, 1.95], load: boardPins, refreshSec: 8 },
   // The wall chart is 5 m wide at the image's 1024 × 559 aspect (build_archive_cli.gd).
   mapPins: { size: [5.0, 5.0 * 559 / 1024], pins: MAP_PINS },
