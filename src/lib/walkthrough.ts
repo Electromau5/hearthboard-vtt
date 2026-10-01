@@ -15,12 +15,16 @@
  *     the wall, that `pinboard` covers with live notes
  *   * "MapFace" (optional) marks the centre of a wall map, facing its -Z out of
  *     the wall, that `mapPins` sticks pins into
+ *   * a "Furniture" child named by `photoFrames.node` (optional) holds the
+ *     empty frames `photoFrames` mounts photographs in
  * Anything else in the model renders but never collides.
  */
 
 export type Examinable = {
   title: string;
   text: string;
+  /** A picture under public/ shown on the reading card, above the text. */
+  image?: string;
 };
 
 /**
@@ -154,6 +158,32 @@ export type MapPin = {
 
 type Vec3 = [number, number, number];
 
+/**
+ * A photograph mounted in one of the frames, on a mat. Examining it opens the
+ * photograph. The opening is measured in the frame mesh's local space.
+ */
+export type FramedPhoto = Examinable & {
+  id: string;
+  image: string;
+  /** Centre of the opening inside the moulding, just proud of the backing. */
+  center: Vec3;
+  /** Width and height of that opening, in local units. */
+  size: [number, number];
+};
+
+/**
+ * Photographs set into frames that were modelled empty — the frames are one
+ * mesh, so the openings are measured rather than marked. Each photograph is
+ * examinable on its own; the frames' node stops being examinable as a whole.
+ */
+export type PhotoFrames = {
+  /** The "Furniture" child holding the frames' mesh. */
+  node: string;
+  /** The mesh's local axes pointing to the viewer's right, up, and out of the wall. */
+  axes: { right: Vec3; up: Vec3; out: Vec3 };
+  photos: FramedPhoto[];
+};
+
 export type WalkthroughLevel = {
   model: string;
   /** Header, e.g. "The Derelict House · Innsmouth". */
@@ -174,6 +204,7 @@ export type WalkthroughLevel = {
   typewriters?: Record<string, Typewriter>;
   /** Pins stuck into the map at the "MapFace" node; `size` is the map's width and height in metres. */
   mapPins?: { size: [number, number]; pins: MapPin[] };
+  photoFrames?: PhotoFrames;
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
   lamps?: { color: number; intensity: number; distance: number };
   atmosphere: {

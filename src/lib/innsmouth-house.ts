@@ -12,7 +12,7 @@
  * replace with the campaign's actual clues.
  */
 
-import type { Examinable, GazeHazard, Peeper, RadioSet, WalkthroughLevel } from './walkthrough';
+import type { Examinable, GazeHazard, Peeper, PhotoFrames, RadioSet, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   console_table: {
@@ -30,10 +30,6 @@ const EXAMINABLES: Record<string, Examinable> = {
   fireplace: {
     title: 'Parlor Fireplace',
     text: 'A brick hearth under a heavy timber mantel. There is a fire in it — burning low and steady in a house no one has lived in for years.',
-  },
-  family_portraits: {
-    title: 'Family Portraits',
-    text: 'Four frames hung above the sofa, the glass fogged with grime. The faces behind it are hard to make out.',
   },
   radio: {
     title: 'Tube Radio',
@@ -73,6 +69,40 @@ const EXAMINABLES: Record<string, Examinable> = {
   },
 };
 
+/**
+ * The four frames above the parlor sofa hold the family's yearly studio
+ * portraits (the same plates as "Family Portraits, 1911–1914" in All
+ * Resources), read left to right then top to bottom: 1911 left, 1912 top,
+ * 1913 bottom, 1914 right. The openings were measured off a render of the
+ * frames' mesh, whose +Y faces into the parlor.
+ */
+const PHOTO_FRAMES: PhotoFrames = {
+  node: 'Examine_family_portraits',
+  axes: { right: [1, 0, 0], up: [0, 0, -1], out: [0, 1, 0] },
+  photos: [
+    {
+      id: 'portrait_1911', title: 'Portrait, 1911', image: '/family-portraits/1911.webp',
+      center: [-0.7285, 0.05, -0.102], size: [0.413, 0.578],
+      text: 'A studio portrait before a painted woodland. A moustached man and his wife sit side by side; a boy in a sailor suit and a girl with a bow in her hair stand behind them. All four look straight at the lens.',
+    },
+    {
+      id: 'portrait_1912', title: 'Portrait, 1912', image: '/family-portraits/1912.webp',
+      center: [-0.0045, 0.05, -0.454], size: [0.495, 0.674],
+      text: 'The same family, a year on: the father seated, his wife behind him, the children in front. Every face is turned to the camera.',
+    },
+    {
+      id: 'portrait_1913', title: 'Portrait, 1913', image: '/family-portraits/1913.webp',
+      center: [-0.0045, 0.05, 0.463], size: [0.495, 0.682],
+      text: 'The father sits in profile, turned away from the lens, his face gone to shadow. The plate is clouded and blistered around him and nowhere else. His wife and children look straight out. There is a small anchor stitched on the boy\'s breast.',
+    },
+    {
+      id: 'portrait_1914', title: 'Portrait, 1914', image: '/family-portraits/1914.webp',
+      center: [0.739, 0.05, -0.2], size: [0.47, 0.592],
+      text: 'The father has his back to the camera. Black blooms of decay have eaten through the emulsion over him; the rest of the plate is clean. The mother sits beside him, the children stand, and all three stare at the lens.',
+    },
+  ],
+};
+
 /** Staring at the idol blurs the view — see GazeHazard. */
 const GAZE_HAZARDS: Record<string, GazeHazard> = {
   dagon_idol: { angleDeg: 3, range: 5, maxBlurPx: 8, onsetSec: 2.5, recoverSec: 0.8 },
@@ -97,6 +127,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
   peeper: PEEPER,
+  photoFrames: PHOTO_FRAMES,
   atmosphere: {
     background: 0x020202,
     fogColor: 0x030303,

@@ -443,6 +443,50 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
           }
         }
 
+        // Photographs in frames that were modelled empty, each examinable on its own.
+        const framesNode = level.photoFrames ? model.getObjectByName(level.photoFrames.node) : undefined;
+        const framesMesh = framesNode?.getObjectByProperty('isMesh', true);
+        if (framesMesh && level.photoFrames) {
+          const { axes, photos } = level.photoFrames;
+          const facing = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(
+            new THREE.Vector3(...axes.right), new THREE.Vector3(...axes.up), new THREE.Vector3(...axes.out),
+          ));
+          for (const ph of photos) {
+            const [w, h] = ph.size;
+            // The print, whole, on an aged mat cut to the opening — cropping a
+            // landscape plate to a portrait frame would cut people out of it.
+            const canvas = document.createElement('canvas');
+            canvas.height = 512;
+            canvas.width = Math.round(512 * w / h);
+            const ctx = canvas.getContext('2d')!;
+            ctx.fillStyle = '#a89878';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const img = new Image();
+            img.onload = () => {
+              if (disposed) return;
+              const margin = canvas.width * 0.06;
+              const s = Math.min((canvas.width - 2 * margin) / img.width, (canvas.height - 2 * margin) / img.height);
+              const iw = img.width * s, ih = img.height * s;
+              ctx.drawImage(img, (canvas.width - iw) / 2, (canvas.height - ih) / 2, iw, ih);
+              tex.needsUpdate = true;
+            };
+            img.src = ph.image;
+            const geo = new THREE.PlaneGeometry(w, h);
+            const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
+            owned.push(geo, mat, tex);
+            const print = new THREE.Mesh(geo, mat);
+            print.quaternion.copy(facing);
+            print.position.set(...ph.center);
+            print.receiveShadow = true;
+            framesMesh.add(print);
+            print.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(print).expandByScalar(0.01);
+            targets.push({ id: ph.id, entry: { title: ph.title, text: ph.text, image: ph.image }, box });
+          }
+        }
+
         markers = createInteractMarkers(targets.filter(t => !t.pinHead));
         scene.add(markers.group);
 
@@ -889,7 +933,8 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
               background: 'rgba(0,0,0,0.55)',
             }}>
               <div style={{
-                width: 'min(440px, 86%)', padding: '16px 18px',
+                width: reading.entry.image ? 'min(760px, 92%)' : 'min(440px, 86%)', padding: '16px 18px',
+                maxHeight: '94%', overflowY: 'auto',
                 background: 'rgba(14,11,8,0.96)', border: '1px solid var(--brass-dim)',
                 borderRadius: 'var(--r-md)', boxShadow: '0 12px 40px rgba(0,0,0,0.8)',
               }}>
@@ -899,6 +944,17 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--parchment)', margin: '4px 0 10px' }}>
                   {reading.entry.title}
                 </div>
+                {reading.entry.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={reading.entry.image}
+                    alt={reading.entry.title}
+                    style={{
+                      display: 'block', width: '100%', maxHeight: '52vh', objectFit: 'contain',
+                      marginBottom: 12, background: '#000', border: '1px solid var(--line)',
+                    }}
+                  />
+                )}
                 <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--parchment)', margin: 0 }}>
                   {reading.entry.text}
                 </p>
