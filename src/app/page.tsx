@@ -1450,7 +1450,7 @@ export default function HearthboardPage() {
             <div className="map-vignette" />
             {mapZoomedTo && (() => {
               const scene = ALL_SCENES.find(s => s.id === mapZoomedTo);
-              const img = scene ? locationImages[scene.locationId] : undefined;
+              const img = scene ? locationImages[scene.locationId] ?? ('image' in scene ? scene.image : undefined) : undefined;
               const isDocks = scene?.locationId === 'loc-docks';
               const isSpeakeasy = scene?.locationId === 'loc-underworld';
               const isBellevue = scene?.locationId === 'loc-bellevue';
