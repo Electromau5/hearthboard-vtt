@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
 import type { ArchiveDoc, Collection, Examinable, GazeHazard, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
 import { createPinboard } from './pinboard';
 import { createInteractMarkers } from './interact-markers';
@@ -67,6 +68,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [attempts, setAttempts] = useState<Record<string, Attempt>>({});
   const [sharedChecks, setSharedChecks] = useState<Set<string>>(() => new Set());
+  const [savedChecks, setSavedChecks] = useState<Set<string>>(() => new Set());
   const canCheck = !!investigator && !!onCheck;
   const [torchOn, setTorchOn] = useState(true);
   const [markersOn, setMarkersOn] = useState(true);
@@ -1087,12 +1089,20 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                       const key = `${reading.id}/${a.skill}`;
                       setAttempts(prev => ({ ...prev, [key]: a }));
                       setSharedChecks(prev => { const next = new Set(prev); next.delete(key); return next; });
+                      setSavedChecks(prev => { const next = new Set(prev); next.delete(key); return next; });
                     }}
                     onShare={(skill, text) => {
                       onShare(text);
                       setSharedChecks(prev => new Set(prev).add(`${reading.id}/${skill}`));
                     }}
                     shared={new Set([...sharedChecks].filter(k => k.startsWith(`${reading.id}/`)).map(k => k.slice(reading.id.length + 1)))}
+                    onSave={async (skill, note) => {
+                      // A finding is filed on clue paper, below the players' own notes.
+                      await fileNote(note, author, { prefix: 'clue', color: '#e8dcc0' });
+                      setSavedChecks(prev => new Set(prev).add(`${reading.id}/${skill}`));
+                      refreshPinsRef.current?.();
+                    }}
+                    saved={new Set([...savedChecks].filter(k => k.startsWith(`${reading.id}/`)).map(k => k.slice(reading.id.length + 1)))}
                   />
                 )}
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>

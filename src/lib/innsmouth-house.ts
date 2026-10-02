@@ -20,6 +20,58 @@ const EXAMINABLES: Record<string, Examinable> = {
   console_table: {
     title: 'Hall Table',
     text: 'A narrow console table under a skin of dust. A brass oil lamp stands on it, the reservoir dry, the wick burned down to nothing.',
+    // Written by the GM in the "Skill Matrix" sheet, one tab per object — keep the two in step.
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Search the table',
+        failure: 'Dust, a dead lamp, and nothing else.',
+        success: 'There is a clean rectangle in the dust, about the size of a calling card, where something lay until a few days ago. Someone took it recently.',
+        hard: 'Besides the clean patch, there is a shallow drawer hidden under the apron with its pull removed. Inside is a tide table clipped from a Newburyport paper, with every 3 a.m. low tide circled in pencil.',
+        extreme: 'Besides the clean patch and the hidden tide table, the floorboards in front of the table are worn in a dull arc. Something stands here often, facing the gilt mirror across the hall.',
+      },
+      {
+        skill: 'Architecture & Engineering', action: 'Study how the table is set against the wall',
+        failure: 'An ordinary console table, cheaply joined, pushed up against the plaster. Nothing about it stands out.',
+        success: 'The table is screwed to the wall, and not to hold it up. The plaster behind it is newer and whiter than the rest of the hall\'s. The table is there to hide something.',
+        hard: 'The wall behind the table sounds hollow when you tap it. A doorway has been lathed and plastered over, and the table placed to hide the seam. It would have led to the space under the stairs.',
+        extreme: 'The patch was done from the other side. The lath is nailed from inside the hollow, so whoever sealed this doorway was standing behind it when they finished, and never came back out this way.',
+      },
+      {
+        skill: 'History', action: 'Date the brass lamp',
+        failure: 'An old brass lamp. It could be any age.',
+        success: 'Not a parlour lamp. It is a ship\'s lamp, gimballed so it stays level at sea, of the kind whalers carried in the 1840s.',
+        hard: 'Under the grime on the base is a chandler\'s stamp: "MARSH & CO. · INNSMOUTH". That dates it to Obed Marsh\'s trading years, when the town\'s fortunes turned.',
+        extreme: 'The burner has been altered: the wick channel is widened to take a thicker, fouler oil than whale oil. It is the same kind of fuel that burns in the parlor grate.',
+      },
+      {
+        skill: 'Science (Forensics)', action: 'Examine the marks in the dust',
+        failure: 'Smudges in the dust. They could have been left by anyone, at any time.',
+        success: 'Two handprints on the front edge, palms down, as if someone leaned their full weight on the table. They are fresh: a day or two old at most.',
+        hard: 'The prints are wrong. The fingers are too long, and there is no ridge detail at all; the skin that made them was smooth. They left a faint film that still has not dried.',
+        extreme: 'Between the fingers, each print bridges across: webbing at the base of the digits. Whoever leaned here was not entirely human, and was here recently.',
+      },
+      {
+        skill: 'Science (Biology)', action: 'Sample the film on the table\'s edge',
+        failure: 'Grime and damp. Nothing you can identify without a laboratory.',
+        success: 'The film is a mucus that crusts with salt crystals as it dries. It is marine in origin, and it is not from the lamp.',
+        hard: 'Small translucent scales are caught in the film. They are not quite fish scales: each has a raised keel, more like a reptile\'s.',
+        extreme: 'Several scales still have living tissue at the root. They were shed, not scraped off a dead fish. Something is moulting, and it does so here.',
+      },
+      {
+        skill: 'Track', action: 'Read the floor around the table',
+        failure: 'The hall floor is a mess of dust, plaster and debris. No trail you can follow.',
+        success: 'Damp barefoot prints come up the hall to the table and stop there.',
+        hard: 'The prints come from the boarded back door, under the boards rather than through them, and go back the same way. The stride is long, with the weight on the balls of the feet.',
+        extreme: 'There are many sets of prints, layered over weeks, always on the same path and always ending at this table. The newest are still wet: whatever made them was here within the hour.',
+      },
+      {
+        skill: 'Listen', action: 'Put an ear to the wall behind the table',
+        failure: 'Only the house creaking as it settles.',
+        success: 'A thin draught comes through a seam behind the table. It smells of low tide.',
+        hard: 'Behind the wall, water drips slowly, and under the dripping something is breathing: long, wet breaths.',
+        extreme: 'The breathing stops when you hold yours. Then, from the other side of the plaster, come three slow knocks at the height of your ear.',
+      },
+    ],
   },
   mirror: {
     title: 'Gilt Mirror',

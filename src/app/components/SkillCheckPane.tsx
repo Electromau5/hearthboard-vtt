@@ -35,6 +35,10 @@ interface Props {
   onShare: (skill: string, text: string) => void;
   /** Skills whose current result has been shared to the party chat. */
   shared: ReadonlySet<string>;
+  /** Pins a result to the case board as a note. Omitted, and there is no Save button. */
+  onSave?: (skill: string, note: string) => Promise<void>;
+  /** Skills whose current result is already on the case board. */
+  saved?: ReadonlySet<string>;
 }
 
 const CHARACTERISTICS = ['STR', 'CON', 'SIZ', 'DEX', 'APP', 'INT', 'POW', 'EDU'];
@@ -68,7 +72,12 @@ function outcome(check: ObjectCheck | undefined, skill: string, level: CheckLeve
         : `Nothing comes of it.`,
     };
   }
-  if (passed) return { passed, text: level === 'Extreme' || level === 'Critical' ? check.extreme ?? check.success : check.success };
+  if (passed) {
+    const text = level === 'Extreme' || level === 'Critical' ? check.extreme ?? check.hard ?? check.success
+      : level === 'Hard' ? check.hard ?? check.success
+      : check.success;
+    return { passed, text };
+  }
   return { passed, text: level === 'Fumble' || pushed ? check.fumble ?? check.failure : check.failure };
 }
 
@@ -79,9 +88,22 @@ function outcome(check: ObjectCheck | undefined, skill: string, level: CheckLeve
  * investigator to share or keep. Each skill gets one roll per object — a
  * failure can be pushed once, as in Call of Cthulhu, at the risk of worse.
  */
-export function SkillCheckPane({ objectTitle, checks, investigator, attempts, roll, onAttempt, onShare, shared }: Props) {
+export function SkillCheckPane({ objectTitle, checks, investigator, attempts, roll, onAttempt, onShare, shared, onSave, saved }: Props) {
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState<string | null>(null);
+  // The skill whose result is being pinned right now, and the last one that failed to pin.
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState<string | null>(null);
+
+  const save = (a: Attempt) => {
+    if (!onSave || saving) return;
+    setSaving(a.skill);
+    setSaveFailed(null);
+    onSave(a.skill, `${objectTitle} · ${a.skill}${a.pushed ? ' (pushed)' : ''} · ${LEVEL_TEXT[a.level]}\n\n${a.text}\n\n— ${investigator.name}`).then(
+      () => setSaving(null),
+      () => { setSaving(null); setSaveFailed(a.skill); },
+    );
+  };
 
   const attempt = (skill: string, push = false) => {
     const prior = attempts[skill];
@@ -92,6 +114,7 @@ export function SkillCheckPane({ objectTitle, checks, investigator, attempts, ro
     const { passed, text } = outcome(check, skill, r.level, push, objectTitle);
     onAttempt({ skill, target, roll: r.roll, level: r.level, pushed: push, passed, text });
     setShown(skill);
+    setSaveFailed(null);
   };
 
   const others = useMemo(() => {
@@ -127,6 +150,11 @@ export function SkillCheckPane({ objectTitle, checks, investigator, attempts, ro
           <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--parchment)', margin: '8px 0 0', fontStyle: 'italic' }}>
             {result.text}
           </p>
+          {saveFailed === result.skill && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--blood)', marginTop: 8, textAlign: 'right' }}>
+              Could not reach the case board. Try again.
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
             {!result.passed && !result.pushed && result.level !== 'Fumble' && result.skill !== 'Luck' && (
               <button type="button" onClick={() => attempt(result.skill, true)} style={btn('var(--blood)')}
@@ -142,6 +170,17 @@ export function SkillCheckPane({ objectTitle, checks, investigator, attempts, ro
             >
               {shared.has(result.skill) ? 'Shared with party' : 'Share with party'}
             </button>
+            {onSave && (
+              <button
+                type="button"
+                disabled={!!saving || !!saved?.has(result.skill)}
+                onClick={() => save(result)}
+                title="Pin this finding to the case board as a note"
+                style={btn(saved?.has(result.skill) ? 'var(--ink-text-2)' : 'var(--forest)')}
+              >
+                {saved?.has(result.skill) ? 'On the case board' : saving === result.skill ? 'Saving…' : 'Save to case board'}
+              </button>
+            )}
           </div>
         </div>
       )}

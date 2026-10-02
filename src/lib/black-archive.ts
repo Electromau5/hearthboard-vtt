@@ -14,6 +14,7 @@
 import { allResources, type Resource, type ResourceSection } from './resources';
 import { RECAP_ACT, SESSION_RECAPS } from './session-recaps';
 import { INNSMOUTH_SCENES } from './innsmouth-scenes';
+import { fetchBoard, fileNote, NOTE_SIZE, type BoardItem, type BoardState } from './case-board';
 import type { ArchiveDoc, Collection, Examinable, MapPin, PinNote, RadioSet, Typewriter, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
@@ -111,18 +112,6 @@ function toDocs(r: Resource): ArchiveDoc[] {
 const section = (...sections: ResourceSection[]) => async () =>
   allResources().filter(r => sections.includes(r.section)).flatMap(toDocs);
 
-type BoardItem = {
-  id: string; type: 'note' | 'image'; x: number; y: number; rotation?: number;
-  text?: string; imageUrl?: string; caption?: string; color?: string; author?: string;
-};
-type BoardState = { items: BoardItem[]; connections: { fromId: string; toId: string; color: string }[] };
-
-async function fetchBoard(): Promise<BoardState> {
-  const res = await fetch('/api/board', { cache: 'no-store' });
-  if (!res.ok) throw new Error(`board ${res.status}`);
-  return res.json();
-}
-
 const recapDocs = (): ArchiveDoc[] => SESSION_RECAPS.map(r => ({
   id: r.id, title: r.title, meta: `Session ${r.session} recap · ${RECAP_ACT}`, text: r.text,
 }));
@@ -162,7 +151,6 @@ const COLLECTIONS: Record<string, Collection> = {
 const RECAP_COLS = 4;
 const CARD = { w: 280, h: 200 };
 const PITCH = { x: 300, y: 220 };
-const NOTE_SIZE = { note: { w: 160, h: 90 }, image: { w: 180, h: 140 } };
 
 /** The recap cards and everything on the case board, pinned to the case-room corkboard. */
 async function boardPins() {
@@ -208,35 +196,8 @@ async function boardPins() {
 
 // ── The case room's typewriter ─────────────────────────────────────────────
 
-/**
- * A typed note, pinned to the case board in a grid of typed notes below the
- * players' own arrangement, so it never lands on top of anything they placed.
- */
-async function pinTypedNote(text: string, author: string): Promise<void> {
-  const board = await fetchBoard();
-  const { w, h } = NOTE_SIZE.note;
-  const theirs = board.items.filter(i => !i.id.startsWith('tw'));
-  const typed = board.items.length - theirs.length;
-  const bottom = theirs.length ? Math.max(...theirs.map(i => i.y + NOTE_SIZE[i.type].h)) : 0;
-  const left = theirs.length ? Math.min(...theirs.map(i => i.x)) : 40;
-  const item: BoardItem = {
-    id: 'tw' + Date.now(),
-    type: 'note',
-    x: left + (typed % 5) * (w + 20),
-    y: bottom + 40 + Math.floor(typed / 5) * (h + 30),
-    rotation: (Math.random() - 0.5) * 4,
-    // Typing paper, not a sticky note.
-    color: '#f5f0e0',
-    text,
-    author,
-  };
-  const res = await fetch('/api/board', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ op: 'add-item', item }),
-  });
-  if (!res.ok) throw new Error(`board ${res.status}`);
-}
+/** A typed note, filed on the case board on typing paper rather than a sticky note. */
+const pinTypedNote = (text: string, author: string) => fileNote(text, author, { prefix: 'tw', color: '#f5f0e0' });
 
 const TYPEWRITERS: Record<string, Typewriter> = {
   typewriter_desk: { maxLength: 400, pin: pinTypedNote, pinLabel: 'Pin to case board' },

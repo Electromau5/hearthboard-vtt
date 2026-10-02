@@ -58,7 +58,9 @@ export type ObjectCheck = {
   difficulty?: 'Regular' | 'Hard' | 'Extreme';
   success: string;
   failure: string;
-  /** An extreme or critical result — more than a plain pass reveals. Falls back to `success`. */
+  /** A hard success — more than a plain pass reveals. Falls back to `success`. */
+  hard?: string;
+  /** An extreme or critical result — the most there is to find. Falls back to `hard`, then `success`. */
   extreme?: string;
   /** A fumble, or failing a pushed roll. Falls back to `failure`. */
   fumble?: string;
