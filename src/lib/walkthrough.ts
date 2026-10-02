@@ -39,6 +39,29 @@ export type Examinable = {
     /** Turn about the vertical, in degrees. */
     turnDeg?: number;
   };
+  /** Skill attempts the object rewards — offered first when the investigator uses a skill on it. */
+  checks?: ObjectCheck[];
+};
+
+/**
+ * What a skill roll turns up at an examinable. The investigator can try any
+ * skill on any object; these are the ones written for it, and the roll's
+ * degree of success picks which text appears. A skill with no entry here
+ * gets a generic "nothing more to find".
+ */
+export type ObjectCheck = {
+  /** As the CoC catalogue names it ('Spot Hidden', 'Science (Biology)'), a characteristic ('STR'), or 'Luck'. */
+  skill: string;
+  /** What the attempt is, shown beside the skill: "Search the blotter". */
+  action: string;
+  /** Degree of success needed to pass. Default 'Regular'. */
+  difficulty?: 'Regular' | 'Hard' | 'Extreme';
+  success: string;
+  failure: string;
+  /** An extreme or critical result — more than a plain pass reveals. Falls back to `success`. */
+  extreme?: string;
+  /** A fumble, or failing a pushed roll. Falls back to `failure`. */
+  fumble?: string;
 };
 
 /**

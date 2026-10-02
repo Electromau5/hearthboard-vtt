@@ -16,7 +16,7 @@ import { InnsmouthTown3D } from './components/InnsmouthTown3D';
 import { AllSkillsModal } from './components/AllSkillsModal';
 import { AllResourcesModal } from './components/AllResourcesModal';
 import { allResources } from '@/lib/resources';
-import { resolveSkills } from '@/lib/coc-skills';
+import { resolveSkills, checkLevel, type CheckLevel } from '@/lib/coc-skills';
 import { InvestigationBoard } from './components/InvestigationBoard';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -93,6 +93,7 @@ type BoardCharacter = {
   inventory: { name: string; qty: number }[];
   /** Populated from /api/characters; absent until that lands. */
   skills?: BoardSkill[];
+  luck?: number;
 };
 
 // Compiled-in starting roster. These are DEFAULTS ONLY — `characters` state
@@ -377,22 +378,6 @@ function toChatItem(e: ChatEventWire): ChatItem {
   };
 }
 
-// ── Call of Cthulhu skill checks ─────────────────────────────────────
-// A check is d100 roll-under: beat the target, and beat it well enough for a
-// better degree of success. 01 always crits; 100 always fumbles, as does
-// 96-99 when the target is under 50.
-type CheckLevel = 'Critical' | 'Extreme' | 'Hard' | 'Success' | 'Failure' | 'Fumble';
-
-function checkLevel(roll: number, target: number): CheckLevel {
-  if (roll === 1) return 'Critical';
-  if (roll === 100) return 'Fumble';
-  if (target < 50 && roll >= 96) return 'Fumble';
-  if (roll <= Math.floor(target / 5)) return 'Extreme';
-  if (roll <= Math.floor(target / 2)) return 'Hard';
-  if (roll <= target) return 'Success';
-  return 'Failure';
-}
-
 const LEVEL_CLASS: Record<CheckLevel, string> = {
   Critical: 'crit',
   Extreme: 'extreme',
@@ -554,7 +539,7 @@ export default function HearthboardPage() {
         if (!r.ok) return;
         const merged = await r.json() as Array<{
           slug: string; name?: string; className?: string; avatar?: string;
-          vitals?: { hp?: number };
+          vitals?: { hp?: number; luck?: number };
           characteristics?: Record<string, number>;
           skills?: Array<{ name: string; value: number }>;
         }>;
@@ -571,6 +556,7 @@ export default function HearthboardPage() {
             maxHp: m.vitals?.hp ?? c.maxHp,
             abilities: m.characteristics ?? c.abilities,
             skills: m.skills ?? c.skills,
+            luck: m.vitals?.luck ?? c.luck,
           };
         }));
         const avatarMap: Record<string, string> = {};
@@ -1052,13 +1038,18 @@ export default function HearthboardPage() {
    * deliberately does NOT switch panes — players roll repeatedly from the
    * character pane and read the verdict from the toast, with the full result
    * landing in the shared chat for everyone else.
+   *
+   * `context` names what the check was made against (a walkthrough object),
+   * so the chat reads "Arthur Wright (Spot Hidden · Writing Desk)". Callers
+   * that show their own verdict pass `quiet` to skip the toast.
    */
-  const rollCheck = useCallback((charName: string, label: string, target: number) => {
+  const rollCheck = useCallback((charName: string, label: string, target: number, context?: string, quiet = false) => {
     const roll = 1 + Math.floor(Math.random() * 100);
     const level = checkLevel(roll, target);
     const res: RollResult = { formula: `1d100 vs ${label} ${target}%`, rolls: [roll], mod: 0, sides: 100, total: roll, n: 1 };
-    pushRollToChat(`${charName} (${label})`, res, { target, level });
-    showToast(`${label} ${target}% — rolled ${roll} · ${level}`);
+    pushRollToChat(`${charName} (${context ? `${label} · ${context}` : label})`, res, { target, level });
+    if (!quiet) showToast(`${label} ${target}% — rolled ${roll} · ${level}`);
+    return { roll, level };
   }, [pushRollToChat, showToast]);
 
   /**
@@ -1178,6 +1169,15 @@ export default function HearthboardPage() {
     if (session?.user?.role === 'admin') return 'GM';
     return session?.user?.name ?? 'Unknown';
   }, [session, assignments, characters]);
+
+  // Who attempts skills inside a walkthrough: a player's own investigator, or
+  // for the GM whichever one the Characters pane has open.
+  const walkthroughInvestigator = useMemo(() => {
+    const mySlug = Object.entries(assignments).find(([, uid]) => uid === session?.user?.id)?.[0];
+    const c = characters.find(ch => ch.slug === mySlug) ?? (isAdmin ? displayChar : undefined);
+    if (!c) return undefined;
+    return { name: c.name, skills: resolveSkills(c.skills, c.abilities), characteristics: c.abilities, luck: c.luck };
+  }, [assignments, characters, session?.user?.id, isAdmin, displayChar]);
 
   const getTokenPos = (tok: Token) =>
     (dragPos && dragPos.id === tok.id) ? { x: dragPos.x, y: dragPos.y } : { x: tok.x, y: tok.y };
@@ -2786,6 +2786,8 @@ export default function HearthboardPage() {
           onClose={() => setWalkthrough(null)}
           onShare={text => pushTextToChat(myDisplayName, text)}
           author={session?.user?.name ?? 'Unknown'}
+          investigator={walkthroughInvestigator}
+          onCheck={(label, target, context) => rollCheck(walkthroughInvestigator?.name ?? myDisplayName, label, target, context, true)}
         />
       )}
 

@@ -243,3 +243,28 @@ export function resolveSkills(
 
   return resolved;
 }
+
+// ── Checks ───────────────────────────────────────────────────────────
+// A check is d100 roll-under: beat the target, and beat it well enough for a
+// better degree of success. 01 always crits; 100 always fumbles, as does
+// 96-99 when the target is under 50.
+export type CheckLevel = 'Critical' | 'Extreme' | 'Hard' | 'Success' | 'Failure' | 'Fumble';
+
+export function checkLevel(roll: number, target: number): CheckLevel {
+  if (roll === 1) return 'Critical';
+  if (roll === 100) return 'Fumble';
+  if (target < 50 && roll >= 96) return 'Fumble';
+  if (roll <= Math.floor(target / 5)) return 'Extreme';
+  if (roll <= Math.floor(target / 2)) return 'Hard';
+  if (roll <= target) return 'Success';
+  return 'Failure';
+}
+
+const LEVEL_RANK: Record<CheckLevel, number> = {
+  Fumble: 0, Failure: 1, Success: 2, Hard: 3, Extreme: 4, Critical: 5,
+};
+
+/** Whether a result clears a check the Keeper set at `difficulty`. */
+export function meetsDifficulty(level: CheckLevel, difficulty: 'Regular' | 'Hard' | 'Extreme' = 'Regular'): boolean {
+  return LEVEL_RANK[level] >= LEVEL_RANK[difficulty === 'Regular' ? 'Success' : difficulty];
+}

@@ -11,6 +11,8 @@ import { createPinboard } from './pinboard';
 import { createInteractMarkers } from './interact-markers';
 import { ArchiveBrowser } from './ArchiveBrowser';
 import { TypewriterPane } from './TypewriterPane';
+import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
+import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
 import { joinLevel, type Peer } from './presence';
 
@@ -22,6 +24,10 @@ interface Props {
   onShare: (text: string) => void;
   /** Who is exploring — signs anything they type at a typewriter. */
   author: string;
+  /** The investigator who uses skills on objects; without one, the skill panel is hidden. */
+  investigator?: Investigator;
+  /** Rolls a check against an object, posting it to the party chat. */
+  onCheck?: (skill: string, target: number, objectTitle: string) => { roll: number; level: CheckLevel };
 }
 
 const EYE = 1.6;           // camera height above the feet
@@ -45,7 +51,7 @@ type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
  * share findings to the party chat. What the level contains, and how it is lit,
  * comes from `level` (see src/lib/walkthrough.ts).
  */
-export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
+export function WalkthroughModal({ level, onClose, onShare, author, investigator, onCheck }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -57,6 +63,11 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
   const [typing, setTyping] = useState<Target | null>(null);
   const [shared, setShared] = useState<Set<string>>(() => new Set());
   const [sharedDocs, setSharedDocs] = useState<Set<string>>(() => new Set());
+  // The reading card's skill panel, and every skill tried this visit, by "<object>/<skill>".
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [attempts, setAttempts] = useState<Record<string, Attempt>>({});
+  const [sharedChecks, setSharedChecks] = useState<Set<string>>(() => new Set());
+  const canCheck = !!investigator && !!onCheck;
   const [torchOn, setTorchOn] = useState(true);
   const [markersOn, setMarkersOn] = useState(true);
   const [radiosOn, setRadiosOn] = useState<Set<string>>(() => new Set());
@@ -86,8 +97,9 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
   useEffect(() => { torchRef.current = torchOn; }, [torchOn]);
   useEffect(() => { markersRef.current = markersOn; }, [markersOn]);
 
-  const openReading = useCallback((t: Target) => {
+  const openReading = useCallback((t: Target, withSkills = false) => {
     setReading(t);
+    setSkillsOpen(withSkills);
     document.exitPointerLock?.();
   }, []);
 
@@ -95,6 +107,9 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
     setReading(null);
     canvasRef.current?.requestPointerLock?.();
   }, []);
+
+  // Collections, typewriters and map pins open their own panes, not the reading card.
+  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !level.typewriters?.[t.id], [canCheck, level]);
 
   // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
   // each time; a typewriter opens a sheet to type on; anything else opens the
@@ -162,6 +177,14 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
         else if (target && level.radios?.[target.id]) toggleRadioRef.current?.(target.id);
         else if (target) openTarget(target);
       }
+      // R brings up the investigator's skills — on the open card, or straight from the crosshair.
+      if (e.code === 'KeyR' && !e.repeat && !browsingRef.current) {
+        const t = readingRef.current ?? focusRef.current;
+        if (t && canUseSkillOn(t)) {
+          if (readingRef.current) setSkillsOpen(v => !v);
+          else openReading(t, true);
+        }
+      }
       if (e.code === 'KeyF') setTorchOn(v => !v);
       // Tab shows or hides the markers over interactive objects (and must not move browser focus).
       if (e.code === 'Tab') {
@@ -171,7 +194,7 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openTarget, closeReading, closeBrowsing, level]);
+  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level]);
 
   useEffect(() => {
     const el = mountRef.current;
@@ -515,7 +538,7 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
             framesMesh.add(print);
             print.updateMatrixWorld(true);
             const box = new THREE.Box3().setFromObject(print).expandByScalar(0.01);
-            targets.push({ id: ph.id, entry: { title: ph.title, text: ph.text, image: ph.image }, box });
+            targets.push({ id: ph.id, entry: { title: ph.title, text: ph.text, image: ph.image, checks: ph.checks }, box });
           }
         }
 
@@ -860,7 +883,7 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? 'WASD move · Shift run · Mouse look · E / click examine · F torch · Tab markers · Esc release'
+      ? `WASD move · Shift run · Mouse look · E / click examine${canCheck ? ' · R use a skill' : ''} · F torch · Tab markers · Esc release`
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -954,6 +977,9 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
               ) : (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}</>
               )}
+              {canUseSkillOn(focus) && (
+                <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> use a skill</span>
+              )}
             </div>
           )}
 
@@ -1022,7 +1048,7 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
               background: 'rgba(0,0,0,0.55)',
             }}>
               <div style={{
-                width: reading.entry.image ? 'min(760px, 92%)' : 'min(440px, 86%)', padding: '16px 18px',
+                width: reading.entry.image || skillsOpen ? 'min(760px, 92%)' : 'min(440px, 86%)', padding: '16px 18px',
                 maxHeight: '94%', overflowY: 'auto',
                 background: 'rgba(14,11,8,0.96)', border: '1px solid var(--brass-dim)',
                 borderRadius: 'var(--r-md)', boxShadow: '0 12px 40px rgba(0,0,0,0.8)',
@@ -1047,7 +1073,42 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
                 <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--parchment)', margin: 0 }}>
                   {reading.entry.text}
                 </p>
+                {skillsOpen && investigator && onCheck && canUseSkillOn(reading) && (
+                  <SkillCheckPane
+                    key={reading.id}
+                    objectTitle={reading.entry.title}
+                    checks={reading.entry.checks ?? []}
+                    investigator={investigator}
+                    attempts={Object.fromEntries(Object.entries(attempts)
+                      .filter(([k]) => k.startsWith(`${reading.id}/`))
+                      .map(([k, a]) => [k.slice(reading.id.length + 1), a]))}
+                    roll={(skill, target) => onCheck(skill, target, reading.entry.title)}
+                    onAttempt={a => {
+                      const key = `${reading.id}/${a.skill}`;
+                      setAttempts(prev => ({ ...prev, [key]: a }));
+                      setSharedChecks(prev => { const next = new Set(prev); next.delete(key); return next; });
+                    }}
+                    onShare={(skill, text) => {
+                      onShare(text);
+                      setSharedChecks(prev => new Set(prev).add(`${reading.id}/${skill}`));
+                    }}
+                    shared={new Set([...sharedChecks].filter(k => k.startsWith(`${reading.id}/`)).map(k => k.slice(reading.id.length + 1)))}
+                  />
+                )}
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+                  {canUseSkillOn(reading) && (
+                    <button
+                      onClick={() => setSkillsOpen(v => !v)}
+                      style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                        padding: '5px 10px', borderRadius: 'var(--r-sm)', cursor: 'pointer', marginRight: 'auto',
+                        background: skillsOpen ? 'rgba(201,148,79,0.16)' : 'rgba(201,148,79,0.08)',
+                        border: '1px solid var(--brass-dim)', color: 'var(--brass)',
+                      }}
+                    >
+                      {skillsOpen ? 'Hide skills [R]' : 'Use a skill [R]'}
+                    </button>
+                  )}
                   <button
                     onClick={() => share(reading)}
                     disabled={shared.has(reading.id)}
