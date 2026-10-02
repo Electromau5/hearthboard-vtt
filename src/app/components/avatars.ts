@@ -11,6 +11,11 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
  * their own palette bands so they read as sleeves and shoes. Its texture is a
  * column of colour bands, so each investigator is dressed by painting a
  * palette (see OUTFITS) rather than by a texture of their own.
+ *
+ * An investigator listed in DRESSED has a model of their own instead — a
+ * MakeHuman body built in Blender with MPFB, in period clothes, on a Mixamo
+ * skeleton carrying the same three clips. Those keep their own materials and
+ * real height; the palette figure remains for everyone else and the Keeper.
  */
 
 export type Gait = 'idle' | 'walk' | 'run';
@@ -35,13 +40,20 @@ const BANDS: [keyof Omit<Outfit, 'hat'>, number, number][] = [
 ];
 
 const MODEL_URL = '/avatars/investigator.glb';
+/** Investigators with a model of their own, at /avatars/<slug>.glb. */
+const DRESSED = new Set(['thomas-callahan']);
 const HEIGHT = 1.75;         // metres, crown to heel
 const CLIP: Record<Gait, string> = { idle: 'Idle', walk: 'Walk', run: 'Run' };
 
-let modelPromise: Promise<{ scene: THREE.Object3D; clips: THREE.AnimationClip[] }> | null = null;
-function loadModel() {
-  modelPromise ??= new GLTFLoader().loadAsync(MODEL_URL).then(g => ({ scene: g.scene, clips: g.animations }));
-  return modelPromise;
+type Model = { scene: THREE.Object3D; clips: THREE.AnimationClip[] };
+const models = new Map<string, Promise<Model>>();
+function loadModel(url: string) {
+  let p = models.get(url);
+  if (!p) {
+    p = new GLTFLoader().loadAsync(url).then(g => ({ scene: g.scene, clips: g.animations }));
+    models.set(url, p);
+  }
+  return p;
 }
 
 function paletteTexture(o: Outfit): THREE.Texture {
@@ -121,7 +133,8 @@ export type RemoteAvatar = {
  * gamelord, dresses as the Keeper). Resolves once the shared model has loaded.
  */
 export async function createAvatar(slug: string | null, name: string): Promise<RemoteAvatar> {
-  const { scene, clips } = await loadModel();
+  const dressed = !!slug && DRESSED.has(slug);
+  const { scene, clips } = await loadModel(dressed ? `/avatars/${slug}.glb` : MODEL_URL);
   const outfit = (slug && OUTFITS[slug]) || KEEPER;
   const figure = SkeletonUtils.clone(scene);
 
@@ -129,24 +142,36 @@ export async function createAvatar(slug: string | null, name: string): Promise<R
   // geometry, which lies along Z until the skeleton stands it up.
   figure.updateMatrixWorld(true);
   const raw = new THREE.Box3().setFromObject(figure, true);
-  const scale = HEIGHT / (raw.max.y - raw.min.y);
+  // A dressed model is built in metres at the investigator's own height.
+  const scale = dressed ? 1 : HEIGHT / (raw.max.y - raw.min.y);
   figure.scale.setScalar(scale);
   figure.position.y = -raw.min.y * scale;
+  const top = (raw.max.y - raw.min.y) * scale;
 
-  const tex = paletteTexture(outfit);
-  const owned: { dispose: () => void }[] = [tex];
+  const owned: { dispose: () => void }[] = [];
+  const tex = dressed ? null : paletteTexture(outfit);
+  if (tex) owned.push(tex);
   figure.traverse(o => {
     const m = o as THREE.SkinnedMesh;
     if (!m.isMesh) return;
+    m.castShadow = true;
+    m.frustumCulled = false;   // skinned bounds lag the animation
+    if (!tex) {
+      // Hair, brows and lashes are cut-outs: test alpha rather than blend, so
+      // overlapping cards neither sort wrongly nor flicker. The materials are
+      // shared by every copy of the model, so they are not ours to dispose.
+      for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) {
+        if (mat.transparent) { mat.transparent = false; mat.alphaTest = 0.5; mat.depthWrite = true; }
+      }
+      return;
+    }
     // Blender exports the material fully metallic, which renders black without an environment map.
     const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0 });
     owned.push(mat);
     m.material = mat;
-    m.castShadow = true;
-    m.frustumCulled = false;   // skinned bounds lag the animation
   });
 
-  if (outfit.hat) {
+  if (!dressed && outfit.hat) {
     const head = figure.getObjectByName('Head');
     if (head) {
       const hat = makeHat(outfit.hat);
@@ -167,7 +192,7 @@ export async function createAvatar(slug: string | null, name: string): Promise<R
   }
 
   const label = makeLabel(name);
-  label.position.y = HEIGHT + 0.3;
+  label.position.y = top + 0.3;
   owned.push(label.material.map!, label.material);
 
   const group = new THREE.Group();

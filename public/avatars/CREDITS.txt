@@ -1,0 +1,13 @@
+Walkthrough avatar credits
+
+investigator.glb
+  "Animated Human" by Quaternius — CC0
+  https://opengameart.org/content/animated-human-low-poly
+
+thomas-callahan.glb
+  Built in Blender with MPFB from MakeHuman assets (https://static.makehumancommunity.org/).
+  Animation: Idle, Walk and Run retargeted from Quaternius's "Animated Human" (CC0).
+  CC0: base body, skin "middleage caucasian male", eyes, eyebrows, eyelashes, hair "short02",
+       "fedora01" (recoloured), "Suit3" by MRT (recoloured).
+  CC BY 4.0: "Shoes_Oxford_male" by Mindfront (Sweden), fitted to the body, otherwise unchanged.
+    https://creativecommons.org/licenses/by/4.0/
