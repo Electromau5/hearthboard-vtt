@@ -51,6 +51,8 @@ src/
       pinboard.ts                 # Pins the case board's live notes onto a walkthrough corkboard
       interact-markers.ts         # Floating markers over a walkthrough's interactive objects — Tab toggles them
       deep-one.ts                 # Procedural Deep One head — peers through the house's back-door peephole
+      woods-lamp.ts               # First-person Wood's lamp (Q) — the 1930s UV lamp held in view, drawn over the level
+      uv-stains.ts                # Blood/brine decals only the Wood's lamp reveals (level.uvStains)
     characters/
       page.tsx                    # Investigator dossier grid — all 7 characters
       [slug]/page.tsx             # Individual character sheet page

@@ -14,7 +14,7 @@
  * mechanic out, not as settled campaign fact.
  */
 
-import type { Examinable, GazeHazard, Peeper, PhotoFrames, RadioSet, WalkthroughLevel } from './walkthrough';
+import type { Examinable, GazeHazard, Peeper, PhotoFrames, RadioSet, UvStain, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   console_table: {
@@ -428,6 +428,99 @@ const RADIOS: Record<string, RadioSet> = {
   radio: { src: '/soundtrack-2.mp3', volume: 0.8, refDistance: 1.5 },
 };
 
+/**
+ * What the Wood's lamp finds (see UvStain): the father's change, written in
+ * brine from his bed to the back door, and the night the family fought him
+ * off, in blood someone has tried to wash away. Positions are in the house's
+ * metres — rooms and walls as laid out in Summer's `build_house.gd`.
+ */
+const UV_STAINS: UvStain[] = [
+  {
+    id: 'uv_brine_prints', kind: 'brine', mark: 'prints',
+    // From the side of the bed, round its foot, out of the bedroom and down the hall to the back door.
+    floor: [[4.95, -3.45], [4.75, -2.55], [3.3, -2.45], [2.55, -3.95], [1.5, -4.3], [0.55, -4.5], [0.1, -4.8]],
+    title: 'Trail of Brine',
+    text: 'Footprints in dried salt water, glowing a sickly green under the lamp. By the bed they are a man\'s bare feet. Down the hall the toes lengthen and splay; at the back door the last prints are three-toed, webbed and clawed, and the stride is far too long. None come back.',
+    checks: [
+      {
+        skill: 'Track', action: 'Follow the trail',
+        success: 'One walker, unhurried, all the way. He did not run and nothing chased him. He stopped once, at the foot of the bed, and stood a long while — the prints there are doubled and smeared.',
+        hard: 'One walker, unhurried. He stood a long while at the foot of the bed before he left. At the back door the last print is half under the door itself: he went out before the boards went up, and the boards were nailed over his footprint.',
+        failure: 'Salt and scuffs. The trail breaks up on the bare boards and you lose it.',
+      },
+      {
+        skill: 'Science (Biology)', action: 'Study the change in the feet',
+        success: 'This is no costume and no deformity. Over a few dozen yards the bones of a foot lengthen and the toes fuse into three. Whatever happened to him happened while he walked.',
+        failure: 'Animal tracks over a man\'s — or a trick of the lamp. You cannot make it mean anything.',
+      },
+    ],
+  },
+  {
+    id: 'uv_brine_glyph', kind: 'brine', mark: 'glyph',
+    wall: { from: [4.0, 1.85, -4.0], toward: [0, 0, -1], size: [0.8, 0.8] },
+    title: 'Sign Above the Bed',
+    text: 'Above the headboard, drawn on the plaster with a wet finger and invisible by any other light: a ring, a three-tined staff with wavering tines, and a wave beneath it. Salt water has run from the strokes and dried.',
+    checks: [
+      {
+        skill: 'Occult', action: 'Read the sign',
+        success: 'A mark of the Esoteric Order of Dagon — the sign members set over a door, or a bed, to say a house is pledged. Someone in this family took the Oath.',
+        failure: 'Fisherman\'s superstition, perhaps. Nothing you know.',
+      },
+      {
+        skill: 'Cthulhu Mythos', action: 'Recall where it is from',
+        success: 'Not a ward. A summons. It tells whatever comes up out of the harbour that someone in this room is ready to go down to it.',
+        failure: 'The shape will not hold still in your memory.',
+      },
+    ],
+  },
+  {
+    id: 'uv_blood_spatter', kind: 'blood', mark: 'spatter',
+    wall: { from: [-3.0, 1.25, -3.35], toward: [1, 0, 0], size: [1.2, 0.9] },
+    title: 'Washed Spatter',
+    text: 'Above the fallen chair the wall has been scrubbed, and by daylight it looks clean. Under the lamp the scrubbing shows as a dark cloud, and through it an arc of flung drops, the sort a heavy blow throws off a weapon on the backswing.',
+    checks: [
+      {
+        skill: 'Science (Forensics)', action: 'Read the spatter',
+        success: 'Two blows, from someone standing where the chair fell, swinging right to left. A tall man, or a woman standing on something. The blood flew back toward the dining table, not the door.',
+        hard: 'Two blows, swung by someone at the fallen chair, right to left. The drops are thinner than they should be and have a greenish ring where they dried — whoever bled here was not entirely human by then.',
+        failure: 'A mess of old stains under older paint. You cannot tell one blow from another.',
+      },
+    ],
+  },
+  {
+    id: 'uv_blood_handprint', kind: 'blood', mark: 'handprint',
+    wall: { from: [-1.0, 0.95, -1.0], toward: [-1, 0, 0], size: [0.34, 0.9] },
+    title: 'Handprint in the Hall',
+    text: 'Beside the dining-room door, a hand in blood: pressed flat at shoulder height, then dragged down the wall to the skirting. Somebody hurt came out of the dining room and needed the wall to stand.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Look closer',
+        success: 'A small hand — a woman\'s, or a child\'s — with a ring on the third finger that left a clean band in the print.',
+        failure: 'A smear. It could be anyone\'s.',
+      },
+      {
+        skill: 'Medicine', action: 'Judge how badly they were hurt',
+        success: 'Enough blood to soak a hand, not enough to kill. Whoever this was walked on.',
+        failure: 'Too old to say.',
+      },
+    ],
+  },
+  {
+    id: 'uv_blood_writing', kind: 'blood', mark: 'writing',
+    words: ['HE IS NOT', 'YOUR FATHER'],
+    wall: { from: [5.0, 1.55, 4.25], toward: [1, 0, 0], size: [1.1, 0.55] },
+    title: 'Words on the Study Wall',
+    text: 'Daubed on the wall beside the desk in big, careful capitals, then scrubbed at with a rag until no eye would see it: HE IS NOT YOUR FATHER.',
+    checks: [
+      {
+        skill: 'Psychology', action: 'Think about who wrote it',
+        success: 'Written for the children, not for him — and scrubbed off later by someone else, someone who did not want them to know.',
+        failure: 'A warning, or a threat. You cannot tell which.',
+      },
+    ],
+  },
+];
+
 /** A Deep One at the hole in the boarded back door, at the end of the hall. */
 const PEEPER: Peeper = { gapSec: [3, 7], holdSec: [1.2, 2.4], shyWithin: 0.8 };
 
@@ -444,6 +537,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   radios: RADIOS,
   peeper: PEEPER,
   photoFrames: PHOTO_FRAMES,
+  uvStains: UV_STAINS,
   atmosphere: {
     background: 0x020202,
     fogColor: 0x030303,

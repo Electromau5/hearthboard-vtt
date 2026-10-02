@@ -16,6 +16,8 @@ import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPan
 import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
 import { joinLevel, type Peer } from './presence';
+import { createWoodsLamp } from './woods-lamp';
+import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
 interface Props {
   /** Which place to explore — HOUSE_LEVEL, VESSEL_LEVEL, … */
@@ -38,11 +40,14 @@ const WALK = 1.7;          // m/s
 const RUN = 3.0;
 const REACH = 2.3;         // how far away something can be examined from
 const LOOK = 0.0022;       // radians per pixel of mouse movement
+const UV_SEEN = 0.12;      // how brightly the lamp must light a stain before it can be examined
 
 type Target = {
   id: string; entry: Examinable; box: THREE.Box3; collection?: Collection;
   /** A map pin: its head swells in focus, and it needs no floating marker — the pin is one. */
   pinHead?: THREE.Object3D;
+  /** A stain only the Wood's lamp shows: it can be examined only while lit. */
+  uv?: { point: THREE.Vector3; normal: THREE.Vector3 };
 };
 type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
 
@@ -71,6 +76,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [savedChecks, setSavedChecks] = useState<Set<string>>(() => new Set());
   const canCheck = !!investigator && !!onCheck;
   const [torchOn, setTorchOn] = useState(true);
+  // The Wood's lamp: in hand (Q), and its switch (F while it is out).
+  const hasLamp = !!level.uvStains?.length;
+  const [lampOut, setLampOut] = useState(false);
+  const [lampOn, setLampOn] = useState(true);
   const [markersOn, setMarkersOn] = useState(true);
   const [radiosOn, setRadiosOn] = useState<Set<string>>(() => new Set());
   // Other investigators in this level right now, by name.
@@ -85,6 +94,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const typingRef = useRef<Target | null>(null);
   const focusRef = useRef<Target | null>(null);
   const torchRef = useRef(true);
+  const lampOutRef = useRef(false);
+  const lampOnRef = useRef(true);
   const markersRef = useRef(true);
   const unlockedAtRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -97,6 +108,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   useEffect(() => { browsingRef.current = browsing; }, [browsing]);
   useEffect(() => { typingRef.current = typing; }, [typing]);
   useEffect(() => { torchRef.current = torchOn; }, [torchOn]);
+  useEffect(() => { lampOutRef.current = lampOut; }, [lampOut]);
+  useEffect(() => { lampOnRef.current = lampOn; }, [lampOn]);
   useEffect(() => { markersRef.current = markersOn; }, [markersOn]);
 
   const openReading = useCallback((t: Target, withSkills = false) => {
@@ -187,7 +200,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           else openReading(t, true);
         }
       }
-      if (e.code === 'KeyF') setTorchOn(v => !v);
+      // Q draws or holsters the Wood's lamp; the torch is put away while it is out, and F works its switch.
+      if (e.code === 'KeyQ' && !e.repeat && hasLamp) setLampOut(v => !v);
+      if (e.code === 'KeyF') {
+        if (lampOutRef.current) setLampOn(v => !v);
+        else setTorchOn(v => !v);
+      }
       // Tab shows or hides the markers over interactive objects (and must not move browser focus).
       if (e.code === 'Tab') {
         e.preventDefault();
@@ -196,7 +214,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level]);
+  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp]);
 
   useEffect(() => {
     const el = mountRef.current;
@@ -223,6 +241,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     scene.background = new THREE.Color(atmo.background);
     scene.fog = new THREE.FogExp2(atmo.fogColor, atmo.fogDensity);
 
+    const owned: { dispose: () => void }[] = [];
     const camera = new THREE.PerspectiveCamera(70, width / height, 0.05, 60);
     camera.rotation.order = 'YXZ';
     scene.add(camera);
@@ -250,6 +269,53 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     camera.add(torch.target);
     torch.target.position.set(0, -0.1, -1);
 
+    // The Wood's lamp: its violet wash on the camera, the stains it finds, and
+    // the lamp itself in the investigator's hand. Others' lit lamps reveal
+    // stains too, and each gets a wash of its own.
+    const uvLevel = !!level.uvStains?.length;
+    const woods = uvLevel ? createWoodsLamp(renderer, width / height) : null;
+    const uvWash = (light: THREE.SpotLight) => {
+      light.angle = CONE_OUTER;
+      light.penumbra = 0.55;
+      light.decay = 2;
+      light.distance = LAMP_RANGE + 1.5;
+      light.intensity = 0;
+      return light;
+    };
+    const uvSpot = uvWash(new THREE.SpotLight(0x6b2dff));
+    const uvOwn: UvLamp = { pos: new THREE.Vector3(), dir: new THREE.Vector3(), power: 0 };
+    const remoteLamps: { light: THREE.SpotLight; glow: THREE.Sprite; lamp: UvLamp }[] = [];
+    if (uvLevel) {
+      uvSpot.position.set(0.12, -0.1, 0);
+      camera.add(uvSpot);
+      camera.add(uvSpot.target);
+      uvSpot.target.position.set(0, -0.02, -1);
+      const glowMap = (() => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 64;
+        const ctx = c.getContext('2d')!;
+        const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        g.addColorStop(0, 'rgba(190,150,255,1)');
+        g.addColorStop(1, 'rgba(80,20,180,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 64, 64);
+        const tex = new THREE.CanvasTexture(c);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+      })();
+      for (let i = 0; i < MAX_LAMPS - 1; i++) {
+        const light = uvWash(new THREE.SpotLight(0x6b2dff));
+        const glowMat = new THREE.SpriteMaterial({ map: glowMap, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+        const glow = new THREE.Sprite(glowMat);
+        glow.scale.setScalar(0.12);
+        glow.visible = false;
+        owned.push(glowMat);
+        scene.add(light, light.target, glow);
+        remoteLamps.push({ light, glow, lamp: { pos: new THREE.Vector3(), dir: new THREE.Vector3(), power: 0 } });
+      }
+      owned.push(glowMap);
+    }
+
     // ── State ───────────────────────────────────────────────────────
     const feet = new THREE.Vector3(-0.3, 0, 4.2);
     let yaw = 0;
@@ -269,7 +335,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const lamps: { light: THREE.PointLight; base: number; dipUntil: number }[] = [];
     let pinboard: ReturnType<typeof createPinboard> | null = null;
     let markers: ReturnType<typeof createInteractMarkers> | null = null;
-    const owned: { dispose: () => void }[] = [];
+    let stains: ReturnType<typeof createUvStains> | null = null;
     let pinTimer = 0;
     let model: THREE.Object3D | null = null;
     let disposed = false;
@@ -544,7 +610,37 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           }
         }
 
-        markers = createInteractMarkers(targets.filter(t => !t.pinHead));
+        // Stains for the Wood's lamp, laid on the walls and floors they name.
+        if (level.uvStains?.length) {
+          const loadedModel = model;
+          const st = createUvStains(
+            level.uvStains,
+            (from, dir) => {
+              ray.set(from, dir);
+              ray.far = 8;
+              const hit = ray.intersectObjects(walls, false)[0];
+              if (!hit?.face) return null;
+              const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+              if (normal.dot(dir) > 0) normal.negate();
+              return { point: hit.point.clone(), normal };
+            },
+            // From just above the boards, so rugs count as floor and tabletops don't.
+            (x, z) => {
+              ray.set(tmpV.set(x, 0.3, z), down);
+              ray.far = 1;
+              const hit = ray.intersectObject(loadedModel, true)[0];
+              return hit ? hit.point.y : null;
+            },
+          );
+          scene.add(st.group);
+          stains = st;
+          for (const piece of st.pieces) {
+            targets.push({ id: piece.stain.id, entry: piece.stain, box: piece.box, uv: { point: piece.point, normal: piece.normal } });
+          }
+        }
+
+        // Stains get no marker: finding them is the lamp's job.
+        markers = createInteractMarkers(targets.filter(t => !t.pinHead && !t.uv));
         scene.add(markers.group);
 
         setLoaded(true);
@@ -655,6 +751,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const lastFeet = new THREE.Vector3().copy(feet);
     const tmpFeet = new THREE.Vector3();
     let gaitHold = 0;
+    let lastYaw = 0, lastPitch = 0;
     let shownGait: Gait = 'idle';
 
     // ── Animate ─────────────────────────────────────────────────────
@@ -698,6 +795,47 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
       camera.position.set(feet.x, feet.y + EYE + Math.sin(t * 1.3) * 0.004, feet.z);
       camera.rotation.set(pitch, yaw, 0);
+      camera.updateMatrixWorld();
+
+      // The Wood's lamp: raise or lower it, let the tube warm, and light the stains.
+      const uvLamps: UvLamp[] = [];
+      if (woods) {
+        woods.setDrawn(lampOutRef.current);
+        woods.setSwitch(lampOnRef.current);
+        const pace = dt > 0 ? Math.min(1, Math.hypot(feet.x - lastFeet.x, feet.z - lastFeet.z) / dt / RUN) : 0;
+        woods.update(dt, [yaw - lastYaw, pitch - lastPitch], pace);
+        uvSpot.intensity = woods.power * 20;
+        uvSpot.getWorldPosition(uvOwn.pos);
+        uvOwn.dir.copy(uvSpot.target.getWorldPosition(tmpV)).sub(uvOwn.pos).normalize();
+        uvOwn.power = woods.power;
+        if (uvOwn.power > 0) uvLamps.push(uvOwn);
+        let slot = 0;
+        for (const { avatar, peer } of avatars.values()) {
+          const aim = peer.pose?.lamp;
+          if (!avatar || aim === undefined || slot >= remoteLamps.length) continue;
+          const r = remoteLamps[slot++];
+          const ay = peer.pose!.yaw;
+          const fwd = tmpV.set(-Math.sin(ay), 0, -Math.cos(ay));
+          // In the right hand, a little ahead and to the side, at chest height.
+          r.lamp.pos.copy(avatar.group.position).add(new THREE.Vector3(0, 1.35, 0))
+            .addScaledVector(fwd, 0.35).addScaledVector(new THREE.Vector3(-fwd.z, 0, fwd.x), 0.18);
+          r.lamp.dir.set(-Math.sin(ay) * Math.cos(aim), Math.sin(aim), -Math.cos(ay) * Math.cos(aim));
+          r.lamp.power = 1;
+          r.light.position.copy(r.lamp.pos);
+          r.light.target.position.copy(r.lamp.pos).add(r.lamp.dir);
+          r.light.intensity = 20;
+          r.glow.position.copy(r.lamp.pos);
+          r.glow.visible = true;
+          uvLamps.push(r.lamp);
+        }
+        for (let i = slot; i < remoteLamps.length; i++) {
+          remoteLamps[i].light.intensity = 0;
+          remoteLamps[i].glow.visible = false;
+        }
+        stains?.setLamps(uvLamps);
+      }
+      lastYaw = yaw;
+      lastPitch = pitch;
 
       // Tell the others where we are and how fast we're going. A short hold
       // keeps a single blocked frame from flicking the figure to idle.
@@ -707,7 +845,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         const gait: Gait = speed > (WALK + RUN) / 2 ? 'run' : speed > 0.3 ? 'walk' : 'idle';
         if (gait !== 'idle') { shownGait = gait; gaitHold = 0.15; }
         else if ((gaitHold -= dt) <= 0) shownGait = 'idle';
-        presence.setPose({ p: [feet.x, feet.y, feet.z], yaw, gait: shownGait });
+        presence.setPose({ p: [feet.x, feet.y, feet.z], yaw, gait: shownGait, lamp: uvOwn.power > 0.3 ? pitch : undefined });
       }
       for (const { avatar, peer } of avatars.values()) {
         if (!avatar) continue;
@@ -717,7 +855,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
 
       // The torch stutters now and then.
-      if (torchRef.current) {
+      if (torchRef.current && !woods?.visible) {
         if (t > flickerUntil && Math.random() < 0.002) flickerUntil = t + 0.25 + Math.random() * 0.4;
         torch.intensity = t < flickerUntil ? (Math.random() < 0.5 ? 4 : 30) : 40;
       } else {
@@ -770,6 +908,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         let best: Target | null = null;
         let bestD = REACH;
         for (const tg of targets) {
+          if (tg.uv && uvLightAt(uvLamps, tg.uv.point, tg.uv.normal) < UV_SEEN) continue;
           const hit = ray.ray.intersectBox(tg.box, tmpV);
           if (!hit) continue;
           const d = hit.distanceTo(camera.position);
@@ -822,6 +961,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
 
       renderer.render(scene, camera);
+      if (woods?.visible) {
+        // The lamp in hand draws over everything, so it never dips into a wall.
+        renderer.autoClear = false;
+        renderer.clearDepth();
+        woods.render(renderer);
+        renderer.autoClear = true;
+      }
     };
     animate();
 
@@ -832,6 +978,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       if (!w || !h) return;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      woods?.resize(w / h);
       renderer.setSize(w, h);
     };
     window.addEventListener('resize', onResize);
@@ -856,6 +1003,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       window.clearInterval(pinTimer);
       pinboard?.dispose();
       markers?.dispose();
+      stains?.dispose();
+      woods?.dispose();
       for (const o of owned) o.dispose();
       peeper?.head.dispose();
       for (const r of radios.values()) {
@@ -885,7 +1034,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? `WASD move · Shift run · Mouse look · E / click examine${canCheck ? ' · R use a skill' : ''} · F torch · Tab markers · Esc release`
+      ? `WASD move · Shift run · Mouse look · E / click examine${canCheck ? ' · R use a skill' : ''} · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -1056,7 +1205,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 borderRadius: 'var(--r-md)', boxShadow: '0 12px 40px rgba(0,0,0,0.8)',
               }}>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
-                  Examined
+                  {reading.uv ? 'Under the Wood\'s lamp' : 'Examined'}
                 </div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--parchment)', margin: '4px 0 10px' }}>
                   {reading.entry.title}
@@ -1157,7 +1306,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           </span>
           <span style={{ display: 'flex', gap: 14, fontFamily: 'var(--font-mono)', fontSize: 9, whiteSpace: 'nowrap' }}>
             <span style={{ color: markersOn ? 'var(--brass)' : 'var(--ink-text-2)' }}>Markers {markersOn ? 'on' : 'off'} [Tab]</span>
-            <span style={{ color: torchOn ? 'var(--brass)' : 'var(--ink-text-2)' }}>Torch {torchOn ? 'on' : 'off'}</span>
+            {hasLamp && (
+              <span style={{ color: lampOut ? '#b48cff' : 'var(--ink-text-2)' }}>
+                Wood&apos;s lamp {lampOut ? (lampOn ? 'lit' : 'out') : 'holstered'} [Q]
+              </span>
+            )}
+            <span style={{ color: torchOn && !lampOut ? 'var(--brass)' : 'var(--ink-text-2)' }}>Torch {lampOut ? 'stowed' : torchOn ? 'on' : 'off'}</span>
           </span>
         </div>
       </div>

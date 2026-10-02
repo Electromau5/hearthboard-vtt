@@ -11,7 +11,8 @@ import type { Gait } from './avatars';
  * refuses, and the level carries on single-player.
  */
 
-export type Pose = { p: [number, number, number]; yaw: number; gait: Gait };
+/** `lamp` is present while their Wood's lamp is lit: the pitch it is aimed at (it points where they look). */
+export type Pose = { p: [number, number, number]; yaw: number; gait: Gait; lamp?: number };
 export type Peer = { id: number; userId: string; name: string; slug: string | null; pose: Pose | null };
 
 type Presence = { pose: Pose | null };
@@ -61,6 +62,7 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void): Le
       // Round so a player standing still sends nothing.
       const r = (n: number) => Math.round(n * 100) / 100;
       const next: Pose = { p: [r(pose.p[0]), r(pose.p[1]), r(pose.p[2])], yaw: r(pose.yaw), gait: pose.gait };
+      if (pose.lamp !== undefined) next.lamp = r(pose.lamp);
       const key = JSON.stringify(next);
       if (key === last) return;
       last = key;

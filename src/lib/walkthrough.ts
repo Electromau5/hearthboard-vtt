@@ -223,6 +223,34 @@ export type PhotoFrames = {
   photos: FramedPhoto[];
 };
 
+/**
+ * A stain that only shows under the Wood's lamp — the investigator's portable
+ * ultraviolet lamp (Q). Blood absorbs ultraviolet, so it shows as a dark mark
+ * on the violet-lit wall; brine's salts and slime fluoresce a pale green.
+ * Neither can be seen by torchlight. Once lit, a stain can be examined like
+ * any other object.
+ */
+export type UvStain = Examinable & {
+  id: string;
+  kind: 'blood' | 'brine';
+  /**
+   * The shape of the mark:
+   *   * `handprint` — a hand pressed to the wall and slid down it
+   *   * `spatter` — drops flung from a blow, with runs beneath the larger ones
+   *   * `glyph` — a sign drawn with a wet finger
+   *   * `writing` — `words` written on the wall, then scrubbed at
+   *   * `prints` — a trail of bare footprints along `floor`, lengthening and
+   *     webbing as they go
+   */
+  mark: 'handprint' | 'spatter' | 'glyph' | 'writing' | 'prints';
+  /** For `writing`: one string per line. */
+  words?: string[];
+  /** Wall marks: cast from `from` along `toward`; the mark is centred where it meets a wall. */
+  wall?: { from: Vec3; toward: Vec3; size: [number, number]; turnDeg?: number };
+  /** Floor marks: the trail's path, as [x, z] points in walking order. */
+  floor?: [number, number][];
+};
+
 export type WalkthroughLevel = {
   /** Stable name for the level's live-presence room — investigators in the same level see each other. */
   id: string;
@@ -246,6 +274,8 @@ export type WalkthroughLevel = {
   /** Pins stuck into the map at the "MapFace" node; `size` is the map's width and height in metres. */
   mapPins?: { size: [number, number]; pins: MapPin[] };
   photoFrames?: PhotoFrames;
+  /** Stains for the Wood's lamp to find. A level without them has no lamp to draw. */
+  uvStains?: UvStain[];
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
   lamps?: { color: number; intensity: number; distance: number };
   atmosphere: {
