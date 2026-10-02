@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { DiceRollerPane } from './components/DiceRollerPane';
 import { CthulhuReliefModal } from './components/CthulhuReliefModal';
 import { WalkthroughModal } from './components/WalkthroughModal';
+import { ZoomableImage } from './components/ZoomableImage';
 import { HOUSE_LEVEL } from '@/lib/innsmouth-house';
 import { VESSEL_LEVEL } from '@/lib/fishing-vessel';
 import { ARCHIVE_LEVEL } from '@/lib/black-archive';
@@ -465,12 +466,29 @@ export default function HearthboardPage() {
   const [walkthrough, setWalkthrough] = useState<WalkthroughLevel | null>(null);
   const [allSkillsOpen, setAllSkillsOpen] = useState(false);
   const [allResourcesOpen, setAllResourcesOpen] = useState(false);
+  const [locCarouselOpen, setLocCarouselOpen] = useState(false);
+  const locTrackRef = useRef<HTMLDivElement>(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [boardView, setBoardView] = useState<'map' | 'board'>('map');
   const [activeMapId, setActiveMapId] = useState<MapId>('default');
   const activeMap = MAPS.find(m => m.id === activeMapId) ?? MAPS[0];
   const [mapMode, setMapMode] = useState<'2d' | '3d'>('2d');
   const show3d = mapMode === '3d' && !!activeMap.model3d;
+
+  // The location carousel's arrows wrap: past the last location is the first.
+  const stepScene = (dir: 1 | -1) => {
+    const scenes = activeMap.scenes;
+    const i = scenes.findIndex(s => s.id === currentSceneId);
+    const next = scenes[((i < 0 ? 0 : i + dir) + scenes.length) % scenes.length];
+    setCurrentSceneId(next.id);
+    setMapZoomedTo(next.id);
+    setSelectedTokenId(null);
+  };
+  // Keep the current location's chip in view as the carousel steps or opens.
+  useEffect(() => {
+    const chip = locTrackRef.current?.querySelector<HTMLElement>('.scene-chip.active');
+    chip?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [currentSceneId, locCarouselOpen, activeMapId]);
   const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
@@ -1235,24 +1253,9 @@ export default function HearthboardPage() {
           <button className="btn btn-ghost btn-sm" onClick={backToDashboard}>← Dashboard</button>
           <span className="gt-title">{currentGame?.name ?? '—'}</span>
           <span className="gt-sys">{currentGame?.system ?? '—'}</span>
-          <div className="scene-switch">
-            {activeMap.scenes.map(s => (
-              <button
-                key={s.id}
-                className={`scene-chip${s.id === currentSceneId ? ' active' : ''}`}
-                onClick={() => {
-                  setCurrentSceneId(s.id);
-                  setMapZoomedTo(prev => prev === s.id ? null : s.id);
-                  setSelectedTokenId(null);
-                }}
-              >
-                {s.short}
-              </button>
-            ))}
-          </div>
           <button
             className={`scene-chip${boardView === 'board' ? ' active' : ''}`}
-            style={{ marginLeft: 8, borderColor: boardView === 'board' ? 'var(--brass)' : undefined, color: boardView === 'board' ? 'var(--brass)' : undefined }}
+            style={{ marginLeft: 16, borderColor: boardView === 'board' ? 'var(--brass)' : undefined, color: boardView === 'board' ? 'var(--brass)' : undefined }}
             onClick={() => setBoardView(v => v === 'map' ? 'board' : 'map')}
             title="Toggle case investigation board"
           >
@@ -1448,6 +1451,36 @@ export default function HearthboardPage() {
             )}
             <div className={`map-grid-overlay${gridOn && !show3d ? '' : ' hidden'}`} id="map-grid-overlay" />
             <div className="map-vignette" />
+            {/* Locations — a carousel docked under the map, closed until opened; the arrows wrap round */}
+            <div className={`loc-carousel${locCarouselOpen ? ' open' : ''}`}>
+              {locCarouselOpen ? (
+                <>
+                  <button className="loc-car-arrow" aria-label="Previous location" onClick={() => stepScene(-1)}>‹</button>
+                  <div className="loc-car-track" ref={locTrackRef}>
+                    {activeMap.scenes.map(s => (
+                      <button
+                        key={s.id}
+                        className={`scene-chip${s.id === currentSceneId ? ' active' : ''}`}
+                        onClick={() => {
+                          setCurrentSceneId(s.id);
+                          setMapZoomedTo(prev => prev === s.id ? null : s.id);
+                          setSelectedTokenId(null);
+                        }}
+                      >
+                        {s.short}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="loc-car-arrow" aria-label="Next location" onClick={() => stepScene(1)}>›</button>
+                  <button className="loc-car-toggle" aria-label="Close locations" onClick={() => setLocCarouselOpen(false)}>▾</button>
+                </>
+              ) : (
+                <button className="loc-car-toggle closed" onClick={() => setLocCarouselOpen(true)}>
+                  Locations ▴
+                  <span className="loc-car-current">{activeMap.scenes.find(s => s.id === currentSceneId)?.short}</span>
+                </button>
+              )}
+            </div>
             {mapZoomedTo && (() => {
               const scene = ALL_SCENES.find(s => s.id === mapZoomedTo);
               const img = scene ? locationImages[scene.locationId] ?? ('image' in scene ? scene.image : undefined) : undefined;
@@ -2631,19 +2664,11 @@ export default function HearthboardPage() {
             cursor: 'zoom-out',
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <ZoomableImage
+            key={lightboxSrc}
             src={lightboxSrc}
             alt=""
-            onClick={e => e.stopPropagation()}
-            style={{
-              maxWidth: '90vw',
-              maxHeight: '90vh',
-              borderRadius: 'var(--r-lg)',
-              border: '1px solid var(--line)',
-              boxShadow: '0 8px 60px rgba(0,0,0,0.8)',
-              objectFit: 'contain',
-            }}
+            style={{ width: '90vw', height: '90vh' }}
           />
           {canStep && (
             <>

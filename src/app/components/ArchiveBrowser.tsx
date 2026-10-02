@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ArchiveDoc } from '@/lib/walkthrough';
+import { ZoomableImage } from './ZoomableImage';
 
 interface Props {
   title: string;
@@ -26,7 +27,6 @@ const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)', letterSpacin
  */
 export function ArchiveBrowser({ title, intro, docs, error, emptyText, shared, onShare, onClose }: Props) {
   const [index, setIndex] = useState(0);
-  const [zoomed, setZoomed] = useState(false);
   const doc = docs?.[Math.min(index, docs.length - 1)];
 
   useEffect(() => {
@@ -34,7 +34,6 @@ export function ArchiveBrowser({ title, intro, docs, error, emptyText, shared, o
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
-        setZoomed(false);
         setIndex(i => Math.max(0, Math.min(docs.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))));
       }
     };
@@ -89,7 +88,7 @@ export function ArchiveBrowser({ title, intro, docs, error, emptyText, shared, o
                 {docs?.map((d, i) => (
                   <button
                     key={d.id}
-                    onClick={() => { setIndex(i); setZoomed(false); }}
+                    onClick={() => setIndex(i)}
                     style={{
                       display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
                       padding: '8px 14px', border: 'none', borderBottom: '1px solid rgba(201,148,79,0.06)',
@@ -114,14 +113,11 @@ export function ArchiveBrowser({ title, intro, docs, error, emptyText, shared, o
                   {doc.meta && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brass)', marginTop: 3 }}>{doc.meta}</div>}
                 </div>
                 {doc.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <ZoomableImage
+                    key={doc.image}
                     src={doc.image}
                     alt={doc.title}
-                    onClick={() => setZoomed(z => !z)}
-                    style={zoomed
-                      ? { width: '100%', height: 'auto', cursor: 'zoom-out', borderRadius: 'var(--r-sm)' }
-                      : { maxWidth: '100%', maxHeight: single ? '68%' : '62%', objectFit: 'contain', alignSelf: 'center', cursor: 'zoom-in', borderRadius: 'var(--r-sm)', boxShadow: '0 4px 18px rgba(0,0,0,0.7)' }}
+                    style={{ flex: '1 1 0', minHeight: 260, borderRadius: 'var(--r-sm)', background: 'rgba(0,0,0,0.35)' }}
                   />
                 )}
                 {doc.video && (
@@ -133,7 +129,7 @@ export function ArchiveBrowser({ title, intro, docs, error, emptyText, shared, o
                 )}
                 <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)' }}>
-                    {doc.image ? 'Click the scan to enlarge · ' : ''}{!single ? '↑ ↓ browse' : ''}
+                    {doc.image ? 'Click or scroll to zoom · drag to pan · ' : ''}{!single ? '↑ ↓ browse' : ''}
                   </span>
                   <button
                     onClick={() => onShare(doc)}
