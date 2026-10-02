@@ -474,6 +474,26 @@ const UV_STAINS: UvStain[] = [
     ],
   },
   {
+    id: 'uv_brine_message', kind: 'brine', mark: 'writing',
+    words: ['ABIGAIL MARSH', 'IS ALIVE'],
+    // The bedroom's west wall, between the door and the dresser, facing the bed.
+    wall: { from: [3.0, 1.5, -1.9], toward: [-1, 0, 0], size: [1.5, 0.65] },
+    title: 'Message in Brine',
+    text: 'Across the bedroom wall, in letters a hand high, drawn with a finger dipped in sea water and dried to salt: ABIGAIL MARSH IS ALIVE. By any other light the plaster is blank.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Study the lettering',
+        success: 'The same finger drew the sign above the bed: the strokes are as wide, and they run the same way. The letters are careful and upright, from someone used to writing a fair hand.',
+        failure: 'Salt letters on old plaster. Nothing more to see in them.',
+      },
+      {
+        skill: 'History', action: 'Place the name',
+        success: 'The Marshes were Innsmouth\'s first family: Captain Obed Marsh\'s line, owners of the refinery, who left the town years ago. No Abigail appears in any record of them you have seen. Either she was never written down, or someone saw to it that she was not.',
+        failure: 'Marsh is an old Innsmouth name. You can recall nothing about an Abigail.',
+      },
+    ],
+  },
+  {
     id: 'uv_blood_spatter', kind: 'blood', mark: 'spatter',
     wall: { from: [-3.0, 1.25, -3.35], toward: [1, 0, 0], size: [1.2, 0.9] },
     title: 'Washed Spatter',
@@ -507,7 +527,7 @@ const UV_STAINS: UvStain[] = [
   },
   {
     id: 'uv_blood_writing', kind: 'blood', mark: 'writing',
-    words: ['HE IS NOT', 'YOUR FATHER'],
+    words: ['HE IS NOT', 'YOUR FATHER'], scrubbed: true,
     wall: { from: [5.0, 1.55, 4.25], toward: [1, 0, 0], size: [1.1, 0.55] },
     title: 'Words on the Study Wall',
     text: 'Daubed on the wall beside the desk in big, careful capitals, then scrubbed at with a rag until no eye would see it: HE IS NOT YOUR FATHER.',

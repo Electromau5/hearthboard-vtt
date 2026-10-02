@@ -267,8 +267,8 @@ function paintGlyph(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => numb
   }
 }
 
-/** Words daubed with a finger, then scrubbed at with a rag — invisible now, except to the lamp. */
-function paintWriting(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => number, lines: string[]) {
+/** Words daubed with a finger — and, if `scrubbed`, wiped at with a rag until only the lamp can find them. */
+function paintWriting(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => number, lines: string[], scrubbed: boolean, ink: number) {
   const lineH = h / (lines.length + 0.4);
   const size = lineH * 0.78;
   ctx.font = `700 ${size}px Georgia, 'Times New Roman', serif`;
@@ -280,7 +280,7 @@ function paintWriting(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => nu
     const base = lineH * (li + 1) + (rnd() - 0.5) * size * 0.1;
     [...line].forEach((ch, i) => {
       ctx.save();
-      ctx.globalAlpha = 0.75 + rnd() * 0.25;
+      ctx.globalAlpha = ink * (0.75 + rnd() * 0.25);
       ctx.translate(x, base + (rnd() - 0.5) * size * 0.12 + i * size * 0.012);
       ctx.rotate((rnd() - 0.5) * 0.18);
       ctx.fillText(ch, 0, 0);
@@ -289,6 +289,7 @@ function paintWriting(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => nu
       x += widths[i];
     });
   });
+  if (!scrubbed) return;
   // The rag: broad sideways wipes that take most of it off and smear the rest.
   ctx.globalCompositeOperation = 'destination-out';
   for (let i = 0; i < 16; i++) {
@@ -461,7 +462,8 @@ export function createUvStains(
       if (stain.mark === 'handprint') paintHandprint(ctx, c.width, c.height, ppm, rnd);
       else if (stain.mark === 'spatter') paintSpatter(ctx, c.width, c.height, ppm, rnd);
       else if (stain.mark === 'glyph') paintGlyph(ctx, c.width, c.height, ppm, rnd);
-      else if (stain.mark === 'writing') paintWriting(ctx, c.width, c.height, ppm, rnd, stain.words ?? []);
+      // Solid letters glowing at full strength burn out to white; brine writes thinner.
+      else if (stain.mark === 'writing') paintWriting(ctx, c.width, c.height, ppm, rnd, stain.words ?? [], !!stain.scrubbed, stain.kind === 'brine' ? 0.4 : 1);
       const geo = new THREE.PlaneGeometry(w, h);
       owned.push(geo);
       const mesh = new THREE.Mesh(geo, material(stain.kind, texture(c)));

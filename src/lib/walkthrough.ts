@@ -238,13 +238,15 @@ export type UvStain = Examinable & {
    *   * `handprint` — a hand pressed to the wall and slid down it
    *   * `spatter` — drops flung from a blow, with runs beneath the larger ones
    *   * `glyph` — a sign drawn with a wet finger
-   *   * `writing` — `words` written on the wall, then scrubbed at
+   *   * `writing` — `words` written on the wall, scrubbed at if `scrubbed`
    *   * `prints` — a trail of bare footprints along `floor`, lengthening and
    *     webbing as they go
    */
   mark: 'handprint' | 'spatter' | 'glyph' | 'writing' | 'prints';
   /** For `writing`: one string per line. */
   words?: string[];
+  /** For `writing`: someone has tried to wipe it off, so only fragments stay legible. */
+  scrubbed?: boolean;
   /** Wall marks: cast from `from` along `toward`; the mark is centred where it meets a wall. */
   wall?: { from: Vec3; toward: Vec3; size: [number, number]; turnDeg?: number };
   /** Floor marks: the trail's path, as [x, z] points in walking order. */
