@@ -466,6 +466,10 @@ export default function HearthboardPage() {
   const [walkthrough, setWalkthrough] = useState<WalkthroughLevel | null>(null);
   const [allSkillsOpen, setAllSkillsOpen] = useState(false);
   const [allResourcesOpen, setAllResourcesOpen] = useState(false);
+  // Archived resources the gamelord has released to the party (shared, server-side).
+  const [unlockedIds, setUnlockedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [pendingUnlocks, setPendingUnlocks] = useState<ReadonlySet<string>>(() => new Set());
+  const isGamelord = session?.user?.id === 'gamelord';
   const [locCarouselOpen, setLocCarouselOpen] = useState(false);
   const locTrackRef = useRef<HTMLDivElement>(null);
   const [exportLoading, setExportLoading] = useState(false);
@@ -661,6 +665,18 @@ export default function HearthboardPage() {
     return () => clearInterval(iv);
   }, []);
 
+  // Refetch the released list each time All Resources opens, so a release
+  // made by the gamelord shows on the next open.
+  useEffect(() => {
+    if (!allResourcesOpen) return;
+    let cancelled = false;
+    fetch('/api/resources/unlocked', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then((ids: string[] | null) => { if (ids && !cancelled) setUnlockedIds(new Set(ids)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [allResourcesOpen]);
+
   const closeLightbox = () => { setLightboxSrc(null); setLightboxGallery([]); };
 
   const stepLightbox = (dir: 1 | -1) => {
@@ -762,6 +778,24 @@ export default function HearthboardPage() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToastVisible(false), 2200);
   }, []);
+
+  const setResourceUnlocked = async (id: string, unlocked: boolean) => {
+    setPendingUnlocks(prev => new Set(prev).add(id));
+    try {
+      const res = await fetch('/api/resources/unlocked', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, unlocked }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setUnlockedIds(new Set(await res.json() as string[]));
+      showToast(unlocked ? 'Released to the party' : 'Returned to the Archive');
+    } catch {
+      showToast('Could not update the Archive');
+    } finally {
+      setPendingUnlocks(prev => { const next = new Set(prev); next.delete(id); return next; });
+    }
+  };
 
   const openGame = () => {
     setView('game');
@@ -2706,7 +2740,9 @@ export default function HearthboardPage() {
       {/* Party resource index — documents, artifacts and carried equipment */}
       {allResourcesOpen && (
         <AllResourcesModal
-          resources={allResources()}
+          resources={allResources(unlockedIds)}
+          onSetUnlocked={isGamelord ? setResourceUnlocked : undefined}
+          pendingUnlocks={pendingUnlocks}
           // Viewers open on top of the index rather than replacing it: the
           // modal stays mounted (keeping its tab and search) and reappears as
           // soon as the viewer closes.

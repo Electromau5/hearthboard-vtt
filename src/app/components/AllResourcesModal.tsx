@@ -19,6 +19,13 @@ interface Props {
   /** Open the 3D artifact viewer. */
   onOpenModel: () => void;
   onClose: () => void;
+  /**
+   * Given only to the gamelord: release an archived item to the party, or
+   * return an unlocked one to the Archive.
+   */
+  onSetUnlocked?: (id: string, unlocked: boolean) => void;
+  /** Ids with a lock change in flight, so their button can show it. */
+  pendingUnlocks?: ReadonlySet<string>;
 }
 
 const ARCHIVE = 'Archive';
@@ -39,6 +46,7 @@ const KIND_LABEL: Record<Resource['kind'], string> = {
  */
 export function AllResourcesModal({
   resources, hidden = false, onOpenImage, onOpenVideo, onOpenAudio, onOpenModel, onClose,
+  onSetUnlocked, pendingUnlocks,
 }: Props) {
   const [query, setQuery] = useState('');
   // One page per category for what the party carries, plus the Archive —
@@ -185,7 +193,10 @@ export function AllResourcesModal({
                 {items.map(r => {
                   const viewable = r.kind !== 'item';
                   const Row = viewable ? 'button' : 'div';
-                  return (
+                  // Archived rows, and rows the gamelord has already unlocked, get a lock toggle.
+                  const lockable = onSetUnlocked && (r.status === 'archived' || r.unlocked);
+                  const pending = pendingUnlocks?.has(r.id) ?? false;
+                  const row = (
                     <Row
                       key={r.id}
                       {...(viewable
@@ -206,9 +217,24 @@ export function AllResourcesModal({
                         {r.note && <span className="res-note">{r.note}</span>}
                       </span>
                       <span className={`res-kind k-${r.kind}`}>
-                        {KIND_LABEL[r.kind]}{r.pages && ` · ${r.pages.length}`}
+                        {r.unlocked && 'Unlocked · '}{KIND_LABEL[r.kind]}{r.pages && ` · ${r.pages.length}`}
                       </span>
                     </Row>
+                  );
+                  if (!lockable) return row;
+                  return (
+                    <div key={r.id} className="res-cell">
+                      {row}
+                      <button
+                        type="button"
+                        className={`res-lock${r.unlocked ? ' relock' : ''}`}
+                        disabled={pending}
+                        onClick={() => onSetUnlocked(r.id, !r.unlocked)}
+                        title={r.unlocked ? `Return ${r.name} to the Archive` : `Release ${r.name} to the party`}
+                      >
+                        {pending ? '…' : r.unlocked ? 'Lock' : 'Unlock'}
+                      </button>
+                    </div>
                   );
                 })}
               </div>

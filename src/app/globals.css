@@ -1364,6 +1364,19 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
 .res-row.archived { opacity: 0.72; border-left: 2px solid var(--brass-dim); }
 .res-row.archived:hover { opacity: 1; }
 
+/* Gamelord only: the lock toggle beside an archived (or released) row. */
+.res-cell { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+.res-cell .res-row { flex: 1; min-width: 0; }
+.res-lock {
+  flex: 0 0 auto; align-self: center; font-family: var(--font-mono); font-size: 9px;
+  text-transform: uppercase; letter-spacing: 1px; padding: 5px 9px; border-radius: var(--r-sm);
+  cursor: pointer; background: rgba(74,124,89,0.12); border: 1px solid var(--forest); color: var(--forest);
+}
+.res-lock:hover { background: rgba(74,124,89,0.24); }
+.res-lock.relock { background: transparent; border-color: var(--line); color: var(--ink-text-2); }
+.res-lock.relock:hover { color: var(--parchment); border-color: var(--brass-dim); }
+.res-lock:disabled { opacity: 0.5; cursor: default; }
+
 /* Top-level category nav. The Archive tab sits apart at the far end: it holds
    every category's stored kit rather than being a category of its own. Scrolls
    sideways inside itself on narrow screens rather than wrapping. */

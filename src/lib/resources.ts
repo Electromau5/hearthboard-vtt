@@ -40,6 +40,8 @@ export type Resource = {
   note?: string;
   /** Sub-section within its tab; see RESOURCE_GROUPS for the order. */
   group?: string;
+  /** Archived by default but released to the party by the gamelord. */
+  unlocked?: boolean;
   /**
    * For a multi-image entry (a portrait series, a paged report): every image
    * in reading order. Opening the entry starts the lightbox on the first.
@@ -415,9 +417,14 @@ const PARTY_KIT: Resource[] = [
   },
 ];
 
-/** The full index, rebuilt from the current character data on each call. */
-export function allResources(): Resource[] {
-  return [...MEDIA, ...PATIENT_FILES, ...carriedResources(), ...PARTY_KIT];
+/**
+ * The full index, rebuilt from the current character data on each call.
+ * `unlocked` holds the ids of archived items the gamelord has released (see
+ * /api/resources/unlocked); they list as active, under their own category.
+ */
+export function allResources(unlocked: ReadonlySet<string> = new Set()): Resource[] {
+  return [...MEDIA, ...PATIENT_FILES, ...carriedResources(), ...PARTY_KIT].map(r =>
+    r.status === 'archived' && unlocked.has(r.id) ? { ...r, status: 'active', unlocked: true } : r);
 }
 
 /** Just the field kit. */
