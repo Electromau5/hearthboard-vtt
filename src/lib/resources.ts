@@ -401,9 +401,23 @@ function carriedResources(): Resource[] {
   );
 }
 
+/** Shared kit that is on no investigator's sheet — held in the party pool. */
+const PARTY_KIT: Resource[] = [
+  {
+    id: 'kit-party-large-flashlight',
+    name: 'Large flashlight',
+    section: 'Weapons & Hardware',
+    group: 'Firearms & Blades',
+    kind: 'item',
+    status: 'active',
+    carriedBy: 'Party pool',
+    note: 'Heavy-duty electric torch — lights cellars, tunnels and night work, and doubles as a club in a pinch.',
+  },
+];
+
 /** The full index, rebuilt from the current character data on each call. */
 export function allResources(): Resource[] {
-  return [...MEDIA, ...PATIENT_FILES, ...carriedResources()];
+  return [...MEDIA, ...PATIENT_FILES, ...carriedResources(), ...PARTY_KIT];
 }
 
 /** Just the field kit. */
