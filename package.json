@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@liveblocks/client": "^3.24.0",
+    "@liveblocks/node": "^3.24.0",
     "@liveblocks/react": "^3.24.0",
     "@types/three": "^0.185.4",
     "@upstash/redis": "^1.38.3",

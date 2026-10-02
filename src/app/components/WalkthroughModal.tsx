@@ -11,6 +11,8 @@ import { createPinboard } from './pinboard';
 import { createInteractMarkers } from './interact-markers';
 import { ArchiveBrowser } from './ArchiveBrowser';
 import { TypewriterPane } from './TypewriterPane';
+import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
+import { joinLevel, type Peer } from './presence';
 
 interface Props {
   /** Which place to explore — HOUSE_LEVEL, VESSEL_LEVEL, … */
@@ -58,6 +60,8 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
   const [torchOn, setTorchOn] = useState(true);
   const [markersOn, setMarkersOn] = useState(true);
   const [radiosOn, setRadiosOn] = useState<Set<string>>(() => new Set());
+  // Other investigators in this level right now, by name.
+  const [companions, setCompanions] = useState<string[]>([]);
   // Checked up front: a browser with WebGL disabled (hardware acceleration off,
   // or the GPU process given up after crashes) makes WebGLRenderer throw.
   const [webgl] = useState(() => WebGL.isWebGL2Available());
@@ -326,6 +330,34 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
           const id = piece.name.startsWith('Examine_') ? piece.name.slice('Examine_'.length) : null;
           const entry = id ? level.examinables[id] : undefined;
           if (id && entry) targets.push({ id, entry, box, collection: level.collections?.[id] });
+          if (entry?.lying) {
+            // Drop onto the top surface at the centre, not box.max.y — a chair
+            // back can rise above the tabletop.
+            const { src, crop: [cx, cy, cw, ch], width, turnDeg = 0 } = entry.lying;
+            const centre = box.getCenter(new THREE.Vector3());
+            const down = new THREE.Raycaster(new THREE.Vector3(centre.x, box.max.y + 0.5, centre.z), new THREE.Vector3(0, -1, 0));
+            const top = down.intersectObject(piece, true)[0]?.point.y ?? box.max.y;
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = Math.round(512 * ch / cw);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const img = new Image();
+            img.onload = () => {
+              if (disposed) return;
+              canvas.getContext('2d')!.drawImage(img, cx, cy, cw, ch, 0, 0, canvas.width, canvas.height);
+              tex.needsUpdate = true;
+            };
+            img.src = src;
+            const geo = new THREE.PlaneGeometry(width, width * ch / cw).rotateX(-Math.PI / 2);
+            const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2 });
+            owned.push(geo, mat, tex);
+            const sheet = new THREE.Mesh(geo, mat);
+            sheet.position.set(centre.x, top + 0.003, centre.z);
+            sheet.rotation.y = THREE.MathUtils.degToRad(turnDeg);
+            sheet.receiveShadow = true;
+            scene.add(sheet);
+          }
           const hazard = id ? level.gazeHazards?.[id] : undefined;
           if (hazard) {
             const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -569,6 +601,37 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
     document.addEventListener('pointerlockchange', onLockChange);
     canvas.addEventListener('click', onCanvasClick);
 
+    // ── Other investigators ─────────────────────────────────────────
+    // Everyone in the same level sees everyone else, as an animated figure
+    // walking where they walk. One figure per connection; a figure appears
+    // once its first position arrives.
+    const avatars = new Map<number, { avatar: RemoteAvatar | null; peer: Peer }>();
+    const onPeers = (peers: Peer[]) => {
+      if (disposed) return;
+      const live = new Set(peers.map(p => p.id));
+      for (const [id, a] of avatars) {
+        if (!live.has(id)) { a.avatar?.dispose(); avatars.delete(id); }
+      }
+      for (const peer of peers) {
+        const known = avatars.get(peer.id);
+        if (known) { known.peer = peer; continue; }
+        const entry = { avatar: null as RemoteAvatar | null, peer };
+        avatars.set(peer.id, entry);
+        createAvatar(peer.slug, peer.name).then(av => {
+          if (disposed || avatars.get(peer.id) !== entry) { av.dispose(); return; }
+          entry.avatar = av;
+          av.group.visible = false;
+          scene.add(av.group);
+        }).catch(err => console.error('Avatar load failed:', err));
+      }
+      setCompanions(peers.filter(p => p.pose).map(p => p.name));
+    };
+    const presence = joinLevel(level.id, onPeers);
+    const lastFeet = new THREE.Vector3().copy(feet);
+    const tmpFeet = new THREE.Vector3();
+    let gaitHold = 0;
+    let shownGait: Gait = 'idle';
+
     // ── Animate ─────────────────────────────────────────────────────
     const clock = new THREE.Clock();
     const lookDir = new THREE.Vector3();
@@ -610,6 +673,23 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
 
       camera.position.set(feet.x, feet.y + EYE + Math.sin(t * 1.3) * 0.004, feet.z);
       camera.rotation.set(pitch, yaw, 0);
+
+      // Tell the others where we are and how fast we're going. A short hold
+      // keeps a single blocked frame from flicking the figure to idle.
+      if (model) {
+        const speed = dt > 0 ? Math.hypot(feet.x - lastFeet.x, feet.z - lastFeet.z) / dt : 0;
+        lastFeet.copy(feet);
+        const gait: Gait = speed > (WALK + RUN) / 2 ? 'run' : speed > 0.3 ? 'walk' : 'idle';
+        if (gait !== 'idle') { shownGait = gait; gaitHold = 0.15; }
+        else if ((gaitHold -= dt) <= 0) shownGait = 'idle';
+        presence.setPose({ p: [feet.x, feet.y, feet.z], yaw, gait: shownGait });
+      }
+      for (const { avatar, peer } of avatars.values()) {
+        if (!avatar) continue;
+        avatar.group.visible = !!peer.pose;
+        if (peer.pose) avatar.setTarget(tmpFeet.fromArray(peer.pose.p), peer.pose.yaw, peer.pose.gait);
+        avatar.update(dt);
+      }
 
       // The torch stutters now and then.
       if (torchRef.current) {
@@ -734,6 +814,10 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
     return () => {
       disposed = true;
       cancelAnimationFrame(animId);
+      presence.leave();
+      for (const a of avatars.values()) a.avatar?.dispose();
+      avatars.clear();
+      setCompanions([]);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
@@ -820,6 +904,11 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
             <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--parchment)' }}>
               {level.title}
             </span>
+            {companions.length > 0 && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--forest)', marginLeft: 14, letterSpacing: '0.4px' }}>
+                ● Here with you: {companions.join(', ')}
+              </span>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -950,7 +1039,7 @@ export function WalkthroughModal({ level, onClose, onShare, author }: Props) {
                     src={reading.entry.image}
                     alt={reading.entry.title}
                     style={{
-                      display: 'block', width: '100%', maxHeight: '52vh', objectFit: 'contain',
+                      display: 'block', width: '100%', maxHeight: '44vh', objectFit: 'contain',
                       marginBottom: 12, background: '#000', border: '1px solid var(--line)',
                     }}
                   />

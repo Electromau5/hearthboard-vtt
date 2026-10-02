@@ -37,7 +37,9 @@ const EXAMINABLES: Record<string, Examinable> = {
   },
   dining_table: {
     title: 'Dining Table',
-    text: 'A long mahogany table set for no one. One of the chairs lies on its back beside it, as if someone rose too quickly.',
+    text: 'A long mahogany table set for no one. One of the chairs lies on its back beside it, as if someone rose too quickly. A torn envelope lies on the boards, the letter half drawn out of it, addressed to Jamies Martnee, Water Street, Innsmouth, Mass.',
+    image: '/innsmouth/letter.webp',
+    lying: { src: '/innsmouth/letter.webp', crop: [215, 455, 1440, 610], width: 0.34, turnDeg: 12 },
   },
   sideboard: {
     title: 'Sideboard',
@@ -117,6 +119,7 @@ const RADIOS: Record<string, RadioSet> = {
 const PEEPER: Peeper = { gapSec: [3, 7], holdSec: [1.2, 2.4], shyWithin: 0.8 };
 
 export const HOUSE_LEVEL: WalkthroughLevel = {
+  id: 'house',
   model: '/innsmouth-house.glb',
   title: 'The Derelict House · Innsmouth',
   loadingText: 'Approaching the house…',

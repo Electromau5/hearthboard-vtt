@@ -25,6 +25,20 @@ export type Examinable = {
   text: string;
   /** A picture under public/ shown on the reading card, above the text. */
   image?: string;
+  /**
+   * Something lying flat on top of the object — a letter on a table — so it
+   * can be spotted before it is examined. Drawn at the centre of the object's
+   * top surface from a crop of `src`.
+   */
+  lying?: {
+    src: string;
+    /** The part of `src` to draw, in its pixels: [x, y, width, height]. */
+    crop: [number, number, number, number];
+    /** Width in metres; the height follows the crop's proportions. */
+    width: number;
+    /** Turn about the vertical, in degrees. */
+    turnDeg?: number;
+  };
 };
 
 /**
@@ -185,6 +199,8 @@ export type PhotoFrames = {
 };
 
 export type WalkthroughLevel = {
+  /** Stable name for the level's live-presence room — investigators in the same level see each other. */
+  id: string;
   model: string;
   /** Header, e.g. "The Derelict House · Innsmouth". */
   title: string;

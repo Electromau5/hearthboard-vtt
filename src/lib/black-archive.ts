@@ -279,6 +279,7 @@ const RADIOS: Record<string, RadioSet> = {
 };
 
 export const ARCHIVE_LEVEL: WalkthroughLevel = {
+  id: 'archive',
   model: '/black-archive.glb',
   title: 'The Black Archive · Boston Harbour',
   loadingText: 'Unlocking the cold store…',

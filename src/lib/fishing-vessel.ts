@@ -102,6 +102,7 @@ const RADIOS: Record<string, RadioSet> = {
 };
 
 export const VESSEL_LEVEL: WalkthroughLevel = {
+  id: 'vessel',
   model: '/fishing-vessel.glb',
   title: 'The Esther Gilman · Innsmouth Reef',
   loadingText: 'Wading out to the wreck…',
