@@ -23,8 +23,6 @@ export type Gait = 'idle' | 'walk' | 'run';
 type Outfit = {
   skin: string; eyes: string; hair: string; jacket: string; trousers: string; shoes: string;
   hat?: { kind: 'fedora' | 'cap'; color: string };
-  /** Width and depth relative to height — over 1 for a heavyset build. */
-  girth?: number;
 };
 
 /** Dressed from each dossier: Wright's surveyor tweed, Finch's mortuary black, Callahan's worn trench coat. */
@@ -33,24 +31,17 @@ const OUTFITS: Record<string, Outfit> = {
   'dr-alistair-finch': { skin: '#e2b896', eyes: '#1d1712', hair: '#1f1a16', jacket: '#1c1c20', trousers: '#18181b', shoes: '#0d0d0f' },
   'thomas-callahan': { skin: '#cf9c76', eyes: '#2a1d14', hair: '#3b2a1e', jacket: '#9a7a4f', trousers: '#3a3630', shoes: '#161210', hat: { kind: 'fedora', color: '#2e2a26' } },
 };
-/**
- * People in the levels (see NpcSpot). The Chief Attendant is drawn from his
- * portrait: bald, heavyset, a cream attendant's smock, grey trousers.
- */
-const NPC_OUTFITS: Record<string, Outfit> = {
-  'chief-attendant': { skin: '#d9a585', eyes: '#2a1d14', hair: '#d4a080', jacket: '#d6cfbd', trousers: '#5a554e', shoes: '#1a1612', girth: 1.18 },
-};
 /** Anyone without an investigator — the Keeper walking the level. */
 const KEEPER: Outfit = { skin: '#d4a684', eyes: '#1d1712', hair: '#2a2420', jacket: '#3a2f45', trousers: '#232028', shoes: '#111', hat: { kind: 'fedora', color: '#1a1720' } };
 
 /** Rows of the 32-px texture each part samples, top to bottom, in glTF UV space. */
-const BANDS: [keyof Omit<Outfit, 'hat' | 'girth'>, number, number][] = [
+const BANDS: [keyof Omit<Outfit, 'hat'>, number, number][] = [
   ['skin', 0, 5.9], ['eyes', 5.9, 9.5], ['hair', 9.5, 15.6], ['jacket', 15.6, 20.9], ['trousers', 20.9, 29.5], ['shoes', 29.5, 32],
 ];
 
 const MODEL_URL = '/avatars/investigator.glb';
-/** Investigators with a model of their own, at /avatars/<slug>.glb. */
-const DRESSED = new Set(['thomas-callahan']);
+/** Investigators — and people in the levels (NpcSpot.outfit) — with a model of their own, at /avatars/<slug>.glb. */
+const DRESSED = new Set(['thomas-callahan', 'chief-attendant']);
 const HEIGHT = 1.75;         // metres, crown to heel
 const CLIP: Record<Gait, string> = { idle: 'Idle', walk: 'Walk', run: 'Run' };
 
@@ -146,7 +137,7 @@ export type RemoteAvatar = {
 export async function createAvatar(slug: string | null, name: string): Promise<RemoteAvatar> {
   const dressed = !!slug && DRESSED.has(slug);
   const { scene, clips } = await loadModel(dressed ? `/avatars/${slug}.glb` : MODEL_URL);
-  const outfit = (slug && (OUTFITS[slug] ?? NPC_OUTFITS[slug])) || KEEPER;
+  const outfit = (slug && OUTFITS[slug]) || KEEPER;
   const figure = SkeletonUtils.clone(scene);
 
   // Measure the skinned, posed vertices: the mesh's own bounds are its unposed
@@ -155,7 +146,7 @@ export async function createAvatar(slug: string | null, name: string): Promise<R
   const raw = new THREE.Box3().setFromObject(figure, true);
   // A dressed model is built in metres at the investigator's own height.
   const scale = dressed ? 1 : HEIGHT / (raw.max.y - raw.min.y);
-  figure.scale.set(scale * (outfit.girth ?? 1), scale, scale * (outfit.girth ?? 1));
+  figure.scale.setScalar(scale);
   figure.position.y = -raw.min.y * scale;
   const top = (raw.max.y - raw.min.y) * scale;
 

@@ -11,3 +11,13 @@ thomas-callahan.glb
        "fedora01" (recoloured), "Suit3" by MRT (recoloured).
   CC BY 4.0: "Shoes_Oxford_male" by Mindfront (Sweden), fitted to the body, otherwise unchanged.
     https://creativecommons.org/licenses/by/4.0/
+
+chief-attendant.glb
+  Built in Blender with MPFB from MakeHuman assets (https://static.makehumancommunity.org/),
+  shaped after his portrait: heavyset, bald, grinning (MakeHuman expression targets).
+  Animation: Idle, Walk and Run retargeted from thomas-callahan.glb (same skeleton).
+  CC0: base body, skin "middleage caucasian male", eyes, eyebrows, eyelashes, teeth, tongue.
+  CC BY 4.0: "Shoes_Oxford_male" by Mindfront (Sweden), fitted to the body, otherwise unchanged.
+  CC BY 4.0: "M_Trousers_01" by Mindfront (Sweden), recoloured grey.
+  CC BY 4.0: "Knitted_Sweater_01" by Mindfront (Sweden), recoloured cream.
+    https://creativecommons.org/licenses/by/4.0/

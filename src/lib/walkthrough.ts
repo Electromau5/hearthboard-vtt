@@ -264,7 +264,7 @@ export type NpcSpot = {
   /** The "Npc_<…>" marker they stand at. */
   node: string;
   name: string;
-  /** Outfit key in src/app/components/avatars.ts. */
+  /** Their look: a model or outfit key in src/app/components/avatars.ts. */
   outfit: string;
 };
 
