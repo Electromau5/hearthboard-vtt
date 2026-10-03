@@ -226,24 +226,27 @@ export type PhotoFrames = {
 /**
  * A stain that only shows under the Wood's lamp — the investigator's portable
  * ultraviolet lamp (Q). Blood absorbs ultraviolet, so it shows as a dark mark
- * on the violet-lit wall; brine's salts and slime fluoresce a pale green.
- * Neither can be seen by torchlight. Once lit, a stain can be examined like
+ * on the violet-lit wall; brine's salts and slime fluoresce a pale green;
+ * invisible ink (milk, lemon juice, laundry bluing) glows a cold blue-white.
+ * None of them can be seen by torchlight. Once lit, a stain can be examined like
  * any other object.
  */
 export type UvStain = Examinable & {
   id: string;
-  kind: 'blood' | 'brine';
+  kind: 'blood' | 'brine' | 'ink';
   /**
    * The shape of the mark:
    *   * `handprint` — a hand pressed to the wall and slid down it
    *   * `spatter` — drops flung from a blow, with runs beneath the larger ones
    *   * `glyph` — a sign drawn with a wet finger
    *   * `writing` — `words` written on the wall, scrubbed at if `scrubbed`
+   *   * `note` — `words` in a small, hurried hand: a message meant to be found
    *   * `prints` — a trail of bare footprints along `floor`, lengthening and
    *     webbing as they go
+   *   * `drag` — something wet or bleeding dragged along `floor`
    */
-  mark: 'handprint' | 'spatter' | 'glyph' | 'writing' | 'prints';
-  /** For `writing`: one string per line. */
+  mark: 'handprint' | 'spatter' | 'glyph' | 'writing' | 'note' | 'prints' | 'drag';
+  /** For `writing` and `note`: one string per line. */
   words?: string[];
   /** For `writing`: someone has tried to wipe it off, so only fragments stay legible. */
   scrubbed?: boolean;
@@ -251,6 +254,8 @@ export type UvStain = Examinable & {
   wall?: { from: Vec3; toward: Vec3; size: [number, number]; turnDeg?: number };
   /** Floor marks: the trail's path, as [x, z] points in walking order. */
   floor?: [number, number][];
+  /** Height of the floor a floor mark lies on, for an upper storey. Default 0. */
+  floorY?: number;
 };
 
 /**

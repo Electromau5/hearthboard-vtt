@@ -98,6 +98,7 @@ const FRAG = /* glsl */ `
 const LOOK = {
   blood: { color: new THREE.Color(0x050001), strength: 1.6, glow: false },
   brine: { color: new THREE.Color(0x7dffc0), strength: 2.2, glow: true },
+  ink: { color: new THREE.Color(0xa8c8ff), strength: 2.0, glow: true },
 } as const;
 
 // ── Masks ───────────────────────────────────────────────────────────
@@ -313,6 +314,74 @@ function paintWriting(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => nu
   }
 }
 
+/**
+ * A message written to be found: small, hurried handwriting, left-aligned, the
+ * lines drifting, the pen (or the finger dipped in milk) running thin and pooling.
+ */
+function paintNote(ctx: Ctx, w: number, h: number, rnd: () => number, lines: string[]) {
+  const lineH = h / (lines.length + 0.6);
+  const font = (px: number) => `600 ${px}px "Bradley Hand", "Segoe Script", "Comic Sans MS", cursive`;
+  // As large as the space allows, but small enough that the longest line fits the width.
+  let size = lineH * 0.6;
+  ctx.font = font(size);
+  const widest = Math.max(...lines.map(l => ctx.measureText(l).width));
+  if (widest > w * 0.88) size *= (w * 0.88) / widest;
+  ctx.font = font(size);
+  ctx.textBaseline = 'alphabetic';
+  const tilt = (rnd() - 0.5) * 0.05;
+  lines.forEach((line, li) => {
+    let x = w * 0.05 + (rnd() - 0.2) * size * 0.4;
+    const base = lineH * (li + 1);
+    for (const word of line.split(' ')) {
+      ctx.save();
+      ctx.globalAlpha = 0.55 + rnd() * 0.45;
+      ctx.translate(x, base + x * tilt + (rnd() - 0.5) * size * 0.08);
+      ctx.rotate(tilt + (rnd() - 0.5) * 0.06);
+      ctx.fillText(word, 0, 0);
+      ctx.restore();
+      x += ctx.measureText(word + ' ').width;
+    }
+  });
+}
+
+/**
+ * A wide smear where something heavy and wet was dragged — the length of the
+ * canvas runs along the drag: broken parallel streaks, the edges ragged, and a
+ * clutching handprint here and there where it caught at the floor.
+ */
+function paintDrag(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => number) {
+  for (let k = 0; k < 26; k++) {
+    const y = h * (0.15 + rnd() * 0.7);
+    let x = rnd() * w * 0.1;
+    ctx.lineWidth = (0.006 + rnd() * 0.03) * ppm;
+    while (x < w) {
+      const len = (0.15 + rnd() * 0.9) * ppm;
+      ctx.globalAlpha = 0.15 + rnd() * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y + (rnd() - 0.5) * 3);
+      ctx.lineTo(Math.min(w, x + len), y + (rnd() - 0.5) * h * 0.06);
+      ctx.stroke();
+      x += len + rnd() * 0.25 * ppm;
+    }
+  }
+  // Fingers dragged sideways where a hand clutched at the boards.
+  const grabs = Math.floor(w / ppm / 2.5);
+  for (let g = 0; g < grabs; g++) {
+    const gx = (g + 0.3 + rnd() * 0.4) * w / Math.max(1, grabs);
+    const gy = h * (rnd() < 0.5 ? 0.12 : 0.88);
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 0.014 * ppm;
+    for (let f = 0; f < 3; f++) {
+      ctx.beginPath();
+      ctx.moveTo(gx + f * 0.02 * ppm, gy);
+      ctx.lineTo(gx + f * 0.02 * ppm - 0.14 * ppm, gy + (gy < h / 2 ? 1 : -1) * 0.05 * ppm);
+      ctx.stroke();
+    }
+  }
+}
+
+const DRAG_WIDTH = 0.5;   // metres
+
 const PRINT_SIZE: [number, number] = [0.2, 0.38];   // metres, toe at the top
 
 /**
@@ -395,7 +464,7 @@ export type UvStains = {
 export function createUvStains(
   stains: UvStain[],
   wallHit: (from: THREE.Vector3, dir: THREE.Vector3) => { point: THREE.Vector3; normal: THREE.Vector3 } | null,
-  floorAt: (x: number, z: number) => number | null,
+  floorAt: (x: number, z: number, nearY: number) => number | null,
 ): UvStains {
   const group = new THREE.Group();
   const pieces: StainPiece[] = [];
@@ -463,7 +532,8 @@ export function createUvStains(
       else if (stain.mark === 'spatter') paintSpatter(ctx, c.width, c.height, ppm, rnd);
       else if (stain.mark === 'glyph') paintGlyph(ctx, c.width, c.height, ppm, rnd);
       // Solid letters glowing at full strength burn out to white; brine writes thinner.
-      else if (stain.mark === 'writing') paintWriting(ctx, c.width, c.height, ppm, rnd, stain.words ?? [], !!stain.scrubbed, stain.kind === 'brine' ? 0.4 : 1);
+      else if (stain.mark === 'writing') paintWriting(ctx, c.width, c.height, ppm, rnd, stain.words ?? [], !!stain.scrubbed, stain.kind === 'blood' ? 1 : 0.4);
+      else if (stain.mark === 'note') paintNote(ctx, c.width, c.height, rnd, stain.words ?? []);
       const geo = new THREE.PlaneGeometry(w, h);
       owned.push(geo);
       const mesh = new THREE.Mesh(geo, material(stain.kind, texture(c)));
@@ -475,12 +545,36 @@ export function createUvStains(
       mesh.updateMatrixWorld(true);
       pieces.push({ stain, box: new THREE.Box3().setFromObject(mesh).expandByScalar(0.03), point: mesh.position.clone(), normal: hit.normal.clone() });
     }
-    if (stain.floor && stain.floor.length > 1) {
+    const up = new THREE.Vector3(0, 1, 0);
+    const floorY = stain.floorY ?? 0;
+    if (stain.mark === 'drag' && stain.floor && stain.floor.length > 1) {
+      // One smear per straight run of the path, each painted to its own length.
+      for (let i = 0; i < stain.floor.length - 1; i++) {
+        const [ax, az] = stain.floor[i];
+        const [bx, bz] = stain.floor[i + 1];
+        const len = Math.hypot(bx - ax, bz - az);
+        const cx = (ax + bx) / 2, cz = (az + bz) / 2;
+        const y = floorAt(cx, cz, floorY);
+        if (y === null || len < 0.05) continue;
+        const ppm = Math.min(300, 2048 / len);
+        const [c, ctx] = canvasFor(len, DRAG_WIDTH, ppm);
+        paintDrag(ctx, c.width, c.height, ppm, rnd);
+        // Overlap the next run a little so the corners don't break.
+        const geo = new THREE.PlaneGeometry(len + DRAG_WIDTH * 0.4, DRAG_WIDTH).rotateX(-Math.PI / 2);
+        owned.push(geo);
+        const mesh = new THREE.Mesh(geo, material(stain.kind, texture(c)));
+        mesh.position.set(cx, y + 0.004, cz);
+        mesh.rotation.y = Math.atan2(-(bz - az), bx - ax);
+        mesh.renderOrder = 2;
+        group.add(mesh);
+        mesh.updateMatrixWorld(true);
+        pieces.push({ stain, box: new THREE.Box3().setFromObject(mesh).expandByScalar(0.04), point: mesh.position.clone(), normal: up });
+      }
+    } else if (stain.floor && stain.floor.length > 1) {
       const path = stain.floor.map(([x, z]) => new THREE.Vector2(x, z));
       const total = path.slice(1).reduce((sum, p, i) => sum + p.distanceTo(path[i]), 0);
       const geo = new THREE.PlaneGeometry(...PRINT_SIZE).rotateX(-Math.PI / 2);
       owned.push(geo);
-      const up = new THREE.Vector3(0, 1, 0);
       // Strides lengthen as the feet do.
       let along = 0.15, side = 1, seg = 0, segStart = 0;
       while (along < total) {
@@ -493,7 +587,7 @@ export function createUvStains(
         const at = a.clone().addScaledVector(dir, along - segStart);
         const x = at.x + -dir.y * side * 0.1;
         const z = at.y + dir.x * side * 0.1;
-        const y = floorAt(x, z);
+        const y = floorAt(x, z, floorY);
         const t = along / total;
         if (y !== null) {
           const stage = Math.min(4, Math.round(t * 4));

@@ -18,7 +18,7 @@
  * filled: he stands at his cage and talks, and remembers (see `npcs`).
  */
 
-import type { Examinable, RadioSet, WalkthroughLevel } from './walkthrough';
+import type { Examinable, RadioSet, UvStain, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   // ── Ground floor: Admissions ──────────────────────────────────────
@@ -113,6 +113,117 @@ const EXAMINABLES: Record<string, Examinable> = {
   },
 };
 
+/**
+ * What the Wood's lamp finds in the ward (see UvStain): the night Cell 66 was
+ * emptied, written in brine and washed-off blood from the cell to the laundry
+ * carts; invisible-ink notes left by Robbie, the laundry crew and the last team
+ * Butler sent; and the Innsmouth sign in Room 7B. Positions are in the ward's
+ * metres — rooms as laid out in Summer's `build_bellevue_cli.gd`; the ward floor
+ * is at y = 3.4. A first pass for the GM, like the examine text.
+ */
+const FH = 3.4;
+const UV_STAINS: UvStain[] = [
+  // ── Ground floor ─────────────────────────────────────────────────
+  {
+    id: 'uv_bv_drag', kind: 'brine', mark: 'drag',
+    // Out of Cell 66, west down the corridor through the gate, into the laundry, to the carts.
+    floor: [[10.5, -3.6], [10.5, -0.3], [-9.5, -0.3], [-9.5, -2.0], [-10.9, -2.9]],
+    title: 'Drag Marks from Sixty-Six',
+    text: 'Under the lamp the floor lights up green: a smear of dried brine as wide as a man\'s shoulders, dragged out of Cell 66, along the Lower Block, through the gate, past the stairs and into the laundry, where it ends at the canvas carts. In places long fingers clawed at the flagstones on the way.',
+    checks: [
+      {
+        skill: 'Track', action: 'Read the drag',
+        success: 'Two people pulled it, walking backwards. One pair of shoes is heavy and flat-footed, with a long sliding scuff on every left step. Whatever they dragged fought for the first few yards and then stopped fighting.',
+        hard: 'Two people pulled it, walking backwards: one heavy and flat-footed, the other in hobnailed boots no orderly here wears. At the laundry the trail goes to the third cart, and beside it is the narrow wheel line of a hand truck, heading for the service door.',
+        failure: 'A smear. Something wet came this way.',
+      },
+    ],
+  },
+  {
+    id: 'uv_bv_corridor_blood', kind: 'blood', mark: 'spatter',
+    wall: { from: [10.5, 1.3, 0.0], toward: [0, 0, 1], size: [1.2, 0.9] },
+    title: 'Blood across from Sixty-Six',
+    text: 'The wall opposite Cell 66 has been washed recently — the paint is cleaner here than anywhere else in the block. Under the lamp an arc of dark drops shows through: someone was struck hard, standing in the corridor just outside the cell door.',
+    checks: [
+      {
+        skill: 'Science (Forensics)', action: 'Read the spatter',
+        success: 'The drops were thrown toward the cell, not out of it. Whoever bled here was standing in the corridor — one of the men who came for the patient, not the patient.',
+        failure: 'Old stains under fresh paint. You cannot tell who bled.',
+      },
+    ],
+  },
+  {
+    id: 'uv_bv_laundry_ink', kind: 'ink', mark: 'note',
+    words: ['Wed. 2 a.m. — cart 3', 'out the service door to the freight yard', 'consigned B.Q.D. — no questions', 'paid in full'],
+    wall: { from: [-10.4, 1.65, -4.5], toward: [0, 0, -1], size: [1.1, 0.55] },
+    title: 'Tally above the Wash Tubs',
+    text: 'On the wall above the wash tubs, in something that dried invisible — milk, or laundry bluing — and glows cold blue under the lamp: "Wed. 2 a.m. — cart 3 — out the service door to the freight yard — consigned B.Q.D. — no questions — paid in full." B.Q.D.: the Boston Quarantine Docks, as on the freight receipt.',
+  },
+  {
+    id: 'uv_bv_cell65_ink', kind: 'ink', mark: 'note',
+    words: ['if they take me too —', 'the box is where the drowned sleep', 'it sings back now. 7B hears it', '— R.'],
+    wall: { from: [6.7, 0.8, -4.5], toward: [0, 0, -1], size: [0.95, 0.5] },
+    title: 'Robbie\'s Hidden Note',
+    text: 'Low on the wall beside the cot, where only someone lying down would write, a note in invisible ink: "if they take me too — the box is where the drowned sleep — it sings back now. 7B hears it — R."',
+    checks: [
+      {
+        skill: 'Psychology', action: 'Think about Robbie',
+        success: 'Not the hand of a madman. Small, careful, written for someone he expected to come looking — and frightened, because he wrote it where the attendants would never think to look.',
+        failure: 'The scrawl of a man who had stopped making sense.',
+      },
+    ],
+  },
+  {
+    id: 'uv_bv_hydro_blood', kind: 'blood', mark: 'handprint',
+    wall: { from: [8.2, 1.45, 6.3], toward: [0, 0, 1], size: [0.34, 0.95] },
+    title: 'Handprint above the Second Bath',
+    text: 'On the white tile above the middle bath, a bloody hand pressed flat and slid down to the rim of the tub: someone laced under the canvas who tried to climb out. The tiles were scrubbed afterwards. The lamp does not care.',
+  },
+  {
+    id: 'uv_bv_office_ink', kind: 'ink', mark: 'note',
+    words: ['Butler\'s last team stood here.', 'He signed 66 out to men with federal papers.', 'He was paid. Do not trust the cage.', '— the last team'],
+    wall: { from: [-6.5, 1.6, 5.8], toward: [-1, 0, 0], size: [1.15, 0.55] },
+    title: 'Message from the Last Team',
+    text: 'On the office wall, in ink that only the lamp shows, a message from other investigators who came before you: "Butler\'s last team stood here. He signed 66 out to men with federal papers. He was paid. Do not trust the cage."',
+  },
+
+  // ── The ward ─────────────────────────────────────────────────────
+  {
+    id: 'uv_bv_7b_glyph', kind: 'brine', mark: 'glyph',
+    // On the side wall over the bed: the north wall here is mostly window.
+    wall: { from: [7.5, FH + 1.6, -4.7], toward: [-1, 0, 0], size: [0.75, 0.75] },
+    title: 'Sign in Room 7B',
+    text: 'Above the bed in 7B, drawn with a wet finger and glowing green under the lamp: a ring, a three-tined staff with wavering tines, and a wave beneath it. The same sign was drawn over the bed in the derelict house in Innsmouth.',
+    checks: [
+      {
+        skill: 'Occult', action: 'Read the sign',
+        success: 'A mark of the Esoteric Order of Dagon, set over a bed to say its sleeper is pledged. Here, on an asylum wall, it means someone inside the ward has taken the Oath — or has been claimed by those who have.',
+        failure: 'Fisherman\'s superstition, or a madman\'s doodle.',
+      },
+    ],
+  },
+  {
+    id: 'uv_bv_dayroom_hands', kind: 'brine', mark: 'handprint',
+    wall: { from: [-9.1, FH + 1.4, 6.5], toward: [0, 0, 1], size: [0.34, 0.95] },
+    title: 'Wet Handprints at the Window',
+    text: 'Beside the day-room window that looks east over the river, a hand pressed to the wall in brine and dragged down it — and above and beside it, fainter, others: the same hand, again and again, night after night, as if someone stood here reaching for the water.',
+  },
+  {
+    id: 'uv_bv_nurses_ink', kind: 'ink', mark: 'note',
+    words: ['the census lies —', 'one name up here was changed', 'the night he came in.', 'the nurse knows which. — R.'],
+    wall: { from: [-1.5, FH + 1.5, 4.4], toward: [-1, 0, 0], size: [0.95, 0.5] },
+    title: 'Note behind the Nurses\' Station',
+    text: 'On the wall behind the nurses\' counter, in Robbie\'s small hand and invisible ink: "the census lies — one name up here was changed the night he came in. the nurse knows which. — R."',
+  },
+  {
+    id: 'uv_bv_treatment_blood', kind: 'blood', mark: 'spatter',
+    // Beside the bed's head rather than behind it, where the headboard would hide it.
+    wall: { from: [-10.5, FH + 1.35, -2.55], toward: [-1, 0, 0], size: [1.0, 0.75] },
+    title: 'Spray by the Restraint Bed',
+    text: 'Fine spray on the wall beside the head of the restraint bed, washed off again and again: the pattern a man makes coughing blood while strapped down.',
+  },
+];
+
 /** The day room's gramophone plays the campaign's first theme. */
 const RADIOS: Record<string, RadioSet> = {
   gramophone: { src: '/soundtrack-1.mp3', volume: 0.7, refDistance: 1.6 },
@@ -128,6 +239,7 @@ export const BELLEVUE_LEVEL: WalkthroughLevel = {
   leaveLabel: 'Leave the ward',
   examinables: EXAMINABLES,
   radios: RADIOS,
+  uvStains: UV_STAINS,
   // He keeps the admissions cage at the ward's entrance. What he knows, hides and remembers: src/lib/npc-personas.ts.
   npcs: [{ id: 'chief-attendant', node: 'Npc_attendant', name: 'The Chief Attendant', outfit: 'chief-attendant' }],
   // Caged ceiling bulbs: corridors and the rooms the night staff use. Cells, the stairwell,

@@ -77,6 +77,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [attempts, setAttempts] = useState<Record<string, Attempt>>({});
   const [sharedChecks, setSharedChecks] = useState<Set<string>>(() => new Set());
   const [savedChecks, setSavedChecks] = useState<Set<string>>(() => new Set());
+  // Finds pinned to the case board from the reading card, and the one being pinned now.
+  const [savedFinds, setSavedFinds] = useState<Set<string>>(() => new Set());
+  const [savingFind, setSavingFind] = useState<string | null>(null);
   const canCheck = !!investigator && !!onCheck;
   const [torchOn, setTorchOn] = useState(true);
   // The Wood's lamp: in hand (Q), and its switch (F while it is out).
@@ -164,6 +167,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     onShare(`pulled "${doc.title}" from the ${t.entry.title.toLowerCase()}${detail}`);
     setSharedDocs(prev => new Set(prev).add(`${t.id}/${doc.id}`));
   }, [onShare]);
+
+  // Pins what the card says to the case board. Wood's-lamp finds go on lavender paper.
+  const saveFind = useCallback(async (t: Target) => {
+    setSavingFind(t.id);
+    const place = level.title.split(' · ')[0];
+    const how = t.uv ? " · under the Wood's lamp" : '';
+    const note = `${t.entry.title}${how} · ${place}\n\n${t.entry.text}\n\n— ${investigator?.name ?? author}`;
+    try {
+      await fileNote(note, author, { prefix: 'clue', color: t.uv ? '#e4dcf2' : '#e8dcc0' });
+      setSavedFinds(prev => new Set(prev).add(t.id));
+      refreshPinsRef.current?.();
+    } catch (err) {
+      console.error('Could not pin to the case board:', err);
+    } finally {
+      setSavingFind(null);
+    }
+  }, [level, investigator, author]);
 
   const share = useCallback((t: Target) => {
     onShare(`examined the ${t.entry.title.toLowerCase()} — ${t.entry.text}`);
@@ -633,8 +653,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               return { point: hit.point.clone(), normal };
             },
             // From just above the boards, so rugs count as floor and tabletops don't.
-            (x, z) => {
-              ray.set(tmpV.set(x, 0.3, z), down);
+            (x, z, nearY) => {
+              ray.set(tmpV.set(x, nearY + 0.3, z), down);
               ray.far = 1;
               const hit = ray.intersectObject(loadedModel, true)[0];
               return hit ? hit.point.y : null;
@@ -1313,6 +1333,18 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                       {skillsOpen ? 'Hide skills [R]' : 'Use a skill [R]'}
                     </button>
                   )}
+                  <button
+                    onClick={() => void saveFind(reading)}
+                    disabled={savedFinds.has(reading.id) || savingFind === reading.id}
+                    style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                      padding: '5px 10px', borderRadius: 'var(--r-sm)', cursor: savedFinds.has(reading.id) ? 'default' : 'pointer',
+                      background: 'rgba(201,148,79,0.08)', border: '1px solid var(--brass-dim)',
+                      color: savedFinds.has(reading.id) ? 'var(--ink-text-2)' : 'var(--brass)',
+                    }}
+                  >
+                    {savedFinds.has(reading.id) ? 'On the case board' : savingFind === reading.id ? 'Pinning…' : 'Save to case board'}
+                  </button>
                   <button
                     onClick={() => share(reading)}
                     disabled={shared.has(reading.id)}
