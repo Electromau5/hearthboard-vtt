@@ -242,6 +242,9 @@ export const BELLEVUE_LEVEL: WalkthroughLevel = {
   uvStains: UV_STAINS,
   // He keeps the admissions cage at the ward's entrance. What he knows, hides and remembers: src/lib/npc-personas.ts.
   npcs: [{ id: 'chief-attendant', node: 'Npc_attendant', name: 'The Chief Attendant', outfit: 'chief-attendant' }],
+  // TEST: the Deep One model walking a loop round the admissions hall, clear of the cage
+  // and the benches. It ignores everyone. Its walk covers about a metre a second.
+  wanderers: [{ model: '/avatars/deep-one.glb', clip: 'Walk', speed: 1.0, path: [[1.4, 6.0], [1.5, 3.0], [0.4, 2.4], [-0.55, 3.0], [-0.55, 6.0], [0.4, 6.5]] }],
   // Caged ceiling bulbs: corridors and the rooms the night staff use. Cells, the stairwell,
   // the office and the patient rooms are left dark.
   lamps: { color: 0xffe2b0, intensity: 3.2, distance: 8 },

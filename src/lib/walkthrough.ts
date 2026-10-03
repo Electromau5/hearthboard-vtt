@@ -273,6 +273,25 @@ export type NpcSpot = {
   outfit: string;
 };
 
+/**
+ * A figure that walks a loop through the level and does nothing else: no
+ * collision, nothing to examine, no reaction to players. Its model plays one
+ * walk-in-place clip while the level moves it along a smooth closed curve
+ * through `path`, facing the way it goes.
+ */
+export type Wanderer = {
+  /** A .glb under public/ whose figure faces +Z. */
+  model: string;
+  /** The clip to loop. Default: the model's first. */
+  clip?: string;
+  /** [x, z] points of the loop, in walking order; it closes back to the first. */
+  path: [number, number][];
+  /** Metres per second — match the clip's stride, or the feet slide. */
+  speed: number;
+  /** Height of the floor it walks on. Default 0. */
+  y?: number;
+};
+
 export type WalkthroughLevel = {
   /** Stable name for the level's live-presence room — investigators in the same level see each other. */
   id: string;
@@ -298,6 +317,8 @@ export type WalkthroughLevel = {
   photoFrames?: PhotoFrames;
   /** People to talk to. */
   npcs?: NpcSpot[];
+  /** Figures that walk loops and ignore the investigators. */
+  wanderers?: Wanderer[];
   /** Stains for the Wood's lamp to find. A level without them has no lamp to draw. */
   uvStains?: UvStain[];
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */

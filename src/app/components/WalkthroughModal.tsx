@@ -775,6 +775,27 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const avatars = new Map<number, { avatar: RemoteAvatar | null; peer: Peer }>();
     // The level's own people (see NpcSpot): where they stand and which way they face at rest.
     const npcs: { avatar: RemoteAvatar | null; home: THREE.Vector3; homeYaw: number }[] = [];
+
+    // Figures walking their loops (see Wanderer). Each loads on its own; until then it is absent.
+    const wanderers: { root: THREE.Object3D; mixer: THREE.AnimationMixer; curve: THREE.CatmullRomCurve3; length: number; speed: number; along: number }[] = [];
+    for (const w of level.wanderers ?? []) {
+      new GLTFLoader().loadAsync(w.model).then(gltf => {
+        if (disposed) return;
+        const y = w.y ?? 0;
+        const curve = new THREE.CatmullRomCurve3(w.path.map(([x, z]) => new THREE.Vector3(x, y, z)), true, 'centripetal');
+        const root = gltf.scene;
+        root.traverse(o => {
+          const m = o as THREE.Mesh;
+          if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; }   // skinned bounds lag the walk
+        });
+        const mixer = new THREE.AnimationMixer(root);
+        const clip = (w.clip && gltf.animations.find(a => a.name === w.clip)) || gltf.animations[0];
+        if (clip) mixer.clipAction(clip).play();
+        scene.add(root);
+        wanderers.push({ root, mixer, curve, length: curve.getLength(), speed: w.speed, along: 0 });
+      }).catch(err => console.error('Wanderer failed to load:', w.model, err));
+    }
+    const wanderAhead = new THREE.Vector3();
     const onPeers = (peers: Peer[]) => {
       if (disposed) return;
       const live = new Set(peers.map(p => p.id));
@@ -901,6 +922,16 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (peer.pose) avatar.setTarget(tmpFeet.fromArray(peer.pose.p), peer.pose.yaw, peer.pose.gait);
         avatar.update(dt);
       }
+      // Wanderers walk on round their loops, facing the way they go.
+      for (const w of wanderers) {
+        w.mixer.update(dt);
+        w.along = (w.along + w.speed * dt) % w.length;
+        const u = w.along / w.length;
+        w.curve.getPointAt(u, w.root.position);
+        w.curve.getTangentAt(u, wanderAhead);
+        w.root.rotation.y = Math.atan2(wanderAhead.x, wanderAhead.z);
+      }
+
       // People turn to watch whoever comes near, and settle back when they leave.
       // Their names show only close to, so a name never gives them away through a wall.
       for (const { avatar, home, homeYaw } of npcs) {
@@ -1065,6 +1096,16 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       markers?.dispose();
       stains?.dispose();
       for (const p of npcs) p.avatar?.dispose();
+      for (const w of wanderers) {
+        w.mixer.stopAllAction();
+        w.root.removeFromParent();
+        w.root.traverse(o => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          m.geometry.dispose();
+          for (const mat of [m.material].flat()) mat.dispose();
+        });
+      }
       woods?.dispose();
       for (const o of owned) o.dispose();
       peeper?.head.dispose();
