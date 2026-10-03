@@ -14,7 +14,8 @@
  * is physical description for the GM to build clues on. The model also marks
  * where people will stand (`Npc_*` nodes) — the attendant at the admissions
  * cage, a nurse, patients in the day room and Ward 3B, and whoever is behind
- * the closed doors of Cells 63 and 64.
+ * the closed doors of Cells 63 and 64. The Chief Attendant is the first to be
+ * filled: he stands at his cage and talks, and remembers (see `npcs`).
  */
 
 import type { Examinable, RadioSet, WalkthroughLevel } from './walkthrough';
@@ -127,6 +128,8 @@ export const BELLEVUE_LEVEL: WalkthroughLevel = {
   leaveLabel: 'Leave the ward',
   examinables: EXAMINABLES,
   radios: RADIOS,
+  // He keeps the admissions cage at the ward's entrance. What he knows, hides and remembers: src/lib/npc-personas.ts.
+  npcs: [{ id: 'chief-attendant', node: 'Npc_attendant', name: 'The Chief Attendant', outfit: 'chief-attendant' }],
   // Caged ceiling bulbs: corridors and the rooms the night staff use. Cells, the stairwell,
   // the office and the patient rooms are left dark.
   lamps: { color: 0xffe2b0, intensity: 3.2, distance: 8 },

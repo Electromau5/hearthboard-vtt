@@ -253,6 +253,21 @@ export type UvStain = Examinable & {
   floor?: [number, number][];
 };
 
+/**
+ * Someone in the level the investigator can talk to (E). They stand at the
+ * model's `node` marker, facing its -Z, and turn to watch whoever comes near.
+ * What they know and how they behave lives on the server (src/lib/npc-personas.ts),
+ * keyed by `id`; so does what they remember about each investigator.
+ */
+export type NpcSpot = {
+  id: string;
+  /** The "Npc_<…>" marker they stand at. */
+  node: string;
+  name: string;
+  /** Outfit key in src/app/components/avatars.ts. */
+  outfit: string;
+};
+
 export type WalkthroughLevel = {
   /** Stable name for the level's live-presence room — investigators in the same level see each other. */
   id: string;
@@ -276,6 +291,8 @@ export type WalkthroughLevel = {
   /** Pins stuck into the map at the "MapFace" node; `size` is the map's width and height in metres. */
   mapPins?: { size: [number, number]; pins: MapPin[] };
   photoFrames?: PhotoFrames;
+  /** People to talk to. */
+  npcs?: NpcSpot[];
   /** Stains for the Wood's lamp to find. A level without them has no lamp to draw. */
   uvStains?: UvStain[];
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */

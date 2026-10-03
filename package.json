@@ -15,12 +15,14 @@
     "@types/three": "^0.185.4",
     "@upstash/redis": "^1.38.3",
     "@vercel/blob": "^2.8.0",
+    "ai": "^7.0.127",
     "bcryptjs": "^3.0.3",
     "next": "16.3.1",
     "next-auth": "^5.0.0-beta.32",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

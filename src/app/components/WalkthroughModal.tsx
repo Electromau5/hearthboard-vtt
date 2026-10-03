@@ -5,13 +5,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Collection, Examinable, GazeHazard, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Collection, Examinable, GazeHazard, NpcSpot, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
 import { createPinboard } from './pinboard';
 import { createInteractMarkers } from './interact-markers';
 import { ArchiveBrowser } from './ArchiveBrowser';
 import { TypewriterPane } from './TypewriterPane';
+import { NpcConversation } from './NpcConversation';
 import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
 import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
@@ -46,6 +47,8 @@ type Target = {
   id: string; entry: Examinable; box: THREE.Box3; collection?: Collection;
   /** A map pin: its head swells in focus, and it needs no floating marker — the pin is one. */
   pinHead?: THREE.Object3D;
+  /** Someone to talk to: E opens a conversation instead of the reading card. */
+  npc?: NpcSpot;
   /** A stain only the Wood's lamp shows: it can be examined only while lit. */
   uv?: { point: THREE.Vector3; normal: THREE.Vector3 };
 };
@@ -124,13 +127,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, []);
 
   // Collections, typewriters and map pins open their own panes, not the reading card.
-  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !level.typewriters?.[t.id], [canCheck, level]);
+  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !level.typewriters?.[t.id], [canCheck, level]);
 
   // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
   // each time; a typewriter opens a sheet to type on; anything else opens the
   // reading card.
   const openTarget = useCallback((t: Target) => {
-    if (level.typewriters?.[t.id]) {
+    // A typewriter or a person takes the keyboard: both open over the level in `typing`.
+    if (level.typewriters?.[t.id] || t.npc) {
       setTyping(t);
       document.exitPointerLock?.();
       return;
@@ -643,8 +647,26 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           }
         }
 
-        // Stains get no marker: finding them is the lamp's job.
-        markers = createInteractMarkers(targets.filter(t => !t.pinHead && !t.uv));
+        // People, standing at their markers. Each is a target the size of a person.
+        for (const spot of level.npcs ?? []) {
+          const node = model.getObjectByName(spot.node);
+          if (!node) { console.warn(`NPC "${spot.id}" has no "${spot.node}" marker`); continue; }
+          const home = node.getWorldPosition(new THREE.Vector3());
+          const homeYaw = new THREE.Euler().setFromQuaternion(node.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+          const person: (typeof npcs)[number] = { avatar: null, home, homeYaw };
+          npcs.push(person);
+          const box = new THREE.Box3(new THREE.Vector3(home.x - 0.35, home.y, home.z - 0.35), new THREE.Vector3(home.x + 0.35, home.y + 1.85, home.z + 0.35));
+          targets.push({ id: `npc-${spot.id}`, entry: { title: spot.name, text: '' }, box, npc: spot });
+          createAvatar(spot.outfit, spot.name).then(av => {
+            if (disposed) { av.dispose(); return; }
+            person.avatar = av;
+            av.setTarget(home, homeYaw, 'idle');
+            scene.add(av.group);
+          }).catch(err => console.error('NPC figure failed to load:', err));
+        }
+
+        // Stains get no marker: finding them is the lamp's job. People have their names over their heads.
+        markers = createInteractMarkers(targets.filter(t => !t.pinHead && !t.uv && !t.npc));
         scene.add(markers.group);
 
         setLoaded(true);
@@ -731,6 +753,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // walking where they walk. One figure per connection; a figure appears
     // once its first position arrives.
     const avatars = new Map<number, { avatar: RemoteAvatar | null; peer: Peer }>();
+    // The level's own people (see NpcSpot): where they stand and which way they face at rest.
+    const npcs: { avatar: RemoteAvatar | null; home: THREE.Vector3; homeYaw: number }[] = [];
     const onPeers = (peers: Peer[]) => {
       if (disposed) return;
       const live = new Set(peers.map(p => p.id));
@@ -857,6 +881,17 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (peer.pose) avatar.setTarget(tmpFeet.fromArray(peer.pose.p), peer.pose.yaw, peer.pose.gait);
         avatar.update(dt);
       }
+      // People turn to watch whoever comes near, and settle back when they leave.
+      // Their names show only close to, so a name never gives them away through a wall.
+      for (const { avatar, home, homeYaw } of npcs) {
+        if (!avatar) continue;
+        const dx = camera.position.x - home.x;
+        const dz = camera.position.z - home.z;
+        const near = Math.hypot(dx, dz) < 5 && Math.abs(camera.position.y - EYE - home.y) < 1;
+        avatar.setTarget(home, near ? Math.atan2(-dx, -dz) : homeYaw, 'idle');
+        avatar.label.visible = near;
+        avatar.update(dt);
+      }
 
       // The torch stutters now and then.
       if (torchRef.current && !woods?.visible) {
@@ -915,7 +950,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           if (tg.uv && uvLightAt(uvLamps, tg.uv.point, tg.uv.normal) < UV_SEEN) continue;
           const hit = ray.ray.intersectBox(tg.box, tmpV);
           if (!hit) continue;
-          const d = hit.distanceTo(camera.position);
+          // A person wins over whatever they stand behind (the admissions counter, a desk).
+          const d = hit.distanceTo(camera.position) - (tg.npc ? 1.2 : 0);
           if (d < bestD) { bestD = d; best = tg; }
         }
         if (best && wallDist(camera.position.clone(), lookDir, bestD) < bestD - 0.05) best = null;
@@ -1008,6 +1044,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       pinboard?.dispose();
       markers?.dispose();
       stains?.dispose();
+      for (const p of npcs) p.avatar?.dispose();
       woods?.dispose();
       for (const o of owned) o.dispose();
       peeper?.head.dispose();
@@ -1120,7 +1157,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.5px',
               color: 'var(--parchment)', textShadow: '0 1px 4px #000',
             }}>
-              {focus.collection ? (
+              {focus.npc ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Speak to {focus.entry.title.replace(/^The /, 'the ')}</>
+              ) : focus.collection ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Open {focus.entry.title}</>
               ) : level.typewriters?.[focus.id] ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Type at the {focus.entry.title}</>
@@ -1186,6 +1225,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               onClose={closeBrowsing}
             />
           )}
+
+          {typing?.npc && <NpcConversation npc={typing.npc} onClose={closeTyping} />}
 
           {typing && level.typewriters?.[typing.id] && (
             <TypewriterPane

@@ -14,6 +14,7 @@ A browser-based Virtual Tabletop (VTT) for the *Echoes of Darkness* Call of Cthu
 | Styling | Tailwind CSS v4 + custom CSS variables |
 | Language | TypeScript 5 / React 19 |
 | 3D | three.js (`three@^0.185`) — dice roller and relief viewer |
+| NPC dialogue | AI SDK 7 (`ai`) through Vercel AI Gateway (`anthropic/claude-sonnet-5.5`, override with `NPC_MODEL`); auth is Vercel OIDC |
 | Shared state | Upstash Redis (prod) / `data/` (dev) — all JSON state |
 | Binary uploads | Vercel Blob — **unprovisioned**; avatars, assets and location attachments |
 | Runtime | Node.js for API routes; Edge Runtime for `src/proxy.ts` |
@@ -51,6 +52,7 @@ src/
       pinboard.ts                 # Pins the case board's live notes onto a walkthrough corkboard
       interact-markers.ts         # Floating markers over a walkthrough's interactive objects — Tab toggles them
       deep-one.ts                 # Procedural Deep One head — peers through the house's back-door peephole
+      NpcConversation.tsx         # Talking to a walkthrough NPC (E) — free text, answered in character via /api/npc/[id]
       woods-lamp.ts               # First-person Wood's lamp (Q) — the 1930s UV lamp held in view, drawn over the level
       uv-stains.ts                # Blood/brine decals only the Wood's lamp reveals (level.uvStains)
     characters/
@@ -85,6 +87,7 @@ src/
       board/route.ts              # GET/POST — shared board state
       effects/route.ts            # GET — player-facing effects polling
       dev-assets/[...path]/route.ts      # GET — serves files out of data/ in local dev
+      npc/[id]/route.ts           # POST — talk to an NPC; per-investigator memory in redis-storage (npc/<id>/<slug>)
   auth.ts                         # Full NextAuth config (Node.js runtime only)
   auth.config.ts                  # Edge-safe config (no fs/bcrypt) — used by proxy
   proxy.ts                        # Next.js 16 edge middleware (replaces middleware.ts)
@@ -100,6 +103,7 @@ src/
     innsmouth-house.ts            # HOUSE_LEVEL — the derelict house's clue text and atmosphere
     fishing-vessel.ts             # VESSEL_LEVEL — the wrecked trawler "Esther Gilman"
     black-archive.ts              # ARCHIVE_LEVEL — the Black Archive warehouse; rooms open live board notes and All Resources
+    npc-personas.ts               # Server-only: who each NPC is, what they know and hide, whom they already know
     bellevue.ts                   # BELLEVUE_LEVEL — the two-storey Bellevue ward: Admissions, the Lower Block (Cells 63–66), the ward upstairs
     session-recaps.ts             # Session cliff notes (from the GM's Drive recaps) — typed cards on the Archive's case board
     innsmouth-scenes.ts           # INNSMOUTH_SCENES — Innsmouth map pins, shared by the board and the Archive's wall chart
