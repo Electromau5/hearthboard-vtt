@@ -21,3 +21,9 @@ chief-attendant.glb
   CC BY 4.0: "M_Trousers_01" by Mindfront (Sweden), recoloured grey.
   CC BY 4.0: "Knitted_Sweater_01" by Mindfront (Sweden), recoloured cream.
     https://creativecommons.org/licenses/by/4.0/
+
+deep-one.glb
+  Sculpt: Deep_One_ver1.stl, supplied by the GM (a tabletop miniature; base removed, scaled to 1.95 m,
+  reduced to 60k triangles, painted with vertex colours in Blender).
+  Animation: Mixamo "Mutant Walking" (Adobe Mixamo), retargeted to a fitted Mixamo skeleton and made
+  walk-in-place, arms damped to suit the sculpt.
