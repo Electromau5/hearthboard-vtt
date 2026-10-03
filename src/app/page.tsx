@@ -10,6 +10,7 @@ import { ZoomableImage } from './components/ZoomableImage';
 import { HOUSE_LEVEL } from '@/lib/innsmouth-house';
 import { VESSEL_LEVEL } from '@/lib/fishing-vessel';
 import { ARCHIVE_LEVEL } from '@/lib/black-archive';
+import { BELLEVUE_LEVEL } from '@/lib/bellevue';
 import { INNSMOUTH_SCENES } from '@/lib/innsmouth-scenes';
 import type { WalkthroughLevel } from '@/lib/walkthrough';
 import { InnsmouthTown3D } from './components/InnsmouthTown3D';
@@ -50,6 +51,7 @@ const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; a
   'loc-inn-house':  { level: HOUSE_LEVEL,  preview: '/innsmouth-house-preview.jpeg', alt: "The derelict house's front hall", cta: 'Enter the house',  hint: 'Click to go inside' },
   'loc-inn-vessel': { level: VESSEL_LEVEL, preview: '/fishing-vessel-preview.jpeg',  alt: "The wrecked trawler's deck",      cta: 'Board the vessel', hint: 'Click to climb aboard' },
   'loc-blackarchive': { level: ARCHIVE_LEVEL, preview: '/black-archive-preview.jpeg', alt: "The Black Archive's warehouse floor", cta: 'Enter the archive', hint: 'Click to step inside' },
+  'loc-bellevue': { level: BELLEVUE_LEVEL, preview: '/bellevue-ward-preview.jpeg', alt: "Bellevue's admissions hall", cta: 'Enter the ward', hint: 'Click to sign in' },
 };
 
 /**

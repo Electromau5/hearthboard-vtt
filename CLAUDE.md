@@ -46,7 +46,7 @@ src/
       LoadingOverlay.tsx          # Full-screen GIF loader
       NavigationLoader.tsx        # Shows the overlay for one GIF cycle on route change
       InnsmouthTown3D.tsx         # 3D Innsmouth map (three.js) — the board's 2D/3D toggle on the Innsmouth map
-      WalkthroughModal.tsx        # First-person walkthrough of a Summer-built level (house, fishing vessel, Black Archive)
+      WalkthroughModal.tsx        # First-person walkthrough of a Summer-built level (house, fishing vessel, Black Archive, Bellevue)
       ArchiveBrowser.tsx          # A walkthrough collection's contents (E on a filing cabinet, gun rack…)
       pinboard.ts                 # Pins the case board's live notes onto a walkthrough corkboard
       interact-markers.ts         # Floating markers over a walkthrough's interactive objects — Tab toggles them
@@ -100,6 +100,7 @@ src/
     innsmouth-house.ts            # HOUSE_LEVEL — the derelict house's clue text and atmosphere
     fishing-vessel.ts             # VESSEL_LEVEL — the wrecked trawler "Esther Gilman"
     black-archive.ts              # ARCHIVE_LEVEL — the Black Archive warehouse; rooms open live board notes and All Resources
+    bellevue.ts                   # BELLEVUE_LEVEL — the two-storey Bellevue ward: Admissions, the Lower Block (Cells 63–66), the ward upstairs
     session-recaps.ts             # Session cliff notes (from the GM's Drive recaps) — typed cards on the Archive's case board
     innsmouth-scenes.ts           # INNSMOUTH_SCENES — Innsmouth map pins, shared by the board and the Archive's wall chart
     vtt-types.ts                  # Shared TypeScript types

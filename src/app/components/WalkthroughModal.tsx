@@ -417,7 +417,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           const box = new THREE.Box3().setFromObject(piece);
           if (box.isEmpty()) return;
           const tall = box.max.y - box.min.y;
-          if (tall > 0.12 && box.min.y < 1.2) blockers.push(box);   // skip rugs and wall-hung frames
+          // Skip rugs and wall-hung frames. "Hung" is measured from the floor the
+          // piece stands over, so furniture on an upper storey still blocks.
+          const below = groundAt((box.min.x + box.max.x) / 2, (box.min.z + box.max.z) / 2, box.min.y);
+          const floorY = below === -Infinity ? 0 : below;
+          if (tall > 0.12 && box.min.y - floorY < 1.2) blockers.push(box);
           const id = piece.name.startsWith('Examine_') ? piece.name.slice('Examine_'.length) : null;
           const entry = id ? level.examinables[id] : undefined;
           if (id && entry) targets.push({ id, entry, box, collection: level.collections?.[id] });
