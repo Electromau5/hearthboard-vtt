@@ -15,7 +15,7 @@ import { allResources, type Resource, type ResourceSection } from './resources';
 import { RECAP_ACT, SESSION_RECAPS } from './session-recaps';
 import { INNSMOUTH_SCENES } from './innsmouth-scenes';
 import { fetchBoard, fileNote, NOTE_SIZE, type BoardItem, type BoardState } from './case-board';
-import type { ArchiveDoc, Collection, Examinable, MapPin, PickupTable, PinNote, RadioSet, Typewriter, WalkthroughLevel } from './walkthrough';
+import type { ArchiveDoc, Bed, Collection, Examinable, MapPin, PickupTable, PinNote, RadioSet, Typewriter, WalkthroughLevel } from './walkthrough';
 import { HELD_MODELS } from './held-items';
 
 const EXAMINABLES: Record<string, Examinable> = {
@@ -71,6 +71,23 @@ const EXAMINABLES: Record<string, Examinable> = {
   medical: {
     title: 'Medical Cabinet',
     text: 'A white enamel cabinet with a red cross on the door, stocked for field surgery.',
+  },
+  // Quarters (the lean-to off the Case Room)
+  bunk_1: {
+    title: 'Bunk',
+    text: 'A two-tier steel bunk against the north wall, army blankets folded at the foot. The lower berth is made up; someone has scratched a row of tally marks into the frame beside the pillow.',
+  },
+  bunk_2: {
+    title: 'Bunk',
+    text: 'A two-tier steel bunk by the stove. The mattress on the lower berth still holds the shape of whoever slept in it last.',
+  },
+  bunk_3: {
+    title: 'Bunk',
+    text: 'A two-tier steel bunk against the south wall. A tin of boot polish and a paperback with its cover torn off are tucked under the pillow.',
+  },
+  bunk_4: {
+    title: 'Bunk',
+    text: 'A two-tier steel bunk nearest the door, the blanket pulled tight enough to bounce a coin on. Sgt. Miles keeps her quarters the way she keeps her armory.',
   },
 };
 
@@ -241,6 +258,17 @@ const RADIOS: Record<string, RadioSet> = {
 };
 
 /**
+ * The four bunks in the Quarters, heads to the west wall. The north pair get up
+ * southward into the room, the south pair northward.
+ */
+const BEDS: Record<string, Bed> = {
+  bunk_1: { head: [-1, 0], out: [0, 1] },
+  bunk_2: { head: [-1, 0], out: [0, 1] },
+  bunk_3: { head: [-1, 0], out: [0, -1] },
+  bunk_4: { head: [-1, 0], out: [0, -1] },
+};
+
+/**
  * The armory workbench: four guns to pick up and carry (E), and put back (E on
  * the empty place). They replace the stand-in rifle the level was built with.
  * The bench's top is 1.2 m (X) by 2.4 m (Z); the vice is at its north end and
@@ -275,6 +303,7 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
   mapPins: { size: [5.0, 5.0 * 559 / 1024], pins: MAP_PINS },
   lamps: { color: 0xffbf73, intensity: 16, distance: 11 },
   pickups: [WORKBENCH],
+  beds: BEDS,
   atmosphere: {
     background: 0x080706,
     fogColor: 0x0b0907,

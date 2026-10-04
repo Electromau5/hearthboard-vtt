@@ -292,6 +292,17 @@ export type PickupTable = {
   items: Pickup[];
 };
 
+/**
+ * A bed to sleep in: E lies down in it and the view fades out; E again wakes
+ * and gets up beside it. Keyed by examinable id (the bed's "Examine_<id>").
+ */
+export type Bed = {
+  /** The way the head lies from the middle of the bed — world X and Z, unit length. */
+  head: [number, number];
+  /** The side to get up on — world X and Z from the middle, unit length. */
+  out: [number, number];
+};
+
 /** Birds that cross the level now and then (see birds.ts). */
 export type Birds = {
   /** A rigged .glb facing +Z, with its flap as the first animation. */
@@ -415,6 +426,8 @@ export type WalkthroughLevel = {
   /** The GM can set the time of day here (src/lib/weather.ts); night is `atmosphere` as built. List the id in WEATHER_LEVELS too. */
   weather?: boolean;
   birds?: Birds;
+  /** Beds to sleep in, keyed by examinable id. */
+  beds?: Record<string, Bed>;
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
   lamps?: { color: number; intensity: number; distance: number };
   atmosphere: {

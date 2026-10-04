@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Collection, Examinable, GazeHazard, Inspectable, NpcSpot, Pickup, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, Inspectable, NpcSpot, Pickup, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
 import { createPinboard } from './pinboard';
@@ -86,6 +86,8 @@ type Target = {
   inspect?: Inspectable;
   /** Something lying on furniture to carry: E takes it in hand, or puts it back. */
   pickup?: Pickup;
+  /** A bed: E lies down and sleeps in it. */
+  bed?: Bed;
 };
 type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
 
@@ -131,6 +133,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     try { return heldKey ? localStorage.getItem(heldKey) : null; } catch { return null; }
   });
   const [usedNote, setUsedNote] = useState<string | null>(null);
+  // Sleeping: the scene runs the lying down, the dark and the getting up; the
+  // page asks for it (sleepCmdRef) and is told how far it has got (asleep).
+  const [asleep, setAsleep] = useState<'no' | 'lying' | 'asleep' | 'waking'>('no');
+  const asleepRef = useRef<'no' | 'lying' | 'asleep' | 'waking'>('no');
+  useEffect(() => { asleepRef.current = asleep; }, [asleep]);
+  const sleepCmdRef = useRef<{ wake: true } | { bed: Target } | null>(null);
+  const sleepShadeRef = useRef<HTMLDivElement | null>(null);
   // Time of day, where the level has weather: set by the GM, fetched by everyone (see src/lib/weather.ts).
   const [weatherTime, setWeatherTime] = useState<TimeOfDay>('night');
   const weatherRef = useRef<TimeOfDay>('night');
@@ -243,12 +252,20 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, []);
 
   // Collections, typewriters and map pins open their own panes, not the reading card.
-  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !t.pickup && !level.typewriters?.[t.id], [canCheck, level]);
+  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !t.pickup && !t.bed && !level.typewriters?.[t.id], [canCheck, level]);
 
   // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
   // each time; a typewriter opens a sheet to type on; anything else opens the
   // reading card.
   const openTarget = useCallback((t: Target) => {
+    // A bed: lie down and sleep. The scene takes it from here.
+    if (t.bed) {
+      if (asleepRef.current === 'no') {
+        sleepCmdRef.current = { bed: t };
+        onShare(`lay down in a ${t.entry.title.toLowerCase()} to sleep`);
+      }
+      return;
+    }
     // A pickup: E on it takes it in hand, and anything already carried goes
     // back to its own place; E on the empty place of the one in hand puts it back.
     if (t.pickup) {
@@ -282,7 +299,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       docs => setBrowsing(b => (b?.target === t ? { ...b, docs } : b)),
       () => setBrowsing(b => (b?.target === t ? { ...b, error: true } : b)),
     );
-  }, [openReading, level, heldKey]);
+  }, [openReading, level, heldKey, onShare]);
 
   const closeInspect = useCallback(() => {
     setInspecting(null);
@@ -370,6 +387,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (e.key === 'Escape') setTyping(null);
         return;
       }
+      // Asleep: E wakes; Escape still leaves the level; nothing else reaches it.
+      if (asleepRef.current !== 'no') {
+        if (e.code === 'KeyE' && !e.repeat && asleepRef.current !== 'waking') {
+          sleepCmdRef.current = { wake: true };
+          onShare('woke and got up');
+        }
+        if (e.key !== 'Escape') return;
+      }
       // Holding something: E or Esc puts it down, Q lights the Wood's lamp on it; nothing else reaches the level.
       if (inspectingRef.current) {
         if (e.key === 'Escape' || (e.code === 'KeyE' && !e.repeat)) closeInspect();
@@ -439,7 +464,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     keyRef.current = onKey;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect]);
+  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect, onShare]);
 
   // ── Weather ───────────────────────────────────────────────────────
   // Every 10 s while the level is open and the tab is showing — gentle on the
@@ -714,6 +739,18 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const targets: Target[] = [];
     // Pickups as they lie in the level, by id.
     const pickupById = new Map<string, { item: Pickup; obj: THREE.Object3D }>();
+    // Sleeping: where the investigator lies and gets up, and how far between
+    // standing (0) and lying (1) they are; `dark` is the fade to sleep.
+    let sleep: {
+      phase: 'lying' | 'asleep' | 'waking';
+      lie: THREE.Vector3; lieQ: THREE.Quaternion;
+      up: THREE.Vector3; upYaw: number;
+      k: number; dark: number;
+    } | null = null;
+    const standQ = new THREE.Quaternion();
+    const camEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+    // Each bed's own furniture, to find the top of its mattress.
+    const bedPieces = new Map<string, THREE.Object3D>();
     const hazards: { hazard: GazeHazard; box: THREE.Box3; center: THREE.Vector3; radius: number }[] = [];
     const fires: THREE.PointLight[] = [];
     const radios = new Map<string, { set: RadioSet; el: HTMLAudioElement; glow: THREE.PointLight; center: THREE.Vector3; sound: THREE.PositionalAudio | null }>();
@@ -837,7 +874,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           if (tall > 0.12 && box.min.y - floorY < 1.2) blockers.push(box);
           const id = piece.name.startsWith('Examine_') ? piece.name.slice('Examine_'.length) : null;
           const entry = id ? level.examinables[id] : undefined;
-          if (id && entry) targets.push({ id, entry, box, collection: level.collections?.[id] });
+          if (id && entry) targets.push({ id, entry, box, collection: level.collections?.[id], bed: level.beds?.[id] });
+          if (id && level.beds?.[id]) bedPieces.set(id, piece);
           if (id) pieceById.set(id, piece);
           if (entry?.lying) {
             // Drop onto the top surface at the centre, not box.max.y — a chair
@@ -1368,7 +1406,36 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       flock?.update(dt, Date.now(), weatherRef.current, RAIN_SPECS[rainRef.current].grounded);
 
-      if (model && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current) {
+      // Take up a request to sleep or wake.
+      const cmd = sleepCmdRef.current;
+      sleepCmdRef.current = null;
+      if (cmd && 'bed' in cmd && !sleep && model) {
+        const bed = cmd.bed.bed!;
+        const box = cmd.bed.box;
+        const mid = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const head = new THREE.Vector3(bed.head[0], 0, bed.head[1]);
+        const long = Math.abs(head.x) > 0.5 ? size.x : size.z;
+        const wide = Math.abs(head.x) > 0.5 ? size.z : size.x;
+        // The top of the mattress: down from under a bunk's upper berth, or from above a plain bed.
+        const from = Math.min(box.max.y + 0.3, box.min.y + 1.25);
+        const piece = bedPieces.get(cmd.bed.id);
+        const top = (piece ? new THREE.Raycaster(new THREE.Vector3(mid.x, from, mid.z), down).intersectObject(piece, true) : [])
+          .find(h => h.point.y < from - 0.05 && h.point.y > box.min.y)?.point.y ?? box.min.y + 0.55;
+        const lie = mid.clone().addScaledVector(head, long / 2 - 0.35).setY(top + 0.14);
+        // On your back, head on the pillow, looking up past your feet.
+        const lieQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(1.15, Math.atan2(head.x, head.z), 0, 'YXZ'));
+        const out = new THREE.Vector3(bed.out[0], 0, bed.out[1]);
+        const up = mid.clone().addScaledVector(out, wide / 2 + 0.45).setY(feet.y);
+        sleep = { phase: 'lying', lie, lieQ, up, upYaw: Math.atan2(-out.x, -out.z), k: 0, dark: 0 };
+        keys.clear();
+        setAsleep('lying');
+      } else if (cmd && 'wake' in cmd && sleep && sleep.phase !== 'waking') {
+        sleep.phase = 'waking';
+        setAsleep('waking');
+      }
+
+      if (model && !sleep && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current) {
         // Arrow keys turn, so the level is walkable without pointer lock too.
         if (keys.has('ArrowLeft')) yaw += 1.8 * dt;
         if (keys.has('ArrowRight')) yaw -= 1.8 * dt;
@@ -1394,6 +1461,38 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
       camera.position.set(feet.x, feet.y + EYE + Math.sin(t * 1.3) * 0.004, feet.z);
       camera.rotation.set(pitch, yaw, 0);
+      // Lying down, sleeping, getting up: ease between standing and lying, and fade.
+      if (sleep) {
+        if (sleep.phase === 'lying') {
+          sleep.k = Math.min(1, sleep.k + dt / 1.3);
+          if (sleep.k >= 1) sleep.dark = Math.min(1, sleep.dark + dt / 2.2);
+          if (sleep.dark >= 1) { sleep.phase = 'asleep'; setAsleep('asleep'); }
+        } else if (sleep.phase === 'waking') {
+          sleep.dark = Math.max(0, sleep.dark - dt / 1.1);
+          if (sleep.dark <= 0.35) {
+            // Up and out beside the bed, facing the room.
+            if (feet.x !== sleep.up.x || feet.z !== sleep.up.z) {
+              feet.copy(sleep.up);
+              yaw = sleep.upYaw;
+              pitch = 0;
+            }
+            sleep.k = Math.max(0, sleep.k - dt / 1.2);
+          }
+        } else {
+          // Asleep: breathing, slow and deep.
+          sleep.lie.y += Math.sin(t * 0.9) * 0.00008;
+        }
+        const e = sleep.k * sleep.k * (3 - 2 * sleep.k);
+        standQ.setFromEuler(camEuler.set(pitch, yaw, 0, 'YXZ'));
+        camera.position.set(feet.x, feet.y + EYE, feet.z).lerp(sleep.lie, e);
+        camera.quaternion.slerpQuaternions(standQ, sleep.lieQ, e);
+        if (sleepShadeRef.current) sleepShadeRef.current.style.opacity = String(sleep.dark * 0.95);
+        if (sleep.phase === 'waking' && sleep.k <= 0 && sleep.dark <= 0) {
+          sleep = null;
+          setAsleep('no');
+          if (sleepShadeRef.current) sleepShadeRef.current.style.opacity = '0';
+        }
+      }
       camera.updateMatrixWorld();
 
       // The Wood's lamp: raise or lower it, let the tube warm, and light the stains.
@@ -1804,7 +1903,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             )}
           </div>
 
-          {loaded && locked && !reading && !browsing && !typing && !inspecting && (
+          {loaded && locked && asleep === 'no' && !reading && !browsing && !typing && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', top: '50%', width: 6, height: 6,
               marginLeft: -3, marginTop: -3, borderRadius: '50%', pointerEvents: 'none',
@@ -1813,7 +1912,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             }} />
           )}
 
-          {loaded && focus && !reading && !browsing && !typing && !invOpen && !inspecting && (
+          {loaded && focus && asleep === 'no' && !reading && !browsing && !typing && !invOpen && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', top: 'calc(50% + 22px)', transform: 'translateX(-50%)',
               pointerEvents: 'none', whiteSpace: 'nowrap',
@@ -1822,6 +1921,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             }}>
               {focus.npc ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Speak to {focus.entry.title.replace(/^The /, 'the ')}</>
+              ) : focus.bed ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Sleep in the {focus.entry.title.toLowerCase()}</>
               ) : focus.inspect ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Pick up the {focus.entry.title.toLowerCase()}</>
               ) : focus.pickup ? (
@@ -1861,6 +1962,26 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 <span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{carriedPickup ? `the ${carriedPickup.title}` : heldItem}
                 {carriedPickup?.view.reload && <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> reload</span>}
               </>}
+            </div>
+          )}
+
+          {/* Sleep: the dark comes down over the level, and lifts on waking. */}
+          {level.beds && (
+            <div
+              ref={sleepShadeRef}
+              style={{
+                position: 'absolute', inset: 0, background: '#000', opacity: 0, pointerEvents: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8,
+              }}
+            >
+              {asleep === 'asleep' && (
+                <>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'rgba(232,220,200,0.75)', letterSpacing: '0.5px' }}>Asleep</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-text-2)', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    <span style={{ color: 'var(--brass)' }}>[E]</span> wake
+                  </div>
+                </>
+              )}
             </div>
           )}
 
