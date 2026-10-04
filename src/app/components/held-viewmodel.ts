@@ -18,6 +18,31 @@ import type { HeldModel } from '@/lib/held-items';
 /** Seconds to bring an item up, or put it away. */
 const DRAW_SEC = 0.32;
 
+/**
+ * A model as made, turned and scaled to `view` (see HeldModel): its barrel
+ * along -Z, +Y up, real size, and the grip at the origin. Also gives where the
+ * left hand goes, in the same space, for long guns. Shared by the hand and by
+ * pickups lying in a level, so both agree.
+ */
+export function prepareHeldModel(model: THREE.Object3D, view: HeldModel): { root: THREE.Group; support: THREE.Vector3 | null } {
+  model.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(model, true);
+  const size = box.getSize(new THREE.Vector3());
+  const at = (f: [number, number, number]) => new THREE.Vector3(...f).multiply(size).add(box.min);
+  const grip = at(view.gripAt);
+  const inner = new THREE.Group();
+  inner.add(model);
+  inner.position.copy(grip).negate();
+  const root = new THREE.Group();
+  root.rotation.set(...view.orient);
+  root.scale.setScalar(view.length / Math.max(size.x, size.y, size.z));
+  root.add(inner);
+  root.updateMatrix();
+  const support = view.supportAt ? at(view.supportAt).sub(grip).applyMatrix4(root.matrix) : null;
+  root.traverse(o => { o.frustumCulled = false; });
+  return { root, support };
+}
+
 export type HeldViewmodel = {
   /** Render after the level: `renderer.clearDepth()` then this. */
   render: (renderer: THREE.WebGLRenderer) => void;
@@ -73,11 +98,8 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
     if (!p) {
       p = loader.loadAsync(view.model).then(gltf => {
         const item = new THREE.Group();
-        const model = gltf.scene;
-        model.rotation.set(...view.orient);
-        model.scale.setScalar(view.scale);
-        model.position.set(...view.grip).multiplyScalar(-view.scale).applyEuler(model.rotation);
-        item.add(model);
+        const { root, support } = prepareHeldModel(gltf.scene, view);
+        item.add(root);
         if (view.hand) {
           const add = (geo: THREE.BufferGeometry, mat: THREE.Material, at: [number, number, number], rot?: [number, number, number], parent: THREE.Object3D = item) => {
             own(geo);
@@ -108,6 +130,23 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
           add(new THREE.CylinderGeometry(0.023, 0.025, 0.07, 16), skin, [0, -0.03, 0], undefined, wrist);
           add(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 20), cuff, [0, -0.07, 0], undefined, wrist);
           add(new THREE.CylinderGeometry(0.04, 0.046, 0.3, 20), sleeve, [0, -0.23, 0], undefined, wrist);
+          // A long gun's fore-grip: the left hand cupped under it, its forearm
+          // running back and down out of the bottom of the view.
+          if (support) {
+            const left = new THREE.Group();
+            left.position.copy(support);
+            item.add(left);
+            add(new RoundedBoxGeometry(0.07, 0.026, 0.06, 3, 0.011), skin, [0, -0.03, 0], [0, 0, 0.15], left);
+            [-0.02, 0, 0.02].forEach(z => add(new THREE.CapsuleGeometry(0.0085, 0.03, 4, 10), skin, [0.03, -0.006, z], [0, 0, 0.5], left));
+            add(new THREE.CapsuleGeometry(0.0095, 0.03, 4, 10), skin, [-0.028, -0.004, 0.006], [0, 0, -0.5], left);
+            const arm = new THREE.Group();
+            arm.position.set(-0.01, -0.05, 0.03);
+            arm.rotation.set(-1.15, -0.25, -0.25);
+            left.add(arm);
+            add(new THREE.CylinderGeometry(0.022, 0.025, 0.08, 16), skin, [0, -0.04, 0], undefined, arm);
+            add(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 20), cuff, [0, -0.085, 0], undefined, arm);
+            add(new THREE.CylinderGeometry(0.04, 0.046, 0.34, 20), sleeve, [0, -0.26, 0], undefined, arm);
+          }
         }
         item.traverse(o => { o.frustumCulled = false; });
         item.visible = false;

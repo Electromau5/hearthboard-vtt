@@ -15,7 +15,8 @@ import { allResources, type Resource, type ResourceSection } from './resources';
 import { RECAP_ACT, SESSION_RECAPS } from './session-recaps';
 import { INNSMOUTH_SCENES } from './innsmouth-scenes';
 import { fetchBoard, fileNote, NOTE_SIZE, type BoardItem, type BoardState } from './case-board';
-import type { ArchiveDoc, Collection, Examinable, MapPin, PinNote, RadioSet, Typewriter, WalkthroughLevel } from './walkthrough';
+import type { ArchiveDoc, Collection, Examinable, MapPin, PickupTable, PinNote, RadioSet, Typewriter, WalkthroughLevel } from './walkthrough';
+import { HELD_MODELS } from './held-items';
 
 const EXAMINABLES: Record<string, Examinable> = {
   // The nave
@@ -239,6 +240,24 @@ const RADIOS: Record<string, RadioSet> = {
   wireless: { src: '/sgt-miles-1.mp3', volume: 0.9, refDistance: 1.6, loop: false },
 };
 
+/**
+ * The armory workbench: four guns to pick up and carry (E), and put back (E on
+ * the empty place). They replace the stand-in rifle the level was built with.
+ * The bench's top is 1.2 m (X) by 2.4 m (Z); the vice is at its north end and
+ * the brass and ammunition box at its south end, so the long guns lie along it
+ * either side and the handguns down the middle.
+ */
+const WORKBENCH: PickupTable = {
+  on: 'Workbench',
+  hide: ['Mesh_gunwood2', 'Mesh_gunmetal2'],
+  items: [
+    { id: 'rifle', title: 'rifle', view: HELD_MODELS.renaissanceRifle, at: [0.36, -0.22], turnDeg: 180 },
+    { id: 'tommy', title: 'Tommy gun', view: HELD_MODELS.tommyGun, at: [-0.3, 0.15], turnDeg: 0 },
+    { id: 'm1911', title: 'Colt .45', view: HELD_MODELS.coltM1911, at: [0.02, 0.05], turnDeg: 90 },
+    { id: 'revolver', title: 'revolver', view: HELD_MODELS.detectiveSpecial, at: [0.02, 0.42], turnDeg: 80 },
+  ],
+};
+
 export const ARCHIVE_LEVEL: WalkthroughLevel = {
   id: 'archive',
   model: '/black-archive.glb',
@@ -255,6 +274,7 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
   // The wall chart is 5 m wide at the image's 1024 × 559 aspect (build_archive_cli.gd).
   mapPins: { size: [5.0, 5.0 * 559 / 1024], pins: MAP_PINS },
   lamps: { color: 0xffbf73, intensity: 16, distance: 11 },
+  pickups: [WORKBENCH],
   atmosphere: {
     background: 0x080706,
     fogColor: 0x0b0907,

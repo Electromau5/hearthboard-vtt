@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Collection, Examinable, GazeHazard, Inspectable, NpcSpot, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Collection, Examinable, GazeHazard, Inspectable, NpcSpot, Pickup, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
 import { createPinboard } from './pinboard';
@@ -20,7 +20,7 @@ import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
 import { joinLevel, type Peer } from './presence';
 import { createWoodsLamp } from './woods-lamp';
-import { createHeldViewmodel } from './held-viewmodel';
+import { createHeldViewmodel, prepareHeldModel } from './held-viewmodel';
 import { heldModelFor } from '@/lib/held-items';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
@@ -77,6 +77,8 @@ type Target = {
   uv?: { point: THREE.Vector3; normal: THREE.Vector3 };
   /** Something to pick up: E opens the inspect viewer instead of the reading card. */
   inspect?: Inspectable;
+  /** Something lying on furniture to carry: E takes it in hand, or puts it back. */
+  pickup?: Pickup;
 };
 type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
 
@@ -122,6 +124,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     try { return heldKey ? localStorage.getItem(heldKey) : null; } catch { return null; }
   });
   const [usedNote, setUsedNote] = useState<string | null>(null);
+  // A pickup carried from where it lay (a gun off the armory bench), by id. Not inventory: it stays in the level.
+  const [carried, setCarried] = useState<string | null>(null);
+  const carriedRef = useRef<string | null>(null);
+  useEffect(() => { carriedRef.current = carried; }, [carried]);
+  const carriedPickup = useMemo(
+    () => (carried ? level.pickups?.flatMap(t => t.items).find(p => p.id === carried) ?? null : null),
+    [carried, level],
+  );
   // The object in hand in the inspect viewer, its Wood's lamp, and clues found, by "<object>/<clue>".
   const [inspecting, setInspecting] = useState<Target | null>(null);
   const [inspectUv, setInspectUv] = useState(false);
@@ -179,6 +189,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const holdItem = useCallback((item: string) => {
     setHeld(prev => {
       const next = prev === item ? null : item;
+      // One hand: whatever was picked up goes back to where it lay.
+      if (next) setCarried(null);
       try {
         if (heldKey) {
           if (next) localStorage.setItem(heldKey, next);
@@ -214,12 +226,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, []);
 
   // Collections, typewriters and map pins open their own panes, not the reading card.
-  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !level.typewriters?.[t.id], [canCheck, level]);
+  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !t.pickup && !level.typewriters?.[t.id], [canCheck, level]);
 
   // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
   // each time; a typewriter opens a sheet to type on; anything else opens the
   // reading card.
   const openTarget = useCallback((t: Target) => {
+    // A pickup: E on it takes it in hand, and anything already carried goes
+    // back to its own place; E on the empty place of the one in hand puts it back.
+    if (t.pickup) {
+      const id = t.pickup.id;
+      setCarried(prev => (prev === id ? null : id));
+      if (carriedRef.current !== id) {
+        setHeld(null);
+        try { if (heldKey) localStorage.removeItem(heldKey); } catch {}
+      }
+      return;
+    }
     // Something small is picked up and turned over in the inspect viewer.
     if (t.inspect) {
       setInspecting(t);
@@ -242,7 +265,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       docs => setBrowsing(b => (b?.target === t ? { ...b, docs } : b)),
       () => setBrowsing(b => (b?.target === t ? { ...b, error: true } : b)),
     );
-  }, [openReading, level]);
+  }, [openReading, level, heldKey]);
 
   const closeInspect = useCallback(() => {
     setInspecting(null);
@@ -359,8 +382,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       // U uses the item in hand on the open card, or on whatever the crosshair is on.
       if (e.code === 'KeyU' && !e.repeat && !browsingRef.current) {
         const t = readingRef.current ?? focusRef.current;
-        const item = heldRef.current;
-        if (t && item && items.includes(item)) applyItem(t, item);
+        const pickup = carriedRef.current ? level.pickups?.flatMap(tb => tb.items).find(p => p.id === carriedRef.current) : undefined;
+        const item = pickup ? pickup.title : heldRef.current;
+        if (t && !t.pickup && item && (pickup || items.includes(item))) applyItem(t, item);
       }
       if (e.code === 'KeyE') {
         const target = focusRef.current;
@@ -584,6 +608,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const walls: THREE.Object3D[] = [];
     const blockers: THREE.Box3[] = [];
     const targets: Target[] = [];
+    // Pickups as they lie in the level, by id.
+    const pickupById = new Map<string, { item: Pickup; obj: THREE.Object3D }>();
     const hazards: { hazard: GazeHazard; box: THREE.Box3; center: THREE.Vector3; radius: number }[] = [];
     const fires: THREE.PointLight[] = [];
     const radios = new Map<string, { set: RadioSet; el: HTMLAudioElement; glow: THREE.PointLight; center: THREE.Vector3; sound: THREE.PositionalAudio | null }>();
@@ -947,12 +973,51 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           const box = new THREE.Box3().setFromObject(obj).expandByScalar(0.04);
           targets.push({ id, entry, box, inspect: insp });
         };
-        Promise.all(Object.entries(level.inspectables ?? {}).map(([id, insp]) =>
-          placeInspectable(id, insp).catch(err => console.error('Inspectable failed to load:', id, err)),
-        )).then(() => {
+        // Things to carry, laid on their furniture: on their side, turned as set,
+        // resting on whatever visible surface is under them.
+        const placePickup = async (item: Pickup, anchor: THREE.Object3D) => {
+          const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(item.view.model);
+          if (disposed) return;
+          const { root } = prepareHeldModel(gltf.scene, item.view);
+          const lie = new THREE.Group();
+          lie.rotation.z = Math.PI / 2;
+          lie.add(root);
+          const obj = new THREE.Group();
+          obj.rotation.y = THREE.MathUtils.degToRad(item.turnDeg ?? 0);
+          obj.add(lie);
+          obj.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          const base = new THREE.Box3().setFromObject(anchor).getCenter(new THREE.Vector3());
+          const x = base.x + item.at[0], z = base.z + item.at[1];
+          const shown = (o: THREE.Object3D | null): boolean => !o || (o.visible && shown(o.parent));
+          const hit = new THREE.Raycaster(new THREE.Vector3(x, base.y + 2, z), new THREE.Vector3(0, -1, 0))
+            .intersectObject(anchor, true).find(h => shown(h.object));
+          obj.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(obj, true);
+          const centre = box.getCenter(new THREE.Vector3());
+          obj.position.set(x - centre.x, (hit ? hit.point.y : base.y) - box.min.y + 0.002, z - centre.z);
+          scene.add(obj);
+          obj.updateMatrixWorld(true);
+          pickupById.set(item.id, { item, obj });
+          targets.push({ id: `pickup-${item.id}`, entry: { title: item.title, text: '' }, box: new THREE.Box3().setFromObject(obj, true).expandByScalar(0.05), pickup: item });
+        };
+        const pickupLoads = (level.pickups ?? []).flatMap(table => {
+          const anchor = model?.getObjectByName(table.on);
+          if (!anchor) { console.warn('Pickups have nowhere to lie:', table.on); return []; }
+          for (const name of table.hide ?? []) {
+            const stand = anchor.getObjectByName(name);
+            if (stand) stand.visible = false;
+          }
+          return table.items.map(item => placePickup(item, anchor).catch(err => console.error('Pickup failed to load:', item.id, err)));
+        });
+        Promise.all([
+          ...Object.entries(level.inspectables ?? {}).map(([id, insp]) =>
+            placeInspectable(id, insp).catch(err => console.error('Inspectable failed to load:', id, err)),
+          ),
+          ...pickupLoads,
+        ]).then(() => {
           if (disposed) return;
           // Stains get no marker: finding them is the lamp's job. People have their names over their heads.
-          markers = createInteractMarkers(targets.filter(t => !t.pinHead && !t.uv && !t.npc));
+          markers = createInteractMarkers(targets.filter(t => !t.pinHead && !t.uv && !t.npc && !t.pickup));
           scene.add(markers.group);
           setLoaded(true);
         });
@@ -1170,7 +1235,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         stains?.setLamps(uvLamps);
       }
       // The item in hand comes up when chosen; the Wood's lamp takes the same hand, so it goes away while that is out.
-      inHand.setItem(lampOutRef.current ? null : heldModelFor(heldItemRef.current));
+      const carriedNow = carriedRef.current ? pickupById.get(carriedRef.current) : undefined;
+      inHand.setItem(lampOutRef.current ? null : carriedNow ? carriedNow.item.view : heldModelFor(heldItemRef.current));
+      // A carried pickup is gone from where it lay; the rest stay put.
+      for (const p of pickupById.values()) p.obj.visible = p.item.id !== carriedRef.current;
       const stride = dt > 0 ? Math.min(1, Math.hypot(feet.x - lastFeet.x, feet.z - lastFeet.z) / dt / RUN) : 0;
       inHand.update(dt, [yaw - lastYaw, pitch - lastPitch], stride);
       lastYaw = yaw;
@@ -1506,6 +1574,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Speak to {focus.entry.title.replace(/^The /, 'the ')}</>
               ) : focus.inspect ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Pick up the {focus.entry.title.toLowerCase()}</>
+              ) : focus.pickup ? (
+                carried === focus.pickup.id
+                  ? <><span style={{ color: 'var(--brass)' }}>[E]</span> Put the {focus.pickup.title} back</>
+                  : <><span style={{ color: 'var(--brass)' }}>[E]</span> Pick up the {focus.pickup.title}{carriedPickup ? <span style={{ color: 'var(--ink-text-2)' }}> · the {carriedPickup.title} goes back</span> : null}</>
               ) : focus.collection ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Open {focus.entry.title}</>
               ) : level.typewriters?.[focus.id] ? (
@@ -1521,21 +1593,21 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               {canUseSkillOn(focus) && (
                 <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> use a skill</span>
               )}
-              {heldItem && (
-                <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[U]</span> use {heldItem}</span>
+              {(carriedPickup || heldItem) && !focus.pickup && (
+                <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[U]</span> use {carriedPickup ? `the ${carriedPickup.title}` : heldItem}</span>
               )}
             </div>
           )}
 
           {/* The item in hand, and the last use of it. */}
-          {loaded && (heldItem || usedNote) && !reading && !browsing && !typing && !inspecting && (
+          {loaded && (carriedPickup || heldItem || usedNote) && !reading && !browsing && !typing && !inspecting && (
             <div style={{
               position: 'absolute', left: 12, bottom: 12, maxWidth: '60%', pointerEvents: 'none',
               fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.5px', color: 'var(--parchment)',
               background: 'rgba(0,0,0,0.6)', border: '1px solid var(--brass-dim)', borderRadius: 'var(--r-sm)',
               padding: '6px 10px', textShadow: '0 1px 4px #000',
             }}>
-              {usedNote ?? <><span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{heldItem}</>}
+              {usedNote ?? <><span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{carriedPickup ? `the ${carriedPickup.title}` : heldItem}</>}
             </div>
           )}
 

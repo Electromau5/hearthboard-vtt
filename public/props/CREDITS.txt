@@ -1,0 +1,26 @@
+3D models in this folder
+
+colt-m1911.glb
+  "Colt M1911" by Ole Gunnar Isager — https://sketchfab.com/FrenchBaguette
+  https://sketchfab.com/3d-models/colt-m1911-26adfd631730494ab0fc80c806eada77
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: textures resized to 1024 px WebP, meshes meshopt-compressed.
+
+renaissance-rifle.glb
+  "Renaissance Rifle" by denis_cliofas — https://sketchfab.com/denis_cliofas
+  https://sketchfab.com/3d-models/renaissance-rifle-b43678fd487a475298b0d680d5b42ae9
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: textures resized to 1024 px WebP, meshes meshopt-compressed.
+
+tommy-gun.glb
+  "Tommy Gun" by lokeig — https://sketchfab.com/lokeig
+  https://sketchfab.com/3d-models/tommy-gun-3f3eecc0307f499e8d1fc16d56d74c83
+  Licence: CC BY-NC 4.0 (http://creativecommons.org/licenses/by-nc/4.0/) — non-commercial use only
+  Changes: textures resized to 1024 px WebP, meshes joined and meshopt-compressed.
+
+detective-special.glb
+  Colt Detective Special revolver, supplied by the GM (source not recorded).
+  Changes: textures resized to 1024 px WebP, meshes meshopt-compressed.
+
+oil-lamp.glb
+  Built procedurally for this project (my-summer-game tools/build_oil_lamp_cli.gd).

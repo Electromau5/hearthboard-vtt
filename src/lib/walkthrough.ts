@@ -20,6 +20,8 @@
  * Anything else in the model renders but never collides.
  */
 
+import type { HeldModel } from './held-items';
+
 export type Examinable = {
   title: string;
   text: string;
@@ -265,6 +267,30 @@ export type InspectClue = {
   size: [number, number];
 };
 
+/**
+ * Something lying on a piece of furniture that can be carried in the hand:
+ * E picks it up (shown first-person, see held-items.ts), E on its empty place
+ * puts it back, and picking up another sends the first back to its place.
+ * Not inventory: it stays in the level.
+ */
+export type Pickup = {
+  id: string;
+  /** "the Tommy gun" reads as "Pick up the Tommy gun". */
+  title: string;
+  view: HeldModel;
+  /** Where it lies: metres from the centre of the furniture's top along world X and Z, and its turn about the vertical. */
+  at: [number, number];
+  turnDeg?: number;
+};
+
+export type PickupTable = {
+  /** The furniture's node name (any child of "Furniture", examinable or not). */
+  on: string;
+  /** Nodes inside it to hide — stand-ins the real models replace. */
+  hide?: string[];
+  items: Pickup[];
+};
+
 export type UvStain = Examinable & {
   id: string;
   kind: 'blood' | 'brine' | 'ink';
@@ -364,6 +390,8 @@ export type WalkthroughLevel = {
   uvStains?: UvStain[];
   /** Objects to pick up and turn over, keyed by examinable id. */
   inspectables?: Record<string, Inspectable>;
+  /** Things lying on furniture to carry in the hand. */
+  pickups?: PickupTable[];
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
   lamps?: { color: number; intensity: number; distance: number };
   atmosphere: {
