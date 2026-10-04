@@ -14,7 +14,7 @@
  * mechanic out, not as settled campaign fact.
  */
 
-import type { Examinable, GazeHazard, Peeper, PhotoFrames, RadioSet, UvStain, WalkthroughLevel } from './walkthrough';
+import type { Examinable, GazeHazard, Inspectable, Peeper, PhotoFrames, RadioSet, UvStain, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   console_table: {
@@ -382,6 +382,10 @@ const EXAMINABLES: Record<string, Examinable> = {
       },
     ],
   },
+  oil_lamp: {
+    title: 'Oil Lamp',
+    text: 'A brass-footed kerosene lamp on the corner of the desk, its chimney sooted up one side. The wick was trimmed not long ago. It is light enough to pick up and turn over.',
+  },
 };
 
 /**
@@ -544,6 +548,35 @@ const UV_STAINS: UvStain[] = [
 /** A Deep One at the hole in the boarded back door, at the end of the hall. */
 const PEEPER: Peeper = { gapSec: [3, 7], holdSec: [1.2, 2.4], shyWithin: 0.8 };
 
+/**
+ * Things to pick up and turn over (E). The lamp is built in Godot
+ * (my-summer-game tools/build_oil_lamp_cli.gd), which also places its clue
+ * markers. PLACEHOLDER clue text, for the GM to replace.
+ */
+const INSPECTABLES: Record<string, Inspectable> = {
+  oil_lamp: {
+    model: '/props/oil-lamp.glb',
+    on: 'writing_desk',
+    offset: [0.28, -0.12],
+    turnDeg: 25,
+    clues: {
+      stamp: {
+        title: "Maker's Stamp",
+        text: 'Pressed into the underside of the foot: GILMAN HOUSE · INNSMOUTH, under a ringed device of a fish-tailed cross. The hotel\'s lamps were never sold; this one was carried out of it.',
+        mark: { kind: 'stamp', lines: ['GILMAN HOUSE', 'INNSMOUTH'] },
+        size: [0.09, 0.09],
+      },
+      print: {
+        title: 'A Webbed Thumbprint',
+        text: "Under the Wood's lamp a thumbprint glows on the side of the foot, crusted with salt. It is too broad, and the ridges run on into a smear of skin between thumb and finger. Whoever last carried this lamp had sea-wet hands.",
+        uv: true,
+        mark: { kind: 'print' },
+        size: [0.026, 0.026],
+      },
+    },
+  },
+};
+
 export const HOUSE_LEVEL: WalkthroughLevel = {
   id: 'house',
   model: '/innsmouth-house.glb',
@@ -559,6 +592,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   peeper: PEEPER,
   photoFrames: PHOTO_FRAMES,
   uvStains: UV_STAINS,
+  inspectables: INSPECTABLES,
   atmosphere: {
     background: 0x020202,
     fogColor: 0x030303,

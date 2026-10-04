@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Collection, Examinable, GazeHazard, NpcSpot, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Collection, Examinable, GazeHazard, Inspectable, NpcSpot, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
 import { createPinboard } from './pinboard';
@@ -14,6 +14,7 @@ import { ArchiveBrowser } from './ArchiveBrowser';
 import { TypewriterPane } from './TypewriterPane';
 import { NpcConversation } from './NpcConversation';
 import { InventoryPane } from './InventoryPane';
+import { InspectViewer } from './InspectViewer';
 import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
 import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
@@ -72,6 +73,8 @@ type Target = {
   npc?: NpcSpot;
   /** A stain only the Wood's lamp shows: it can be examined only while lit. */
   uv?: { point: THREE.Vector3; normal: THREE.Vector3 };
+  /** Something to pick up: E opens the inspect viewer instead of the reading card. */
+  inspect?: Inspectable;
 };
 type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
 
@@ -117,6 +120,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     try { return heldKey ? localStorage.getItem(heldKey) : null; } catch { return null; }
   });
   const [usedNote, setUsedNote] = useState<string | null>(null);
+  // The object in hand in the inspect viewer, its Wood's lamp, and clues found, by "<object>/<clue>".
+  const [inspecting, setInspecting] = useState<Target | null>(null);
+  const [inspectUv, setInspectUv] = useState(false);
+  const [foundClues, setFoundClues] = useState<Set<string>>(() => new Set());
+  const [sharedClues, setSharedClues] = useState<Set<string>>(() => new Set());
+  const [savedClues, setSavedClues] = useState<Set<string>>(() => new Set());
   // Other investigators in this level right now, by name.
   const [companions, setCompanions] = useState<string[]>([]);
   // Checked up front: a browser with WebGL disabled (hardware acceleration off,
@@ -138,6 +147,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const lampOnRef = useRef(true);
   const markersRef = useRef(true);
   const invOpenRef = useRef(false);
+  const inspectingRef = useRef<Target | null>(null);
   const heldRef = useRef<string | null>(null);
   const unlockedAtRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -154,6 +164,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   useEffect(() => { lampOnRef.current = lampOn; }, [lampOn]);
   useEffect(() => { markersRef.current = markersOn; }, [markersOn]);
   useEffect(() => { invOpenRef.current = invOpen; }, [invOpen]);
+  useEffect(() => { inspectingRef.current = inspecting; }, [inspecting]);
   useEffect(() => { heldRef.current = held; }, [held]);
 
   // An item struck off the sheet since it was taken in hand is gone from the hand too.
@@ -198,12 +209,19 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, []);
 
   // Collections, typewriters and map pins open their own panes, not the reading card.
-  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !level.typewriters?.[t.id], [canCheck, level]);
+  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !level.typewriters?.[t.id], [canCheck, level]);
 
   // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
   // each time; a typewriter opens a sheet to type on; anything else opens the
   // reading card.
   const openTarget = useCallback((t: Target) => {
+    // Something small is picked up and turned over in the inspect viewer.
+    if (t.inspect) {
+      setInspecting(t);
+      setInspectUv(false);
+      document.exitPointerLock?.();
+      return;
+    }
     // A typewriter or a person takes the keyboard: both open over the level in `typing`.
     if (level.typewriters?.[t.id] || t.npc) {
       setTyping(t);
@@ -219,6 +237,35 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       () => setBrowsing(b => (b?.target === t ? { ...b, error: true } : b)),
     );
   }, [openReading, level]);
+
+  const closeInspect = useCallback(() => {
+    setInspecting(null);
+    setInspectUv(false);
+    canvasRef.current?.requestPointerLock?.();
+  }, []);
+
+  const shareClue = useCallback((t: Target, clueId: string) => {
+    const clue = t.inspect?.clues[clueId];
+    if (!clue) return;
+    onShare(`turned over the ${t.entry.title.toLowerCase()}${clue.uv ? " under the Wood's lamp" : ''} — ${clue.title}: ${clue.text}`);
+    setSharedClues(prev => new Set(prev).add(`${t.id}/${clueId}`));
+  }, [onShare]);
+
+  // A clue found on an object goes on the case board like any other find; UV finds on lavender paper.
+  const saveClue = useCallback(async (t: Target, clueId: string) => {
+    const clue = t.inspect?.clues[clueId];
+    if (!clue) return;
+    const place = level.title.split(' · ')[0];
+    const how = clue.uv ? " · under the Wood's lamp" : '';
+    const note = `${clue.title} · on the ${t.entry.title.toLowerCase()}${how} · ${place}\n\n${clue.text}\n\n— ${investigator?.name ?? author}`;
+    try {
+      await fileNote(note, author, { prefix: 'clue', color: clue.uv ? '#e4dcf2' : '#e8dcc0' });
+      setSavedClues(prev => new Set(prev).add(`${t.id}/${clueId}`));
+      refreshPinsRef.current?.();
+    } catch (err) {
+      console.error('Could not pin to the case board:', err);
+    }
+  }, [level, investigator, author]);
 
   const closeTyping = useCallback(() => {
     setTyping(null);
@@ -275,6 +322,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       // from reaching here); only Escape, from a focused button, backs out.
       if (typingRef.current) {
         if (e.key === 'Escape') setTyping(null);
+        return;
+      }
+      // Holding something: E or Esc puts it down, Q works the Wood's lamp on it; nothing else reaches the level.
+      if (inspectingRef.current) {
+        if (e.key === 'Escape' || (e.code === 'KeyE' && !e.repeat)) closeInspect();
+        else if (e.code === 'KeyQ' && !e.repeat && hasLamp) setInspectUv(v => !v);
         return;
       }
       if (e.key === 'Escape') {
@@ -334,7 +387,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     keyRef.current = onKey;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory]);
+  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect]);
 
   // ── Godot ─────────────────────────────────────────────────────────
   // The iframe walks, lights and works out what the investigator is looking
@@ -351,7 +404,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     if (!entry) return null;
     let t = godotTargets.current.get(id);
     if (!t) {
-      t = { id, entry, box: new THREE.Box3(), collection: level.collections?.[id] };
+      t = { id, entry, box: new THREE.Box3(), collection: level.collections?.[id], inspect: level.inspectables?.[id] };
       godotTargets.current.set(id, t);
     }
     return t;
@@ -407,7 +460,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, [godot, level, postGodot, godotTarget, openTarget]);
 
   // Hold the level still under a card; let it go when the last one closes.
-  const covered = !!(reading || browsing || typing || invOpen);
+  const covered = !!(reading || browsing || typing || invOpen || inspecting);
   useEffect(() => {
     if (!godot || !loaded) return;
     postGodot({ type: covered ? 'pause' : 'resume' });
@@ -612,6 +665,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
         // Furniture blocks as boxes: cheaper than its triangles, and it never snags on chair legs.
         const furniture = model.getObjectByName('Furniture');
+        // Examinable furniture by id, for things set down on it (inspectables).
+        const pieceById = new Map<string, THREE.Object3D>();
         furniture?.children.forEach((piece) => {
           const box = new THREE.Box3().setFromObject(piece);
           if (box.isEmpty()) return;
@@ -624,6 +679,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           const id = piece.name.startsWith('Examine_') ? piece.name.slice('Examine_'.length) : null;
           const entry = id ? level.examinables[id] : undefined;
           if (id && entry) targets.push({ id, entry, box, collection: level.collections?.[id] });
+          if (id) pieceById.set(id, piece);
           if (entry?.lying) {
             // Drop onto the top surface at the centre, not box.max.y — a chair
             // back can rise above the tabletop.
@@ -860,11 +916,38 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           }).catch(err => console.error('NPC figure failed to load:', err));
         }
 
-        // Stains get no marker: finding them is the lamp's job. People have their names over their heads.
-        markers = createInteractMarkers(targets.filter(t => !t.pinHead && !t.uv && !t.npc));
-        scene.add(markers.group);
-
-        setLoaded(true);
+        // Small things to pick up, each stood on its piece of furniture. The level
+        // opens once they are down, so their markers and focus boxes exist.
+        const placeInspectable = async (id: string, insp: Inspectable) => {
+          const anchor = pieceById.get(insp.on);
+          const entry = level.examinables[id];
+          if (!anchor || !entry) { console.warn('Inspectable has nowhere to stand:', id); return; }
+          const gltf = await new GLTFLoader().loadAsync(insp.model);
+          if (disposed) return;
+          const obj = gltf.scene;
+          const base = new THREE.Box3().setFromObject(anchor).getCenter(new THREE.Vector3());
+          const [ox, oz] = insp.offset ?? [0, 0];
+          const x = base.x + ox, z = base.z + oz;
+          // Onto whatever top is under that spot — the desk's, not a hutch above it.
+          const hit = new THREE.Raycaster(new THREE.Vector3(x, base.y + 2, z), new THREE.Vector3(0, -1, 0)).intersectObject(anchor, true)[0];
+          obj.position.set(x, hit ? hit.point.y : base.y, z);
+          obj.rotation.y = THREE.MathUtils.degToRad(insp.turnDeg ?? 0);
+          obj.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          scene.add(obj);
+          obj.updateMatrixWorld(true);
+          // A little larger than the lamp itself, so it is easy to look at.
+          const box = new THREE.Box3().setFromObject(obj).expandByScalar(0.04);
+          targets.push({ id, entry, box, inspect: insp });
+        };
+        Promise.all(Object.entries(level.inspectables ?? {}).map(([id, insp]) =>
+          placeInspectable(id, insp).catch(err => console.error('Inspectable failed to load:', id, err)),
+        )).then(() => {
+          if (disposed) return;
+          // Stains get no marker: finding them is the lamp's job. People have their names over their heads.
+          markers = createInteractMarkers(targets.filter(t => !t.pinHead && !t.uv && !t.npc));
+          scene.add(markers.group);
+          setLoaded(true);
+        });
       },
       (ev) => { if (ev.lengthComputable) setProgress(ev.loaded / ev.total); },
       (err) => { console.error('Walkthrough GLB load error:', level.model, err); if (!disposed) setLoadError(true); },
@@ -927,7 +1010,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * LOOK));
     };
     const onCanvasClick = () => {
-      if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current) return;
+      if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
       else if (focusRef.current) openTarget(focusRef.current);
     };
@@ -1013,7 +1096,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
-      if (model && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current) {
+      if (model && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current) {
         // Arrow keys turn, so the level is walkable without pointer lock too.
         if (keys.has('ArrowLeft')) yaw += 1.8 * dt;
         if (keys.has('ArrowRight')) yaw -= 1.8 * dt;
@@ -1387,7 +1470,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             )}
           </div>
 
-          {loaded && locked && !reading && !browsing && !typing && (
+          {loaded && locked && !reading && !browsing && !typing && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', top: '50%', width: 6, height: 6,
               marginLeft: -3, marginTop: -3, borderRadius: '50%', pointerEvents: 'none',
@@ -1396,7 +1479,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             }} />
           )}
 
-          {loaded && focus && !reading && !browsing && !typing && (
+          {loaded && focus && !reading && !browsing && !typing && !invOpen && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', top: 'calc(50% + 22px)', transform: 'translateX(-50%)',
               pointerEvents: 'none', whiteSpace: 'nowrap',
@@ -1405,6 +1488,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             }}>
               {focus.npc ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Speak to {focus.entry.title.replace(/^The /, 'the ')}</>
+              ) : focus.inspect ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Pick up the {focus.entry.title.toLowerCase()}</>
               ) : focus.collection ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Open {focus.entry.title}</>
               ) : level.typewriters?.[focus.id] ? (
@@ -1427,7 +1512,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           )}
 
           {/* The item in hand, and the last use of it. */}
-          {loaded && (heldItem || usedNote) && !reading && !browsing && !typing && (
+          {loaded && (heldItem || usedNote) && !reading && !browsing && !typing && !inspecting && (
             <div style={{
               position: 'absolute', left: 12, bottom: 12, maxWidth: '60%', pointerEvents: 'none',
               fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.5px', color: 'var(--parchment)',
@@ -1436,6 +1521,24 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             }}>
               {usedNote ?? <><span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{heldItem}</>}
             </div>
+          )}
+
+          {inspecting?.inspect && (
+            <InspectViewer
+              key={inspecting.id}
+              title={inspecting.entry.title}
+              intro={inspecting.entry.text}
+              inspectable={inspecting.inspect}
+              hasLamp={hasLamp}
+              uvOn={inspectUv}
+              found={new Set([...foundClues].filter(k => k.startsWith(`${inspecting.id}/`)).map(k => k.slice(inspecting.id.length + 1)))}
+              onFound={clueId => setFoundClues(prev => new Set(prev).add(`${inspecting.id}/${clueId}`))}
+              shared={new Set([...sharedClues].filter(k => k.startsWith(`${inspecting.id}/`)).map(k => k.slice(inspecting.id.length + 1)))}
+              saved={new Set([...savedClues].filter(k => k.startsWith(`${inspecting.id}/`)).map(k => k.slice(inspecting.id.length + 1)))}
+              onShare={clueId => shareClue(inspecting, clueId)}
+              onSave={clueId => saveClue(inspecting, clueId)}
+              onClose={closeInspect}
+            />
           )}
 
           {invOpen && (
@@ -1472,7 +1575,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             </div>
           )}
 
-          {webgl && loaded && !locked && !reading && !browsing && !typing && !invOpen && (
+          {webgl && loaded && !locked && !reading && !browsing && !typing && !invOpen && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
               pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.5px',

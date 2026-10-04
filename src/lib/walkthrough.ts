@@ -231,6 +231,40 @@ export type PhotoFrames = {
  * None of them can be seen by torchlight. Once lit, a stain can be examined like
  * any other object.
  */
+/**
+ * A small object that can be picked up and turned over in the inspect viewer:
+ * E on it opens the viewer instead of the reading card (its examinable gives
+ * the viewer's title and intro). The model stands on top of another
+ * examinable's furniture in the walkthrough.
+ */
+export type Inspectable = {
+  /** The .glb under public/. Empty nodes named "Clue_<id>" mark where each clue sits, local +Z out of the surface. */
+  model: string;
+  /** The examinable whose top it stands on. */
+  on: string;
+  /** Metres from the centre of that top, along world X and Z. */
+  offset?: [number, number];
+  turnDeg?: number;
+  /** Keyed by the marker's id: "stamp" for "Clue_stamp". */
+  clues: Record<string, InspectClue>;
+};
+
+export type InspectClue = {
+  title: string;
+  /** Shown once found, and filed to the case board from there. */
+  text: string;
+  /** Shows only where the Wood's lamp shines. */
+  uv?: boolean;
+  /**
+   * What is on the surface: `stamp` is lettering pressed into metal, with a
+   * ringed sigil above it; `print` is a smeared thumbprint, with any lines
+   * scrawled beneath it.
+   */
+  mark: { kind: 'stamp' | 'print'; lines?: string[] };
+  /** The decal's width and height in metres. */
+  size: [number, number];
+};
+
 export type UvStain = Examinable & {
   id: string;
   kind: 'blood' | 'brine' | 'ink';
@@ -328,6 +362,8 @@ export type WalkthroughLevel = {
   wanderers?: Wanderer[];
   /** Stains for the Wood's lamp to find. A level without them has no lamp to draw. */
   uvStains?: UvStain[];
+  /** Objects to pick up and turn over, keyed by examinable id. */
+  inspectables?: Record<string, Inspectable>;
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
   lamps?: { color: number; intensity: number; distance: number };
   atmosphere: {
