@@ -204,6 +204,7 @@ export const CHARACTERS: Character[] = [
       "PI badge",
       "Worn trench coat",
       "Scarred silver lighter with unknown initials",
+      "Colt Detective Special revolver (.38)",
     ],
   },
   {

@@ -20,6 +20,8 @@ import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
 import { joinLevel, type Peer } from './presence';
 import { createWoodsLamp } from './woods-lamp';
+import { createHeldViewmodel } from './held-viewmodel';
+import { heldModelFor } from '@/lib/held-items';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
 interface Props {
@@ -147,6 +149,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const lampOnRef = useRef(true);
   const markersRef = useRef(true);
   const invOpenRef = useRef(false);
+  // The item in hand, if it is still on the sheet — read by the level's loop to show it.
+  const heldItemRef = useRef<string | null>(null);
   const inspectingRef = useRef<Target | null>(null);
   const heldRef = useRef<string | null>(null);
   const unlockedAtRef = useRef(0);
@@ -169,6 +173,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
   // An item struck off the sheet since it was taken in hand is gone from the hand too.
   const heldItem = held && items.includes(held) ? held : null;
+  useEffect(() => { heldItemRef.current = heldItem; }, [heldItem]);
 
   // Takes an item in hand, or puts it away; remembered per investigator across levels.
   const holdItem = useCallback((item: string) => {
@@ -527,6 +532,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // stains too, and each gets a wash of its own.
     const uvLevel = !!level.uvStains?.length;
     const woods = uvLevel ? createWoodsLamp(renderer, width / height) : null;
+    // Whatever inventory item is in hand, when it has a model (the revolver).
+    const inHand = createHeldViewmodel(renderer, width / height);
     const uvWash = (light: THREE.SpotLight) => {
       light.angle = CONE_OUTER;
       light.penumbra = 0.55;
@@ -1162,6 +1169,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         }
         stains?.setLamps(uvLamps);
       }
+      // The item in hand comes up when chosen; the Wood's lamp takes the same hand, so it goes away while that is out.
+      inHand.setItem(lampOutRef.current ? null : heldModelFor(heldItemRef.current));
+      const stride = dt > 0 ? Math.min(1, Math.hypot(feet.x - lastFeet.x, feet.z - lastFeet.z) / dt / RUN) : 0;
+      inHand.update(dt, [yaw - lastYaw, pitch - lastPitch], stride);
       lastYaw = yaw;
       lastPitch = pitch;
 
@@ -1210,6 +1221,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       } else {
         torch.intensity = 0;
       }
+      inHand.setTorch(torch.intensity / 40);
       // The Deep One: slide in behind the hole from one side, stare, withdraw.
       if (peeper && level.peeper) {
         const cfg = level.peeper;
@@ -1311,11 +1323,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
 
       renderer.render(scene, camera);
-      if (woods?.visible) {
-        // The lamp in hand draws over everything, so it never dips into a wall.
+      if (woods?.visible || inHand.visible) {
+        // What is in hand draws over everything, so it never dips into a wall.
         renderer.autoClear = false;
         renderer.clearDepth();
-        woods.render(renderer);
+        if (woods?.visible) woods.render(renderer);
+        inHand.render(renderer);
         renderer.autoClear = true;
       }
     };
@@ -1329,6 +1342,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       woods?.resize(w / h);
+      inHand.resize(w / h);
       renderer.setSize(w, h);
     };
     window.addEventListener('resize', onResize);
@@ -1366,6 +1380,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         });
       }
       woods?.dispose();
+      inHand.dispose();
       for (const o of owned) o.dispose();
       peeper?.head.dispose();
       for (const r of radios.values()) {
