@@ -16,8 +16,8 @@ import type { TimeOfDay } from '@/lib/weather';
  * level makes one on the first click or key, as browsers require.
  */
 export type Flock = {
-  /** `now` is Date.now(); `time` the level's current time of day. */
-  update: (dt: number, now: number, time: TimeOfDay) => void;
+  /** `now` is Date.now(); `time` the level's current time of day; `grounded` keeps them down (heavy rain). */
+  update: (dt: number, now: number, time: TimeOfDay, grounded?: boolean) => void;
   dispose: () => void;
 };
 
@@ -86,9 +86,9 @@ export function createFlock(scene: THREE.Scene, cfg: Birds, listener: () => THRE
   const at = new THREE.Vector3();
 
   return {
-    update(dt, now, time) {
+    update(dt, now, time, grounded = false) {
       if (!birds.length) return;
-      const flying = cfg.times.includes(time);
+      const flying = cfg.times.includes(time) && !grounded;
       const pass = Math.floor(now / 1000 / cfg.everySec);
       const into = now / 1000 - pass * cfg.everySec;
       // Passes go in pairs: out one way, back the other.

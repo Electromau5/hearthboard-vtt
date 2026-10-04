@@ -24,7 +24,8 @@ import { createHeldViewmodel, prepareHeldModel } from './held-viewmodel';
 import { heldModelFor } from '@/lib/held-items';
 import { createSkyDome } from './sky-dome';
 import { createFlock } from './birds';
-import { isTimeOfDay, skyFor, TIME_LABELS, TIMES, type TimeOfDay } from '@/lib/weather';
+import { isRain, isTimeOfDay, RAIN_LABELS, RAIN_SPECS, RAINS, skyFor, TIME_LABELS, TIMES, withRain, type Rain, type TimeOfDay } from '@/lib/weather';
+import { buildCover, createRain, createRainSound, type Cover, type RainSound } from './rain';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
 interface Props {
@@ -133,6 +134,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [weatherTime, setWeatherTime] = useState<TimeOfDay>('night');
   const weatherRef = useRef<TimeOfDay>('night');
   useEffect(() => { weatherRef.current = weatherTime; }, [weatherTime]);
+  const [rain, setRain] = useState<Rain>('none');
+  const rainRef = useRef<Rain>('none');
+  useEffect(() => { rainRef.current = rain; }, [rain]);
   const [weatherError, setWeatherError] = useState(false);
   // A pickup carried from where it lay (a gun off the armory bench), by id. Not inventory: it stays in the level.
   const [carried, setCarried] = useState<string | null>(null);
@@ -439,7 +443,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       if (document.hidden) return;
       fetch(`/api/weather?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
         .then(r => (r.ok ? r.json() : null))
-        .then((w: { time?: unknown } | null) => { if (!cancelled) setWeatherTime(isTimeOfDay(w?.time) ? w.time : 'night'); })
+        .then((w: { time?: unknown; rain?: unknown } | null) => {
+          if (cancelled) return;
+          setWeatherTime(isTimeOfDay(w?.time) ? w.time : 'night');
+          setRain(isRain(w?.rain) ? w.rain : 'none');
+        })
         .catch(() => {});
     };
     poll();
@@ -448,20 +456,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
   }, [level]);
 
-  const setWeather = useCallback(async (time: TimeOfDay) => {
-    const before = weatherRef.current;
-    setWeatherTime(time);
+  // The GM changes the time of day or the rain; the other stays as it is.
+  const setWeather = useCallback(async (change: { time?: TimeOfDay; rain?: Rain }) => {
+    const before = { time: weatherRef.current, rain: rainRef.current };
+    if (change.time) setWeatherTime(change.time);
+    if (change.rain) setRain(change.rain);
     setWeatherError(false);
     try {
       const r = await fetch('/api/weather', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level: level.id, time }),
+        body: JSON.stringify({ level: level.id, ...change }),
       });
       if (!r.ok) throw new Error(String(r.status));
     } catch (err) {
-      console.error('Could not set the time of day:', err);
-      setWeatherTime(before);
+      console.error('Could not set the weather:', err);
+      setWeatherTime(before.time);
+      setRain(before.rain);
       setWeatherError(true);
     }
   }, [level]);
@@ -594,8 +605,18 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const dome = level.weather ? createSkyDome(50) : null;
     if (dome) scene.add(dome.mesh);
     const flock = level.birds ? createFlock(scene, level.birds, () => listener) : null;
+    // Rain: the streaks, what covers each part of the level (measured once it
+    // loads), its sound once there is a listener, and how hard it is falling now.
+    const rainFall = level.weather ? createRain() : null;
+    if (rainFall) scene.add(rainFall.object);
+    let cover: Cover | null = null;
+    let rainSound: RainSound | null = null;
+    const rainNow = { drops: 0, wind: 0, loudness: 0, storm: 0 };
+    const rainTint = new THREE.Color();
+    let lastBolt = -1;
+    let flash = 0;
     const sky = (() => {
-      const k = skyFor(weatherRef.current, level);
+      const k = withRain(skyFor(weatherRef.current, level), rainRef.current);
       return {
         zenith: new THREE.Color(k.zenith), horizon: new THREE.Color(k.horizon), sunColor: new THREE.Color(k.sunColor),
         sunDir: new THREE.Vector3(...k.sunDir).normalize(), sunIntensity: k.sunIntensity,
@@ -775,6 +796,17 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
         const arch = model.getObjectByName('Architecture');
         arch?.traverse((o) => { if ((o as THREE.Mesh).isMesh) walls.push(o); });
+        // Where the rain cannot reach: over the architecture, cast down from above.
+        if (rainFall && arch) {
+          const span = new THREE.Box3().setFromObject(arch).expandByScalar(1);
+          cover = buildCover(span, (x, z, from) => {
+            ray.set(tmpV.set(x, from, z), down);
+            ray.far = from - span.min.y + 1;
+            const hit = ray.intersectObjects(walls, false)[0];
+            return hit ? hit.point.y : -Infinity;
+          });
+          rainFall.setCover(cover);
+        }
 
         // Furniture blocks as boxes: cheaper than its triangles, and it never snags on chair legs.
         const furniture = model.getObjectByName('Furniture');
@@ -1146,7 +1178,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // ── Input ───────────────────────────────────────────────────────
     const onKeyDown = (e: KeyboardEvent) => {
       // A level with birds calling needs sound from the start; a key press lets it begin.
-      if (level.birds?.cries) ensureListener();
+      if (level.birds?.cries || level.weather) ensureListener();
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
         keys.add(e.code);
         if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -1160,7 +1192,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * LOOK));
     };
     const onCanvasClick = () => {
-      if (level.birds?.cries) ensureListener();
+      if (level.birds?.cries || level.weather) ensureListener();
       if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
       else if (focusRef.current) openTarget(focusRef.current);
@@ -1249,8 +1281,15 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
       // Ease the light toward the time of day over a few seconds.
       if (level.weather) {
-        const k = skyFor(weatherRef.current, level);
+        const spec = RAIN_SPECS[rainRef.current];
+        const k = withRain(skyFor(weatherRef.current, level), rainRef.current);
         const a = 1 - Math.exp(-dt / 1.2);
+        // Rain comes on and eases off over a few seconds, too.
+        const ra = 1 - Math.exp(-dt / 2.5);
+        rainNow.drops += (spec.drops - rainNow.drops) * ra;
+        rainNow.wind += (spec.wind - rainNow.wind) * ra;
+        rainNow.loudness += (spec.loudness - rainNow.loudness) * ra;
+        rainNow.storm += ((spec.lightning ? 1 : 0) - rainNow.storm) * ra;
         sky.zenith.lerp(goal.set(k.zenith), a);
         sky.horizon.lerp(goal.set(k.horizon), a);
         sky.sunColor.lerp(goal.set(k.sunColor), a);
@@ -1268,13 +1307,41 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         (scene.background as THREE.Color).copy(sky.horizon);
         hemi.color.copy(sky.hemiSky);
         hemi.groundColor.copy(sky.hemiGround);
-        hemi.intensity = sky.fill;
+        // Lightning, in a storm: the bolts come from the clock, so everyone sees the same one.
+        flash = Math.max(0, flash - dt * 7);
+        if (rainNow.storm > 0.5) {
+          const slot = Math.floor(Date.now() / 1500);
+          let r = Math.sin(slot * 12.9898) * 43758.5453;
+          r -= Math.floor(r);
+          if (slot !== lastBolt && r < 0.09) {
+            lastBolt = slot;
+            flash = 1;
+            // The thunder follows, sooner and sharper the nearer the strike.
+            const delay = 0.5 + (r / 0.09) * 3;
+            rainSound?.thunder(delay, 1 - delay / 3.5);
+          }
+        }
+        // A bolt is two hard pulses of white.
+        const bolt = flash > 0 ? flash * (0.6 + 0.4 * Math.sin(flash * 40)) : 0;
+        hemi.intensity = sky.fill + bolt * 4;
         if (moon) {
           moon.color.copy(sky.sunColor);
           moon.intensity = sky.sunIntensity;
           moon.position.copy(sky.sunDir).multiplyScalar(30);
         }
-        dome?.set(sky.zenith, sky.horizon, sky.sunColor, sky.sunDir, sky.stars);
+        if (bolt > 0 && dome) {
+          const white = new THREE.Color(0xdfe6ff);
+          dome.set(sky.zenith.clone().lerp(white, bolt * 0.7), sky.horizon.clone().lerp(white, bolt * 0.5), sky.sunColor, sky.sunDir, sky.stars);
+        } else {
+          dome?.set(sky.zenith, sky.horizon, sky.sunColor, sky.sunDir, sky.stars);
+        }
+
+        // The rain, catching what light there is.
+        rainTint.copy(sky.horizon).lerp(goal.set(0xe8eef4), 0.35).multiplyScalar(0.55 + bolt * 0.8);
+        rainFall?.update(dt, camera.position, rainNow.drops, rainNow.wind, rainTint);
+        if (listener && !rainSound) rainSound = createRainSound(listener.context, listener.getInput());
+        const overhead = cover ? cover.at(camera.position.x, camera.position.z) : -Infinity;
+        rainSound?.update(dt, rainNow.loudness, Math.min(1, rainNow.wind / 4.5), overhead > camera.position.y);
         if (model && !sea) {
           model.traverse(o => {
             const mat = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
@@ -1283,7 +1350,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         }
         if (sea) sea.mat.color.copy(sea.night).lerp(goal.copy(sky.horizon).multiplyScalar(0.32), 1 - sky.stars);
       }
-      flock?.update(dt, Date.now(), weatherRef.current);
+      flock?.update(dt, Date.now(), weatherRef.current, RAIN_SPECS[rainRef.current].grounded);
 
       if (model && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current) {
         // Arrow keys turn, so the level is walkable without pointer lock too.
@@ -1568,6 +1635,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       inHand.dispose();
       dome?.dispose();
       flock?.dispose();
+      rainFall?.dispose();
+      cover?.texture.dispose();
+      rainSound?.dispose();
       for (const o of owned) o.dispose();
       peeper?.head.dispose();
       for (const r of radios.values()) {
@@ -1656,7 +1726,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               {TIMES.map(time => (
                 <button
                   key={time}
-                  onClick={() => void setWeather(time)}
+                  onClick={() => void setWeather({ time })}
                   aria-pressed={weatherTime === time}
                   style={{
                     fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
@@ -1667,6 +1737,26 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                   }}
                 >
                   {TIME_LABELS[time]}
+                </button>
+              ))}
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)', margin: '0 4px 0 10px' }}>
+                Rain
+              </span>
+              {RAINS.map(r => (
+                <button
+                  key={r}
+                  onClick={() => void setWeather({ rain: r })}
+                  aria-pressed={rain === r}
+                  title={RAIN_LABELS[r]}
+                  style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                    padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                    background: rain === r ? 'rgba(120,150,190,0.2)' : 'transparent',
+                    border: `1px solid ${rain === r ? '#8fa6c8' : 'var(--line)'}`,
+                    color: rain === r ? '#b9cbe4' : 'var(--ink-text-2)',
+                  }}
+                >
+                  {r === 'none' ? 'Off' : r === 'light' ? 'Light' : r === 'heavy' ? 'Heavy' : 'Storm'}
                 </button>
               ))}
             </div>
