@@ -30,7 +30,7 @@ export type HeldModel = {
   /** Where the grip sits in view, camera space (metres; -Z is ahead), and how it is angled there. */
   pos: [number, number, number];
   rot: [number, number, number];
-  /** Draw hands. */
+  /** Draw hands. Off for the long guns, which are shown on their own (the GM's call). */
   hand: boolean;
 };
 
@@ -59,13 +59,13 @@ export const HELD_MODELS = {
   // A wheel-lock long gun; along X, muzzle toward +X. Held at the wrist of the stock.
   renaissanceRifle: {
     model: '/props/renaissance-rifle.glb', orient: [0, Math.PI / 2, 0], length: 1.25,
-    gripAt: [0.28, 0.4, 0.5], supportAt: [0.6, 0.62, 0.5], ...RIFLE_POSE, hand: true,
+    gripAt: [0.28, 0.4, 0.5], supportAt: [0.6, 0.62, 0.5], ...RIFLE_POSE, hand: false,
   },
   // Thompson submachine gun with the drum; along X, muzzle toward +X. (The
   // model's loose cartridge, "bullet_low", is stripped before compressing.)
   tommyGun: {
     model: '/props/tommy-gun.glb', orient: [0, Math.PI / 2, 0], length: 0.85,
-    gripAt: [0.42, 0.38, 0.5], supportAt: [0.73, 0.4, 0.5], ...SMG_POSE, hand: true,
+    gripAt: [0.42, 0.38, 0.5], supportAt: [0.73, 0.4, 0.5], ...SMG_POSE, hand: false,
   },
 } satisfies Record<string, HeldModel>;
 
