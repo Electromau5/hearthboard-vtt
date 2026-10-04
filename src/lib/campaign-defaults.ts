@@ -30,6 +30,13 @@ export const CAMPAIGN_LOCATIONS: Location[] = [
     attachments: [],
   },
   {
+    id: "loc-downtown",
+    name: "Downtown",
+    description:
+      "The city's commercial heart: brick shopfronts and newsstands under soot-dark apartment blocks, the street lamps lit early against the harbour fog.",
+    attachments: [],
+  },
+  {
     id: "loc-docks",
     name: "Federal Quarantine Docks",
     description:

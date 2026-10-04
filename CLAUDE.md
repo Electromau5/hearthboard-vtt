@@ -105,6 +105,7 @@ src/
     black-archive.ts              # ARCHIVE_LEVEL — the Black Archive warehouse; rooms open live board notes and All Resources
     npc-personas.ts               # Server-only: who each NPC is, what they know and hide, whom they already know
     bellevue.ts                   # BELLEVUE_LEVEL — the two-storey Bellevue ward: Admissions, the Lower Block (Cells 63–66), the ward upstairs
+    downtown.ts                   # DOWNTOWN_LEVEL — the default map's Downtown street (Sketchfab asset, wrapped in my-summer-game)
     session-recaps.ts             # Session cliff notes (from the GM's Drive recaps) — typed cards on the Archive's case board
     innsmouth-scenes.ts           # INNSMOUTH_SCENES — Innsmouth map pins, shared by the board and the Archive's wall chart
     vtt-types.ts                  # Shared TypeScript types
@@ -358,6 +359,7 @@ A federal quarantine facility ostensibly maintained for disease control and insp
 | Abattoir | Underworld Abattoir & Speakeasy | 49% | 52% |
 | Black Archives | Black Archives | 65% | 47% |
 | Fed. Docks | Federal Quarantine Docks | 70% | 18% |
+| Downtown | Downtown (3D walkthrough) | 66% | 32% |
 
 ---
 

@@ -11,6 +11,7 @@ import { HOUSE_LEVEL } from '@/lib/innsmouth-house';
 import { VESSEL_LEVEL } from '@/lib/fishing-vessel';
 import { ARCHIVE_LEVEL } from '@/lib/black-archive';
 import { BELLEVUE_LEVEL } from '@/lib/bellevue';
+import { DOWNTOWN_LEVEL } from '@/lib/downtown';
 import { INNSMOUTH_SCENES } from '@/lib/innsmouth-scenes';
 import type { WalkthroughLevel } from '@/lib/walkthrough';
 import { InnsmouthTown3D } from './components/InnsmouthTown3D';
@@ -44,6 +45,7 @@ const SCENES = [
   { id: 's3', locationId: 'loc-underworld', name: 'Underworld Abattoir & Speakeasy',      short: 'Abattoir',   mapX: 49, mapY: 52 },
   { id: 's4', locationId: 'loc-blackarchive', name: 'Black Archives',                     short: 'Black Archives', mapX: 65, mapY: 47 },
   { id: 's5', locationId: 'loc-docks',      name: 'Federal Quarantine Docks',             short: 'Fed. Docks', mapX: 70, mapY: 18 },
+  { id: 's6', locationId: 'loc-downtown',   name: 'Downtown',                             short: 'Downtown',   mapX: 66, mapY: 32 },
 ];
 
 /** Locations whose info panel opens a first-person walkthrough, keyed by locationId. */
@@ -52,6 +54,7 @@ const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; a
   'loc-inn-vessel': { level: VESSEL_LEVEL, preview: '/fishing-vessel-preview.jpeg',  alt: "The wrecked trawler's deck",      cta: 'Board the vessel', hint: 'Click to climb aboard' },
   'loc-blackarchive': { level: ARCHIVE_LEVEL, preview: '/black-archive-preview.jpeg', alt: "The Black Archive's warehouse floor", cta: 'Enter the archive', hint: 'Click to step inside' },
   'loc-bellevue': { level: BELLEVUE_LEVEL, preview: '/bellevue-ward-preview.jpeg', alt: "Bellevue's admissions hall", cta: 'Enter the ward', hint: 'Click to sign in' },
+  'loc-downtown': { level: DOWNTOWN_LEVEL, preview: '/downtown-preview.jpeg', alt: 'A downtown street of brick shopfronts at night', cta: 'Walk downtown', hint: 'Click to walk the street' },
 };
 
 /**
