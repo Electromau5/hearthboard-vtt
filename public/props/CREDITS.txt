@@ -18,6 +18,12 @@ tommy-gun.glb
   Licence: CC BY-NC 4.0 (http://creativecommons.org/licenses/by-nc/4.0/) — non-commercial use only
   Changes: textures resized to 1024 px WebP, meshes joined and meshopt-compressed.
 
+seagull.glb
+  "Low-Poly Seagull (with Animation & Rigged)" by simonaskLDE — https://sketchfab.com/simonaskLDE
+  https://sketchfab.com/3d-models/low-poly-seagull-with-animation-rigged-985024328902444c8270c0f09acc897e
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Unchanged.
+
 detective-special.glb
   Colt Detective Special revolver, supplied by the GM (source not recorded).
   Changes: textures resized to 1024 px WebP, meshes meshopt-compressed.

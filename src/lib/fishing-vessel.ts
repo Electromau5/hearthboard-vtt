@@ -114,6 +114,8 @@ export const VESSEL_LEVEL: WalkthroughLevel = {
   radios: RADIOS,
   // The GM sets dawn, day, evening or night (`/admin/experience`); night is the atmosphere below.
   weather: true,
+  // Herring gulls over the wreck by day: a flock every two minutes, out and back.
+  birds: { model: '/props/seagull.glb', times: ['dawn', 'day'], everySec: 120, count: [3, 5], wingspan: 1.4, over: [0, 0], height: [8, 15] },
   atmosphere: {
     background: 0x070b10,
     fogColor: 0x070b10,

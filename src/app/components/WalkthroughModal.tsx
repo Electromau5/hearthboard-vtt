@@ -23,6 +23,7 @@ import { createWoodsLamp } from './woods-lamp';
 import { createHeldViewmodel, prepareHeldModel } from './held-viewmodel';
 import { heldModelFor } from '@/lib/held-items';
 import { createSkyDome } from './sky-dome';
+import { createFlock } from './birds';
 import { isTimeOfDay, skyFor, TIME_LABELS, TIMES, type TimeOfDay } from '@/lib/weather';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
@@ -592,6 +593,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // Time of day: the sky dome, and where the light is now, easing toward the GM's choice.
     const dome = level.weather ? createSkyDome(50) : null;
     if (dome) scene.add(dome.mesh);
+    const flock = level.birds ? createFlock(scene, level.birds) : null;
     const sky = (() => {
       const k = skyFor(weatherRef.current, level);
       return {
@@ -1272,6 +1274,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         }
         if (sea) sea.mat.color.copy(sea.night).lerp(goal.copy(sky.horizon).multiplyScalar(0.32), 1 - sky.stars);
       }
+      flock?.update(dt, Date.now(), weatherRef.current);
 
       if (model && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current) {
         // Arrow keys turn, so the level is walkable without pointer lock too.
@@ -1555,6 +1558,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       woods?.dispose();
       inHand.dispose();
       dome?.dispose();
+      flock?.dispose();
       for (const o of owned) o.dispose();
       peeper?.head.dispose();
       for (const r of radios.values()) {

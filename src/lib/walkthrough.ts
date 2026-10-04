@@ -21,6 +21,7 @@
  */
 
 import type { HeldModel } from './held-items';
+import type { TimeOfDay } from './weather';
 
 export type Examinable = {
   title: string;
@@ -291,6 +292,23 @@ export type PickupTable = {
   items: Pickup[];
 };
 
+/** Birds that cross the level now and then (see birds.ts). */
+export type Birds = {
+  /** A rigged .glb facing +Z, with its flap as the first animation. */
+  model: string;
+  /** Times of day they fly. */
+  times: TimeOfDay[];
+  /** Seconds between flocks; each comes back the way the last one went. */
+  everySec: number;
+  /** How many in a flock, fewest and most. */
+  count: [number, number];
+  /** Metres from wingtip to wingtip. */
+  wingspan: number;
+  /** The point they cross over (world X and Z), and how high they fly, lowest and highest. */
+  over: [number, number];
+  height: [number, number];
+};
+
 export type UvStain = Examinable & {
   id: string;
   kind: 'blood' | 'brine' | 'ink';
@@ -394,6 +412,7 @@ export type WalkthroughLevel = {
   pickups?: PickupTable[];
   /** The GM can set the time of day here (src/lib/weather.ts); night is `atmosphere` as built. List the id in WEATHER_LEVELS too. */
   weather?: boolean;
+  birds?: Birds;
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
   lamps?: { color: number; intensity: number; distance: number };
   atmosphere: {
