@@ -593,7 +593,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // Time of day: the sky dome, and where the light is now, easing toward the GM's choice.
     const dome = level.weather ? createSkyDome(50) : null;
     if (dome) scene.add(dome.mesh);
-    const flock = level.birds ? createFlock(scene, level.birds) : null;
+    const flock = level.birds ? createFlock(scene, level.birds, () => listener) : null;
     const sky = (() => {
       const k = skyFor(weatherRef.current, level);
       return {
@@ -683,6 +683,16 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const fires: THREE.PointLight[] = [];
     const radios = new Map<string, { set: RadioSet; el: HTMLAudioElement; glow: THREE.PointLight; center: THREE.Vector3; sound: THREE.PositionalAudio | null }>();
     let listener: THREE.AudioListener | null = null;
+    // Sound starts on the first click or key in the level (browsers require a
+    // gesture); after that, radios and birds share the one listener.
+    const ensureListener = () => {
+      if (!listener) {
+        listener = new THREE.AudioListener();
+        camera.add(listener);
+      }
+      if (listener.context.state !== 'running') void listener.context.resume();
+      return listener;
+    };
     // The watcher at the peephole: where its eye rests behind the hole, and the
     // state of its current look.
     let peeper: { head: ReturnType<typeof createDeepOneHead>; rest: THREE.Vector3; side: THREE.Vector3; hole: THREE.Vector3 } | null = null;
@@ -1100,18 +1110,15 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     toggleRadioRef.current = (id) => {
       const r = radios.get(id);
       if (!r) return;
-      if (!listener) {
-        listener = new THREE.AudioListener();
-        camera.add(listener);
-      }
+      const ear = ensureListener();
       if (!r.sound) {
-        const sound = new THREE.PositionalAudio(listener);
+        const sound = new THREE.PositionalAudio(ear);
         sound.setMediaElementSource(r.el);
         sound.setRefDistance(r.set.refDistance);
         sound.setRolloffFactor(1.4);
         sound.setVolume(r.set.volume);
         // Cut the lows and highs: a 1930s cabinet speaker, not a gramophone.
-        const ctx = listener.context;
+        const ctx = ear.context;
         const low = ctx.createBiquadFilter();
         low.type = 'highpass';
         low.frequency.value = 250;
@@ -1123,7 +1130,6 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         scene.add(sound);
         r.sound = sound;
       }
-      void listener.context.resume();
       const on = r.el.paused;
       // A broadcast starts over each time, so nobody hears it from the middle.
       if (on && !r.el.loop) r.el.currentTime = 0;
@@ -1139,6 +1145,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
     // ── Input ───────────────────────────────────────────────────────
     const onKeyDown = (e: KeyboardEvent) => {
+      // A level with birds calling needs sound from the start; a key press lets it begin.
+      if (level.birds?.cries) ensureListener();
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
         keys.add(e.code);
         if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -1152,6 +1160,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * LOOK));
     };
     const onCanvasClick = () => {
+      if (level.birds?.cries) ensureListener();
       if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
       else if (focusRef.current) openTarget(focusRef.current);

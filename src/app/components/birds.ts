@@ -10,6 +10,10 @@ import type { TimeOfDay } from '@/lib/weather';
  * way. Passes are worked out from the wall clock, seeded by their number, so
  * everyone in the level sees the same birds at the same moment without a word
  * to the server. They fly only at the times of day the level lists.
+ *
+ * With `cries`, each bird calls now and then while it is up, from where it
+ * is: loud overhead, fading as it goes. Audio waits for `listener()` — the
+ * level makes one on the first click or key, as browsers require.
  */
 export type Flock = {
   /** `now` is Date.now(); `time` the level's current time of day. */
@@ -21,6 +25,8 @@ export type Flock = {
 const CROSS_SEC = 18;
 /** Metres from `over` where a flock starts and ends — out in the haze. */
 const REACH = 46;
+/** Seconds between one bird's calls, fewest and most. */
+const CRY_GAP: [number, number] = [3.5, 9];
 
 /** A small seeded generator (mulberry32), so every client draws the same flock. */
 function seeded(seed: number) {
@@ -34,10 +40,18 @@ function seeded(seed: number) {
   };
 }
 
-export function createFlock(scene: THREE.Scene, cfg: Birds): Flock {
+export function createFlock(scene: THREE.Scene, cfg: Birds, listener: () => THREE.AudioListener | null): Flock {
   const [minCount, maxCount] = cfg.count;
-  const birds: { root: THREE.Object3D; mixer: THREE.AnimationMixer }[] = [];
+  const birds: { root: THREE.Object3D; mixer: THREE.AnimationMixer; voice: THREE.PositionalAudio | null; nextCry: number }[] = [];
   let disposed = false;
+
+  // The calls, decoded once. Decoding needs no user gesture; playing does.
+  const cries: AudioBuffer[] = [];
+  const audioLoader = new THREE.AudioLoader();
+  for (const url of cfg.cries ?? []) {
+    audioLoader.loadAsync(url).then(buf => { if (!disposed) cries.push(buf); })
+      .catch(err => console.error('Bird call failed to load:', url, err));
+  }
 
   new GLTFLoader().loadAsync(cfg.model).then(gltf => {
     if (disposed) return;
@@ -63,7 +77,7 @@ export function createFlock(scene: THREE.Scene, cfg: Birds): Flock {
         action.time = (i * 0.21) % clip.duration;
         action.play();
       }
-      birds.push({ root, mixer });
+      birds.push({ root, mixer, voice: null, nextCry: 0.5 + i * 0.9 });
     }
   }).catch(err => console.error('Birds failed to load:', cfg.model, err));
 
@@ -97,7 +111,10 @@ export function createFlock(scene: THREE.Scene, cfg: Birds): Flock {
         const u = ((into - lag) * pace) / CROSS_SEC;
         const show = flying && i < count && u > 0 && u < 1;
         b.root.visible = show;
-        if (!show) return;
+        if (!show) {
+          b.nextCry = 0.5 + Math.random() * 2;   // the first call comes soon after it appears
+          return;
+        }
         b.mixer.update(dt);
         const along = (u * 2 - 1) * REACH;
         const drift = Math.sin(u * Math.PI * 2 + sway) * 2.5;
@@ -107,11 +124,32 @@ export function createFlock(scene: THREE.Scene, cfg: Birds): Flock {
         b.root.position.copy(at);
         // Face the way it flies; bank into its drift.
         b.root.rotation.set(0, heading, -Math.cos(u * Math.PI * 2 + sway) * 0.35, 'YXZ');
+
+        // Now and then it calls, from where it is.
+        b.nextCry -= dt;
+        const ear = listener();
+        if (b.nextCry <= 0 && cries.length && ear) {
+          b.nextCry = CRY_GAP[0] + Math.random() * (CRY_GAP[1] - CRY_GAP[0]);
+          if (!b.voice) {
+            b.voice = new THREE.PositionalAudio(ear);
+            b.voice.setRefDistance(9);
+            b.voice.setRolloffFactor(1.1);
+            b.root.add(b.voice);
+          }
+          if (!b.voice.isPlaying) {
+            b.voice.setBuffer(cries[Math.floor(Math.random() * cries.length)]);
+            b.voice.setPlaybackRate(0.92 + Math.random() * 0.16);   // no two quite alike
+            b.voice.setVolume(0.55 + Math.random() * 0.3);
+            b.voice.play();
+          }
+        }
       });
     },
     dispose() {
       disposed = true;
       for (const b of birds) {
+        if (b.voice?.isPlaying) b.voice.stop();
+        b.voice?.disconnect();
         b.mixer.stopAllAction();
         b.root.removeFromParent();
         b.root.traverse(o => {

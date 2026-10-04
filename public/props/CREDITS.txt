@@ -30,3 +30,12 @@ detective-special.glb
 
 oil-lamp.glb
   Built procedurally for this project (my-summer-game tools/build_oil_lamp_cli.gd).
+
+Sounds (public/sounds/)
+
+gull-1.mp3 … gull-5.mp3
+  Flight calls of the European Herring Gull (Larus argentatus), recorded at
+  Carolles, Normandy, by Sonothèque ADVL — xeno-canto XC707075, via Wikimedia Commons
+  https://commons.wikimedia.org/wiki/File:XC707075_-_European_Herring_Gull_-_Larus_argentatus.mp3
+  Licence: CC0 (public domain)
+  Changes: cut into single calls, high-passed at 320 Hz, loudness-normalised, mono MP3.

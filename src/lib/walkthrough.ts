@@ -307,6 +307,8 @@ export type Birds = {
   /** The point they cross over (world X and Z), and how high they fly, lowest and highest. */
   over: [number, number];
   height: [number, number];
+  /** Short calls under public/, played from a bird now and then while a flock is overhead. */
+  cries?: string[];
 };
 
 export type UvStain = Examinable & {

@@ -115,7 +115,11 @@ export const VESSEL_LEVEL: WalkthroughLevel = {
   // The GM sets dawn, day, evening or night (`/admin/experience`); night is the atmosphere below.
   weather: true,
   // Herring gulls over the wreck by day: a flock every two minutes, out and back.
-  birds: { model: '/props/seagull.glb', times: ['dawn', 'day'], everySec: 120, count: [3, 5], wingspan: 1.4, over: [0, 0], height: [8, 15] },
+  birds: {
+    model: '/props/seagull.glb', times: ['dawn', 'day'], everySec: 120, count: [3, 5], wingspan: 1.4, over: [0, 0], height: [8, 15],
+    // Herring gull flight calls (xeno-canto XC707075, Sonothèque ADVL, CC0), cut into single calls.
+    cries: ['/sounds/gull-1.mp3', '/sounds/gull-2.mp3', '/sounds/gull-3.mp3', '/sounds/gull-4.mp3', '/sounds/gull-5.mp3'],
+  },
   atmosphere: {
     background: 0x070b10,
     fogColor: 0x070b10,
