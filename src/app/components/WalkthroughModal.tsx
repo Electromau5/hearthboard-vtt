@@ -43,6 +43,26 @@ const REACH = 2.3;         // how far away something can be examined from
 const LOOK = 0.0022;       // radians per pixel of mouse movement
 const UV_SEEN = 0.12;      // how brightly the lamp must light a stain before it can be examined
 
+/**
+ * The level's Godot build, when it has one and this browser has opted in —
+ * `?engine=godot` on the page (remembered), or `localStorage['hearthboard:engine']`
+ * set to 'godot'; `?engine=three` switches back. Off by default while the
+ * Godot levels catch up with the three.js ones.
+ */
+function pickGodot(level: WalkthroughLevel): string | null {
+  if (!level.godot || typeof window === 'undefined') return null;
+  try {
+    const asked = new URLSearchParams(window.location.search).get('engine');
+    if (asked === 'godot' || asked === 'three') localStorage.setItem('hearthboard:engine', asked);
+    return localStorage.getItem('hearthboard:engine') === 'godot' ? level.godot : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A message to or from the Godot iframe (see my-summer-game/web/walkthrough.gd). */
+type GodotMessage = { type: string; [key: string]: unknown };
+
 type Target = {
   id: string; entry: Examinable; box: THREE.Box3; collection?: Collection;
   /** A map pin: its head swells in focus, and it needs no floating marker — the pin is one. */
@@ -93,6 +113,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // Checked up front: a browser with WebGL disabled (hardware acceleration off,
   // or the GPU process given up after crashes) makes WebGLRenderer throw.
   const [webgl] = useState(() => WebGL.isWebGL2Available());
+  // Godot draws the level instead of three.js; this page still owns every card and pane.
+  const [godot] = useState(() => pickGodot(level));
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // The key handler below, so keys the iframe forwards go through the same logic.
+  const keyRef = useRef<((e: Pick<KeyboardEvent, 'code' | 'key' | 'repeat' | 'preventDefault'>) => void) | null>(null);
 
   // Refs the animation loop reads without re-registering.
   const readingRef = useRef<Target | null>(null);
@@ -194,7 +219,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // leave pointer lock must not also close the modal, so a key arriving just
   // after the lock was released is ignored.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: Pick<KeyboardEvent, 'code' | 'key' | 'repeat' | 'preventDefault'>) => {
       // At the typewriter every key is typing (the textarea keeps its own keys
       // from reaching here); only Escape, from a focused button, backs out.
       if (typingRef.current) {
@@ -236,13 +261,93 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (!e.repeat) setMarkersOn(v => !v);
       }
     };
+    keyRef.current = onKey;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp]);
 
+  // ── Godot ─────────────────────────────────────────────────────────
+  // The iframe walks, lights and works out what the investigator is looking
+  // at; it reports focus, pointer lock and the keys this page acts on, and is
+  // paused while a card or pane is open.
+  const postGodot = useCallback((msg: GodotMessage) => {
+    iframeRef.current?.contentWindow?.postMessage(JSON.stringify({ hearthboard: msg }), window.location.origin);
+  }, []);
+
+  // One Target per examinable, so a focused object stays the same object.
+  const godotTargets = useRef(new Map<string, Target>());
+  const godotTarget = useCallback((id: string): Target | null => {
+    const entry = level.examinables[id];
+    if (!entry) return null;
+    let t = godotTargets.current.get(id);
+    if (!t) {
+      t = { id, entry, box: new THREE.Box3(), collection: level.collections?.[id] };
+      godotTargets.current.set(id, t);
+    }
+    return t;
+  }, [level]);
+
+  useEffect(() => {
+    if (!godot) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin || e.source !== iframeRef.current?.contentWindow) return;
+      let msg: GodotMessage;
+      try {
+        msg = (JSON.parse(String(e.data)) as { hearthboard?: GodotMessage }).hearthboard as GodotMessage;
+      } catch {
+        return;
+      }
+      if (!msg) return;
+      switch (msg.type) {
+        case 'progress':
+          setProgress(Number(msg.p) || 0);
+          break;
+        case 'error':
+          console.error('Godot walkthrough failed:', msg.message);
+          setLoadError(true);
+          break;
+        case 'ready':
+          postGodot({ type: 'init', examinables: Object.keys(level.examinables) });
+          setLoaded(true);
+          break;
+        case 'focus': {
+          const t = typeof msg.id === 'string' ? godotTarget(msg.id) : null;
+          focusRef.current = t;
+          setFocus(t);
+          break;
+        }
+        case 'lock':
+          if (!msg.locked) unlockedAtRef.current = performance.now();
+          setLocked(!!msg.locked);
+          break;
+        case 'key': {
+          const code = String(msg.code);
+          keyRef.current?.({ code, key: code === 'Escape' ? 'Escape' : '', repeat: false, preventDefault: () => {} });
+          break;
+        }
+        case 'activate': {
+          const t = typeof msg.id === 'string' ? godotTarget(msg.id) : null;
+          if (t && !readingRef.current && !browsingRef.current && !typingRef.current) openTarget(t);
+          break;
+        }
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [godot, level, postGodot, godotTarget, openTarget]);
+
+  // Hold the level still under a card; let it go when the last one closes.
+  const covered = !!(reading || browsing || typing);
+  useEffect(() => {
+    if (!godot || !loaded) return;
+    postGodot({ type: covered ? 'pause' : 'resume' });
+    // Keys go back to the level once the card is gone.
+    if (!covered) iframeRef.current?.focus();
+  }, [godot, loaded, covered, postGodot]);
+
   useEffect(() => {
     const el = mountRef.current;
-    if (!el || !webgl) return;
+    if (!el || !webgl || godot) return;
 
     const width = el.clientWidth || 960;
     const height = el.clientHeight || 540;
@@ -1131,7 +1236,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       canvasRef.current = null;
       if (el.contains(canvas)) el.removeChild(canvas);
     };
-  }, [openTarget, webgl, level]);
+  }, [openTarget, webgl, level, godot]);
 
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
@@ -1200,7 +1305,17 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
         {/* Three.js canvas mount + overlays */}
         <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
-          <div ref={mountRef} style={{ position: 'absolute', inset: 0, cursor: locked ? 'none' : 'pointer' }} />
+          <div ref={mountRef} style={{ position: 'absolute', inset: 0, cursor: locked ? 'none' : 'pointer' }}>
+            {godot && webgl && (
+              <iframe
+                ref={iframeRef}
+                src={godot}
+                title={level.title}
+                allow="autoplay; fullscreen"
+                style={{ width: '100%', height: '100%', border: 0, display: 'block', background: '#020202' }}
+              />
+            )}
+          </div>
 
           {loaded && locked && !reading && !browsing && !typing && (
             <div style={{

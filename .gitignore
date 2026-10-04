@@ -43,3 +43,7 @@ next-env.d.ts
 
 # user data (contains hashed passwords — never commit)
 /data/
+
+# Godot web walkthrough build (my-summer-game tools/export_web.sh) — ~58 MB, kept
+# out of git while it is behind the ?engine=godot flag
+/public/godot/

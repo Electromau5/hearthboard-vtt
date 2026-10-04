@@ -296,6 +296,13 @@ export type WalkthroughLevel = {
   /** Stable name for the level's live-presence room — investigators in the same level see each other. */
   id: string;
   model: string;
+  /**
+   * The level's Godot web build (my-summer-game, `web/walkthrough.tscn`), used
+   * in place of the three.js viewer when the engine flag is on — see
+   * `pickGodot` in WalkthroughModal.tsx. Only the walk, light and focus run in
+   * Godot; every card and pane stays on the page.
+   */
+  godot?: string;
   /** Header, e.g. "The Derelict House · Innsmouth". */
   title: string;
   /** Progress line while the model streams in, before the percentage. */

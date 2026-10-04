@@ -547,6 +547,7 @@ const PEEPER: Peeper = { gapSec: [3, 7], holdSec: [1.2, 2.4], shyWithin: 0.8 };
 export const HOUSE_LEVEL: WalkthroughLevel = {
   id: 'house',
   model: '/innsmouth-house.glb',
+  godot: '/godot/walkthrough.html?level=house',
   title: 'The Derelict House · Innsmouth',
   loadingText: 'Approaching the house…',
   errorText: 'The house could not be loaded.',
