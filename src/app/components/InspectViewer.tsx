@@ -5,16 +5,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { InspectClue, Inspectable } from '@/lib/walkthrough';
-import { uvLightAt, CONE_OUTER, type UvLamp } from './uv-stains';
 
 interface Props {
   title: string;
   intro: string;
   inspectable: Inspectable;
-  /** The level has a Wood's lamp (Q); without one, UV clues cannot be found. */
-  hasLamp: boolean;
-  /** The Wood's lamp is lit — toggled by the modal's Q. */
+  /** The Wood's lamp is lit — Q, handled by the modal, or the panel's switch. */
   uvOn: boolean;
+  onToggleUv: () => void;
   /** Clue ids found so far, kept by the modal so they survive putting the object down. */
   found: Set<string>;
   onFound: (clueId: string) => void;
@@ -32,17 +30,19 @@ const FOV = 35;
 const NOTICE_SEC = 0.5;
 /** …and drawn at least this many pixels across: it has to be looked at, not glimpsed. */
 const NOTICE_PX = 60;
-/** How brightly the lamp must light a UV clue to see it, as in the walkthrough. */
+/** How brightly the lamp must light a UV clue to see it. */
 const UV_SEEN = 0.3;
+/** The Wood's lamp's violet. */
+const UV_COLOR = 0x5a2cff;
 
 /**
  * An object picked up from the walkthrough, held in the light to be turned
- * over: drag to turn it, scroll to zoom, and with the Wood's lamp lit (Q) the
- * beam follows the pointer. Clues sit at the model's "Clue_<id>" markers; one
- * is noticed once it has faced the viewer, close enough to read, for a moment
- * — and a UV clue only while the beam is on it.
+ * over: drag to turn it, scroll to zoom, and Q floods it with the Wood's
+ * lamp's light. Clues sit at the model's "Clue_<id>" markers; one is noticed
+ * once it has faced the viewer, close enough to read, for a moment — and a UV
+ * clue only while the lamp is lit.
  */
-export function InspectViewer({ title, intro, inspectable, hasLamp, uvOn, found, onFound, shared, saved, onShare, onSave, onClose }: Props) {
+export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, found, onFound, shared, saved, onShare, onSave, onClose }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -87,10 +87,14 @@ export function InspectViewer({ title, intro, inspectable, hasLamp, uvOn, found,
     rim.position.set(1.5, 0.6, -1.8);
     scene.add(hemi, key, rim);
 
-    // The Wood's lamp, held just below and right of the eye, aimed where the pointer is.
-    const uvSpot = new THREE.SpotLight(0x4b22ff, 0, 4, CONE_OUTER * 0.6, 0.5, 2);
-    scene.add(uvSpot, uvSpot.target);
-    const lamp: UvLamp = { pos: new THREE.Vector3(), dir: new THREE.Vector3(0, 0, -1), power: 0 };
+    // The Wood's lamp, held just below and right of the eye, its wash wide
+    // enough to take in the whole object.
+    const uvSpot = new THREE.SpotLight(UV_COLOR, 0, 6, 0.6, 0.6, 2);
+    // …and a faint violet fill, so the side away from it does not drop to black.
+    const uvFill = new THREE.AmbientLight(UV_COLOR, 0);
+    scene.add(uvSpot, uvSpot.target, uvFill);
+    const lampPos = new THREE.Vector3();
+    const toLamp = new THREE.Vector3();
     let uvPower = 0;
 
     const ray = new THREE.Raycaster();
@@ -249,15 +253,14 @@ export function InspectViewer({ title, intro, inspectable, hasLamp, uvOn, found,
 
       // The lamp: its tube warms up and dies down rather than snapping.
       uvPower = THREE.MathUtils.clamp(uvPower + (uvRef.current ? dt / 0.35 : -dt / 0.2), 0, 1);
-      ray.setFromCamera(pointer, camera);
-      lamp.pos.copy(camera.position).add(new THREE.Vector3(radius * 0.25, -radius * 0.2, 0));
-      lamp.dir.copy(ray.ray.at(dist, new THREE.Vector3())).sub(lamp.pos).normalize();
-      lamp.power = uvPower;
-      uvSpot.position.copy(lamp.pos);
-      uvSpot.target.position.copy(lamp.pos).add(lamp.dir);
-      uvSpot.intensity = uvPower * dist * dist * 1.6;
+      lampPos.copy(camera.position).add(new THREE.Vector3(radius * 0.3, -radius * 0.25, 0));
+      uvSpot.position.copy(lampPos);
+      uvSpot.target.position.set(target.x, target.y, 0);
+      uvSpot.angle = Math.min(1.2, Math.atan((radius * 1.4) / dist));
+      uvSpot.intensity = uvPower * dist * dist * 10;
+      uvFill.intensity = uvPower * 0.9;
       // Under the lamp the room light goes, so the glow has the dark it needs.
-      const room = 1 - uvPower * 0.94;
+      const room = 1 - uvPower * 0.9;
       hemi.intensity = 0.7 * room;
       key.intensity = 1.7 * room;
       rim.intensity = 0.9 * room;
@@ -269,7 +272,8 @@ export function InspectViewer({ title, intro, inspectable, hasLamp, uvOn, found,
         m.node.getWorldPosition(pos);
         normal.set(0, 0, 1).applyQuaternion(m.node.getWorldQuaternion(q));
         const facing = normal.dot(toCam.subVectors(camera.position, pos).normalize());
-        const lit = m.clue.uv ? uvLightAt([lamp], pos, normal) : 1;
+        // Lit by how squarely the clue faces the lamp.
+        const lit = m.clue.uv ? uvPower * THREE.MathUtils.clamp(normal.dot(toLamp.subVectors(lampPos, pos).normalize()) * 1.5, 0, 1) : 1;
         if (m.clue.uv) (m.mat as THREE.MeshBasicMaterial).opacity = Math.min(1, lit * 1.4) * THREE.MathUtils.clamp(facing * 2, 0, 1);
         const onScreen = pos.clone().project(camera);
         const plain = facing > 0.75 && Math.abs(onScreen.x) < 0.85 && Math.abs(onScreen.y) < 0.85
@@ -345,7 +349,7 @@ export function InspectViewer({ title, intro, inspectable, hasLamp, uvOn, found,
           position: 'absolute', left: 12, bottom: 10, pointerEvents: 'none',
           fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--ink-text-2)', letterSpacing: '0.4px',
         }}>
-          Drag or arrow keys to turn · scroll to zoom · right-drag to slide · double-click to reset{hasLamp ? ` · Q Wood's lamp (${uvOn ? 'lit, follows the pointer' : 'off'})` : ''} · E / Esc put it down
+          Drag or arrow keys to turn · scroll to zoom · right-drag to slide · double-click to reset · Q Wood&apos;s lamp · E / Esc put it down
         </div>
       </div>
 
@@ -361,10 +365,27 @@ export function InspectViewer({ title, intro, inspectable, hasLamp, uvOn, found,
         <div style={{ padding: '8px 14px', ...mono, fontSize: 9, color: foundClues.length === clueIds.length ? 'var(--forest)' : 'var(--brass)' }}>
           Clues found · {foundClues.length} of {clueIds.length}
         </div>
+        <div style={{ padding: '0 14px 10px' }}>
+          <button
+            onClick={onToggleUv}
+            aria-pressed={uvOn}
+            style={{
+              ...mono, fontSize: 9, width: '100%', padding: '7px 10px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: uvOn ? 'rgba(107,45,255,0.22)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${uvOn ? '#8a5cff' : 'var(--line)'}`,
+              color: uvOn ? '#cbb4ff' : 'var(--ink-text-2)',
+              boxShadow: uvOn ? '0 0 14px rgba(107,45,255,0.35)' : 'none',
+            }}
+          >
+            <span>Wood&apos;s lamp · {uvOn ? 'lit' : 'off'}</span>
+            <span>[Q]</span>
+          </button>
+        </div>
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 10px 10px' }}>
           {foundClues.length === 0 && (
             <p style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--ink-text-2)', margin: '4px 4px' }}>
-              Turn it over and look closely.{hasLamp ? " Some things only show under the Wood's lamp." : ''}
+              Turn it over and look closely. Some things only show under the Wood&apos;s lamp.
             </p>
           )}
           {foundClues.map(id => {

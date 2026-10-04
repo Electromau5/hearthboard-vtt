@@ -218,7 +218,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // Something small is picked up and turned over in the inspect viewer.
     if (t.inspect) {
       setInspecting(t);
-      setInspectUv(false);
+      // A Wood's lamp already lit in the level stays lit on the object.
+      setInspectUv(lampOutRef.current && lampOnRef.current);
       document.exitPointerLock?.();
       return;
     }
@@ -324,10 +325,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (e.key === 'Escape') setTyping(null);
         return;
       }
-      // Holding something: E or Esc puts it down, Q works the Wood's lamp on it; nothing else reaches the level.
+      // Holding something: E or Esc puts it down, Q lights the Wood's lamp on it; nothing else reaches the level.
       if (inspectingRef.current) {
         if (e.key === 'Escape' || (e.code === 'KeyE' && !e.repeat)) closeInspect();
-        else if (e.code === 'KeyQ' && !e.repeat && hasLamp) setInspectUv(v => !v);
+        else if (e.code === 'KeyQ' && !e.repeat) setInspectUv(v => !v);
         return;
       }
       if (e.key === 'Escape') {
@@ -1529,8 +1530,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               title={inspecting.entry.title}
               intro={inspecting.entry.text}
               inspectable={inspecting.inspect}
-              hasLamp={hasLamp}
               uvOn={inspectUv}
+              onToggleUv={() => setInspectUv(v => !v)}
               found={new Set([...foundClues].filter(k => k.startsWith(`${inspecting.id}/`)).map(k => k.slice(inspecting.id.length + 1)))}
               onFound={clueId => setFoundClues(prev => new Set(prev).add(`${inspecting.id}/${clueId}`))}
               shared={new Set([...sharedClues].filter(k => k.startsWith(`${inspecting.id}/`)).map(k => k.slice(inspecting.id.length + 1)))}
