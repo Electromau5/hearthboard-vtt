@@ -39,3 +39,10 @@ gull-1.mp3 … gull-5.mp3
   https://commons.wikimedia.org/wiki/File:XC707075_-_European_Herring_Gull_-_Larus_argentatus.mp3
   Licence: CC0 (public domain)
   Changes: cut into single calls, high-passed at 320 Hz, loudness-normalised, mono MP3.
+
+ratchet.mp3
+  "Tools Ratchet" by CapsLok, via Wikimedia Commons
+  https://commons.wikimedia.org/wiki/File:Tools_Ratchet.ogg
+  Licence: CC0 (public domain)
+  Changes: one second of ratcheting cut out, high-passed, loudness-normalised, mono MP3.
+  Used for spanning the wheel-lock's wheel; the other reload sounds are synthesised.

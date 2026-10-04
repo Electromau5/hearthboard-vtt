@@ -4,6 +4,8 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { HeldModel } from '@/lib/held-items';
+import { rigReload, type ReloadRig } from './reloads';
+import type { GunSounds } from './gun-sounds';
 
 /**
  * The inventory item in the investigator's right hand, first-person, for the
@@ -48,10 +50,16 @@ export type HeldViewmodel = {
   render: (renderer: THREE.WebGLRenderer) => void;
   /** What to hold, or null for empty-handed. */
   setItem: (view: HeldModel | null) => void;
+  /** Loads and builds an item ahead of time, so it comes up (and reloads) at once when taken. */
+  preload: (view: HeldModel) => void;
   /** How strongly the torch lights the hand, 0..1 — it follows the torch's flicker and switch. */
   setTorch: (k: number) => void;
   /** Advance by `dt`; `look` is how far the view turned this frame (yaw, pitch), `pace` 0..1 walking speed. */
   update: (dt: number, look: [number, number], pace: number) => void;
+  /** Reloads what is in hand, if it can be (see reloads.ts) and is not already; false if not. */
+  reload: (sounds: GunSounds | null) => boolean;
+  /** A reload is under way. */
+  readonly reloading: boolean;
   /** Whether anything is on screen. */
   readonly visible: boolean;
   resize: (aspect: number) => void;
@@ -86,6 +94,8 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   loader.setMeshoptDecoder(MeshoptDecoder);
   /** One built item (model and hand) per model file, made on first use. */
   const built = new Map<string, Promise<THREE.Group>>();
+  /** Each built item's reload, where it has one. */
+  const rigs = new Map<THREE.Group, ReloadRig>();
 
   /**
    * The model with the grip at the origin, and a right hand closed round it:
@@ -149,6 +159,8 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
           }
         }
         item.traverse(o => { o.frustumCulled = false; });
+        const reload = rigReload(view, item, gltf.scene, gltf.animations);
+        if (reload) rigs.set(item, reload);
         item.visible = false;
         rig.add(item);
         return item;
@@ -169,7 +181,16 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   const qa = new THREE.Quaternion();
   const qb = new THREE.Quaternion();
   const lowered = new THREE.Vector3();
+  const qr = new THREE.Quaternion();
   let disposed = false;
+  // The reload playing, if any: its rig, how far in, and how to silence it.
+  let reloading: { rig: ReloadRig; t: number; hush: () => void } | null = null;
+  const endReload = () => {
+    if (!reloading) return;
+    reloading.rig.reset();
+    reloading.hush();
+    reloading = null;
+  };
 
   return {
     render(r) {
@@ -179,13 +200,17 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
     setTorch(k) {
       torchSpill.intensity = 0.9 * THREE.MathUtils.clamp(k, 0, 1);
     },
+    preload(view) {
+      void build(view).catch(err => console.error('Held item failed to load:', view.model, err));
+    },
     setItem(view) {
       wanted = view;
       if (view) void build(view).catch(err => console.error('Held item failed to load:', view.model, err));
     },
     update(dt, [dYaw, dPitch], pace) {
-      // Put the old item away before the new one comes up.
+      // Put the old item away before the new one comes up; a reload stops where it is.
       if (shown !== wanted) {
+        endReload();
         raise = Math.max(0, raise - dt / DRAW_SEC);
         if (raise === 0) {
           if (shownItem) shownItem.visible = false;
@@ -217,8 +242,24 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
         qa.setFromEuler(new THREE.Euler(shown.rot[0] - 1.0, shown.rot[1] + 0.3, shown.rot[2]));
         qb.setFromEuler(new THREE.Euler(...shown.rot));
         shownItem.quaternion.slerpQuaternions(qa, qb, r);
+        // The reload's own movement, on top of the hold.
+        if (reloading) {
+          reloading.t += dt;
+          const off = reloading.rig.apply(Math.min(reloading.t, reloading.rig.duration));
+          shownItem.position.add(off.pos);
+          shownItem.quaternion.multiply(qr.setFromEuler(off.rot));
+          if (reloading.t >= reloading.rig.duration) endReload();
+        }
       }
     },
+    reload(sounds) {
+      if (reloading || !shownItem || shown !== wanted || raise < 0.99) return false;
+      const r = rigs.get(shownItem);
+      if (!r) return false;
+      reloading = { rig: r, t: 0, hush: sounds ? sounds.play(r.cues) : () => {} };
+      return true;
+    },
+    get reloading() { return !!reloading; },
     get visible() { return raise > 0.001 && !!shownItem; },
     resize(a) {
       camera.aspect = a;
@@ -226,6 +267,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
     },
     dispose() {
       disposed = true;
+      endReload();
       for (const p of built.values()) {
         void p.then(item => item.traverse(o => {
           const m = o as THREE.Mesh;

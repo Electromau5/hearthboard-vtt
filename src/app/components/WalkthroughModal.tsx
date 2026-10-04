@@ -24,6 +24,7 @@ import { createHeldViewmodel, prepareHeldModel } from './held-viewmodel';
 import { heldModelFor } from '@/lib/held-items';
 import { createSkyDome } from './sky-dome';
 import { createFlock } from './birds';
+import { createGunSounds, type GunSounds } from './gun-sounds';
 import { isRain, isTimeOfDay, RAIN_LABELS, RAIN_SPECS, RAINS, skyFor, TIME_LABELS, TIMES, withRain, type Rain, type TimeOfDay } from '@/lib/weather';
 import { buildCover, createRain, createRainSound, type Cover, type RainSound } from './rain';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
@@ -181,6 +182,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Set by the scene once the level loads; switches a radio on or off.
   const toggleRadioRef = useRef<((id: string) => void) | null>(null);
+  // Set by the scene: reloads the gun in hand, if it can be.
+  const reloadRef = useRef<(() => void) | null>(null);
   // Set by the scene when the level has a pinboard; refetches its notes now.
   const refreshPinsRef = useRef<(() => void) | null>(null);
 
@@ -407,6 +410,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         else if (browsingRef.current) closeBrowsing();
         else if (target && level.radios?.[target.id]) toggleRadioRef.current?.(target.id);
         else if (target) openTarget(target);
+      }
+      // With a gun that reloads in hand, R reloads it (skills are still on the open card).
+      if (e.code === 'KeyR' && !e.repeat && !readingRef.current && !browsingRef.current) {
+        const gun = carriedRef.current ? level.pickups?.flatMap(tb => tb.items).find(p => p.id === carriedRef.current) : undefined;
+        if (gun?.view.reload) { reloadRef.current?.(); return; }
       }
       // R brings up the investigator's skills — on the open card, or straight from the crosshair.
       if (e.code === 'KeyR' && !e.repeat && !browsingRef.current) {
@@ -648,6 +656,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const woods = uvLevel ? createWoodsLamp(renderer, width / height) : null;
     // Whatever inventory item is in hand, when it has a model (the revolver).
     const inHand = createHeldViewmodel(renderer, width / height);
+    let gunSounds: GunSounds | null = null;
+    reloadRef.current = () => {
+      const ear = ensureListener();
+      gunSounds ??= createGunSounds(ear.context, ear.getInput());
+      inHand.reload(gunSounds);
+    };
     const uvWash = (light: THREE.SpotLight) => {
       light.angle = CONE_OUTER;
       light.penumbra = 0.55;
@@ -1109,6 +1123,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           scene.add(obj);
           obj.updateMatrixWorld(true);
           pickupById.set(item.id, { item, obj });
+          // Ready in the hand too, so it comes up and reloads the moment it is taken.
+          inHand.preload(item.view);
           targets.push({ id: `pickup-${item.id}`, entry: { title: item.title, text: '' }, box: new THREE.Box3().setFromObject(obj, true).expandByScalar(0.05), pickup: item });
         };
         const pickupLoads = (level.pickups ?? []).flatMap(table => {
@@ -1615,6 +1631,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       canvas.style.filter = '';
       window.removeEventListener('resize', onResize);
       toggleRadioRef.current = null;
+      reloadRef.current = null;
       refreshPinsRef.current = null;
       window.clearInterval(pinTimer);
       pinboard?.dispose();
@@ -1667,7 +1684,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? `WASD move · Shift run · Mouse look · E / click examine${canCheck ? ' · R use a skill' : ''}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
+      ? `WASD move · Shift run · Mouse look · E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -1823,7 +1840,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               ) : (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}</>
               )}
-              {canUseSkillOn(focus) && (
+              {canUseSkillOn(focus) && !carriedPickup?.view.reload && (
                 <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> use a skill</span>
               )}
               {(carriedPickup || heldItem) && !focus.pickup && (
@@ -1840,7 +1857,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               background: 'rgba(0,0,0,0.6)', border: '1px solid var(--brass-dim)', borderRadius: 'var(--r-sm)',
               padding: '6px 10px', textShadow: '0 1px 4px #000',
             }}>
-              {usedNote ?? <><span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{carriedPickup ? `the ${carriedPickup.title}` : heldItem}</>}
+              {usedNote ?? <>
+                <span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{carriedPickup ? `the ${carriedPickup.title}` : heldItem}
+                {carriedPickup?.view.reload && <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> reload</span>}
+              </>}
             </div>
           )}
 

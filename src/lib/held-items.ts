@@ -32,6 +32,8 @@ export type HeldModel = {
   rot: [number, number, number];
   /** Draw hands. Off for the long guns, which are shown on their own (the GM's call). */
   hand: boolean;
+  /** R reloads it (see reloads.ts): a Thompson's drum, or a muzzle-loader's powder, ball and ramrod. */
+  reload?: 'drum' | 'muzzle';
 };
 
 type Pose = Pick<HeldModel, 'pos' | 'rot'>;
@@ -59,13 +61,13 @@ export const HELD_MODELS = {
   // A wheel-lock long gun; along X, muzzle toward +X. Held at the wrist of the stock.
   renaissanceRifle: {
     model: '/props/renaissance-rifle.glb', orient: [0, Math.PI / 2, 0], length: 1.25,
-    gripAt: [0.28, 0.4, 0.5], supportAt: [0.6, 0.62, 0.5], ...RIFLE_POSE, hand: false,
+    gripAt: [0.28, 0.4, 0.5], supportAt: [0.6, 0.62, 0.5], ...RIFLE_POSE, hand: false, reload: 'muzzle',
   },
   // Thompson submachine gun with the drum; along X, muzzle toward +X. (The
   // model's loose cartridge, "bullet_low", is stripped before compressing.)
   tommyGun: {
     model: '/props/tommy-gun.glb', orient: [0, Math.PI / 2, 0], length: 0.85,
-    gripAt: [0.42, 0.38, 0.5], supportAt: [0.73, 0.4, 0.5], ...SMG_POSE, hand: false,
+    gripAt: [0.42, 0.38, 0.5], supportAt: [0.73, 0.4, 0.5], ...SMG_POSE, hand: false, reload: 'drum',
   },
 } satisfies Record<string, HeldModel>;
 
