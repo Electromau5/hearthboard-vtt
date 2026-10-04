@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -13,6 +13,7 @@ import { createInteractMarkers } from './interact-markers';
 import { ArchiveBrowser } from './ArchiveBrowser';
 import { TypewriterPane } from './TypewriterPane';
 import { NpcConversation } from './NpcConversation';
+import { InventoryPane } from './InventoryPane';
 import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
 import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
@@ -108,6 +109,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [lampOn, setLampOn] = useState(true);
   const [markersOn, setMarkersOn] = useState(true);
   const [radiosOn, setRadiosOn] = useState<Set<string>>(() => new Set());
+  // The investigator's sheet equipment (I), the item in hand, and the last use, shown briefly.
+  const items = useMemo(() => investigator?.equipment ?? [], [investigator]);
+  const heldKey = investigator?.slug ? `hearthboard:held:${investigator.slug}` : null;
+  const [invOpen, setInvOpen] = useState(false);
+  const [held, setHeld] = useState<string | null>(() => {
+    try { return heldKey ? localStorage.getItem(heldKey) : null; } catch { return null; }
+  });
+  const [usedNote, setUsedNote] = useState<string | null>(null);
   // Other investigators in this level right now, by name.
   const [companions, setCompanions] = useState<string[]>([]);
   // Checked up front: a browser with WebGL disabled (hardware acceleration off,
@@ -128,6 +137,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const lampOutRef = useRef(false);
   const lampOnRef = useRef(true);
   const markersRef = useRef(true);
+  const invOpenRef = useRef(false);
+  const heldRef = useRef<string | null>(null);
   const unlockedAtRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Set by the scene once the level loads; switches a radio on or off.
@@ -142,6 +153,38 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   useEffect(() => { lampOutRef.current = lampOut; }, [lampOut]);
   useEffect(() => { lampOnRef.current = lampOn; }, [lampOn]);
   useEffect(() => { markersRef.current = markersOn; }, [markersOn]);
+  useEffect(() => { invOpenRef.current = invOpen; }, [invOpen]);
+  useEffect(() => { heldRef.current = held; }, [held]);
+
+  // An item struck off the sheet since it was taken in hand is gone from the hand too.
+  const heldItem = held && items.includes(held) ? held : null;
+
+  // Takes an item in hand, or puts it away; remembered per investigator across levels.
+  const holdItem = useCallback((item: string) => {
+    setHeld(prev => {
+      const next = prev === item ? null : item;
+      try {
+        if (heldKey) {
+          if (next) localStorage.setItem(heldKey, next);
+          else localStorage.removeItem(heldKey);
+        }
+      } catch {}
+      return next;
+    });
+  }, [heldKey]);
+
+  const openInventory = useCallback(() => {
+    setInvOpen(true);
+    document.exitPointerLock?.();
+  }, []);
+
+  const closeInventory = useCallback(() => {
+    setInvOpen(false);
+    canvasRef.current?.requestPointerLock?.();
+  }, []);
+
+  const usedTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(usedTimer.current), []);
 
   const openReading = useCallback((t: Target, withSkills = false) => {
     setReading(t);
@@ -215,6 +258,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     setShared(prev => new Set(prev).add(t.id));
   }, [onShare]);
 
+  // Uses the item in hand on what the investigator is looking at, and tells the party.
+  const applyItem = useCallback((t: Target, item: string) => {
+    onShare(`used “${item}” on the ${t.entry.title.toLowerCase()}`);
+    setUsedNote(`Used ${item} on the ${t.entry.title.toLowerCase()} · shared with the party`);
+    window.clearTimeout(usedTimer.current);
+    usedTimer.current = window.setTimeout(() => setUsedNote(null), 3500);
+  }, [onShare]);
+
   // Escape closes the reading card first, then the level. Pressing Escape to
   // leave pointer lock must not also close the modal, so a key arriving just
   // after the lock was released is ignored.
@@ -229,9 +280,28 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       if (e.key === 'Escape') {
         if (readingRef.current) { setReading(null); return; }
         if (browsingRef.current) { setBrowsing(null); return; }
+        if (invOpenRef.current) { setInvOpen(false); return; }
         if (document.pointerLockElement || performance.now() - unlockedAtRef.current < 300) return;
         onClose();
         return;
+      }
+      // I opens or closes the inventory; with it open, 1–9 take an item in hand.
+      if (e.code === 'KeyI' && !e.repeat && !readingRef.current && !browsingRef.current) {
+        if (invOpenRef.current) closeInventory();
+        else openInventory();
+        return;
+      }
+      if (invOpenRef.current) {
+        const n = /^Digit([1-9])$/.exec(e.code);
+        if (n && !e.repeat && items[Number(n[1]) - 1]) holdItem(items[Number(n[1]) - 1]);
+        // The level behind the pane is not being looked at: no examining or skills from here.
+        if (e.code === 'KeyE' || e.code === 'KeyR' || e.code === 'KeyU') return;
+      }
+      // U uses the item in hand on the open card, or on whatever the crosshair is on.
+      if (e.code === 'KeyU' && !e.repeat && !browsingRef.current) {
+        const t = readingRef.current ?? focusRef.current;
+        const item = heldRef.current;
+        if (t && item && items.includes(item)) applyItem(t, item);
       }
       if (e.code === 'KeyE') {
         const target = focusRef.current;
@@ -264,7 +334,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     keyRef.current = onKey;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp]);
+  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory]);
 
   // ── Godot ─────────────────────────────────────────────────────────
   // The iframe walks, lights and works out what the investigator is looking
@@ -337,7 +407,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, [godot, level, postGodot, godotTarget, openTarget]);
 
   // Hold the level still under a card; let it go when the last one closes.
-  const covered = !!(reading || browsing || typing);
+  const covered = !!(reading || browsing || typing || invOpen);
   useEffect(() => {
     if (!godot || !loaded) return;
     postGodot({ type: covered ? 'pause' : 'resume' });
@@ -857,7 +927,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * LOOK));
     };
     const onCanvasClick = () => {
-      if (readingRef.current || browsingRef.current || typingRef.current) return;
+      if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
       else if (focusRef.current) openTarget(focusRef.current);
     };
@@ -943,7 +1013,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
-      if (model && !readingRef.current && !browsingRef.current && !typingRef.current) {
+      if (model && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current) {
         // Arrow keys turn, so the level is walkable without pointer lock too.
         if (keys.has('ArrowLeft')) yaw += 1.8 * dt;
         if (keys.has('ArrowRight')) yaw -= 1.8 * dt;
@@ -1241,7 +1311,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? `WASD move · Shift run · Mouse look · E / click examine${canCheck ? ' · R use a skill' : ''} · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
+      ? `WASD move · Shift run · Mouse look · E / click examine${canCheck ? ' · R use a skill' : ''}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -1350,7 +1420,32 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               {canUseSkillOn(focus) && (
                 <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> use a skill</span>
               )}
+              {heldItem && (
+                <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[U]</span> use {heldItem}</span>
+              )}
             </div>
+          )}
+
+          {/* The item in hand, and the last use of it. */}
+          {loaded && (heldItem || usedNote) && !reading && !browsing && !typing && (
+            <div style={{
+              position: 'absolute', left: 12, bottom: 12, maxWidth: '60%', pointerEvents: 'none',
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.5px', color: 'var(--parchment)',
+              background: 'rgba(0,0,0,0.6)', border: '1px solid var(--brass-dim)', borderRadius: 'var(--r-sm)',
+              padding: '6px 10px', textShadow: '0 1px 4px #000',
+            }}>
+              {usedNote ?? <><span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{heldItem}</>}
+            </div>
+          )}
+
+          {invOpen && (
+            <InventoryPane
+              owner={investigator?.name}
+              items={items}
+              held={heldItem}
+              onHold={holdItem}
+              onClose={closeInventory}
+            />
           )}
 
           {!webgl && (
@@ -1377,7 +1472,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             </div>
           )}
 
-          {webgl && loaded && !locked && !reading && !browsing && !typing && (
+          {webgl && loaded && !locked && !reading && !browsing && !typing && !invOpen && (
             <div style={{
               position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
               pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.5px',
@@ -1489,6 +1584,20 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                       {skillsOpen ? 'Hide skills [R]' : 'Use a skill [R]'}
                     </button>
                   )}
+                  {heldItem && (
+                    <button
+                      onClick={() => applyItem(reading, heldItem)}
+                      title={`Use ${heldItem} on the ${reading.entry.title.toLowerCase()}`}
+                      style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                        padding: '5px 10px', borderRadius: 'var(--r-sm)', cursor: 'pointer', maxWidth: 220,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        background: 'rgba(201,148,79,0.08)', border: '1px solid var(--brass-dim)', color: 'var(--brass)',
+                      }}
+                    >
+                      Use {heldItem} [U]
+                    </button>
+                  )}
                   <button
                     onClick={() => void saveFind(reading)}
                     disabled={savedFinds.has(reading.id) || savingFind === reading.id}
@@ -1538,6 +1647,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             {hint}
           </span>
           <span style={{ display: 'flex', gap: 14, fontFamily: 'var(--font-mono)', fontSize: 9, whiteSpace: 'nowrap' }}>
+            <span style={{ color: invOpen ? 'var(--brass)' : 'var(--ink-text-2)' }}>Inventory [I]</span>
             <span style={{ color: markersOn ? 'var(--brass)' : 'var(--ink-text-2)' }}>Markers {markersOn ? 'on' : 'off'} [Tab]</span>
             {hasLamp && (
               <span style={{ color: lampOut ? '#b48cff' : 'var(--ink-text-2)' }}>

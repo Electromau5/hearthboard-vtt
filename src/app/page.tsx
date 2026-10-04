@@ -96,6 +96,8 @@ type BoardCharacter = {
   /** Populated from /api/characters; absent until that lands. */
   skills?: BoardSkill[];
   luck?: number;
+  /** The sheet's equipment list (editable, unlike `inventory`); from /api/characters. */
+  equipment?: string[];
 };
 
 // Compiled-in starting roster. These are DEFAULTS ONLY — `characters` state
@@ -544,6 +546,7 @@ export default function HearthboardPage() {
           vitals?: { hp?: number; luck?: number };
           characteristics?: Record<string, number>;
           skills?: Array<{ name: string; value: number }>;
+          equipment?: string[];
         }>;
         if (cancelled) return;
         const bySlug = new Map(merged.map(m => [m.slug, m]));
@@ -559,6 +562,7 @@ export default function HearthboardPage() {
             abilities: m.characteristics ?? c.abilities,
             skills: m.skills ?? c.skills,
             luck: m.vitals?.luck ?? c.luck,
+            equipment: m.equipment ?? c.equipment,
           };
         }));
         const avatarMap: Record<string, string> = {};
@@ -1178,7 +1182,7 @@ export default function HearthboardPage() {
     const mySlug = Object.entries(assignments).find(([, uid]) => uid === session?.user?.id)?.[0];
     const c = characters.find(ch => ch.slug === mySlug) ?? (isAdmin ? displayChar : undefined);
     if (!c) return undefined;
-    return { name: c.name, skills: resolveSkills(c.skills, c.abilities), characteristics: c.abilities, luck: c.luck };
+    return { name: c.name, skills: resolveSkills(c.skills, c.abilities), characteristics: c.abilities, luck: c.luck, slug: c.slug, equipment: c.equipment ?? [] };
   }, [assignments, characters, session?.user?.id, isAdmin, displayChar]);
 
   const getTokenPos = (tok: Token) =>

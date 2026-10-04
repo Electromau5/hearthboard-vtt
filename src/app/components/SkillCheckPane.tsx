@@ -10,6 +10,9 @@ export type Investigator = {
   skills: ResolvedSkill[];
   characteristics: Record<string, number>;
   luck?: number;
+  slug?: string;
+  /** What they carry, from the merged character sheet — the walkthrough's inventory. */
+  equipment?: string[];
 };
 
 /** One skill tried on one object. Kept by the walkthrough, so it survives closing the card. */
