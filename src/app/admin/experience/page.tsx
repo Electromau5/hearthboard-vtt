@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ActiveEffect } from "@/app/api/admin/effects/route";
+import { TIMES, TIME_LABELS, WEATHER_LEVELS, type TimeOfDay, type WeatherState } from "@/lib/weather";
 
 const EFFECTS = [
   {
@@ -84,6 +85,30 @@ export default function ExperiencePage() {
   const [countdown, setCountdown] = useState(0);
 
   const notify = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2200); };
+
+  // Time of day in each level that has weather; null until loaded, "night" when never set.
+  const [weather, setWeatherState] = useState<Record<string, TimeOfDay | null>>({});
+  useEffect(() => {
+    for (const lvl of WEATHER_LEVELS) {
+      fetch(`/api/weather?level=${lvl.id}`, { cache: "no-store" })
+        .then(r => (r.ok ? r.json() : null))
+        .then((w: WeatherState | null) => setWeatherState(prev => ({ ...prev, [lvl.id]: w?.time ?? "night" })))
+        .catch(() => {});
+    }
+  }, []);
+  const setTime = async (levelId: string, title: string, time: TimeOfDay) => {
+    const res = await fetch("/api/weather", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level: levelId, time }),
+    });
+    if (res.ok) {
+      setWeatherState(prev => ({ ...prev, [levelId]: time }));
+      notify(`${TIME_LABELS[time]} on ${title.split(" · ")[0]} — players see it within ~10 seconds.`);
+    } else {
+      notify("Could not set the time of day.");
+    }
+  };
 
   const loadCurrent = async () => {
     const res = await fetch("/api/admin/effects");
@@ -215,6 +240,33 @@ export default function ExperiencePage() {
             <button className="btn btn-sm btn-danger" onClick={clear}>Clear Now</button>
           </div>
         )}
+
+        {/* Weather — time of day per level */}
+        <div style={section}>
+          <div style={sectionLabel}>Weather · time of day</div>
+          {WEATHER_LEVELS.map(lvl => (
+            <div key={lvl.id} style={{ ...card, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 10 }}>
+              <div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 600 }}>{lvl.title}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-text-2)", marginTop: 3 }}>
+                  {weather[lvl.id] ? `Now: ${TIME_LABELS[weather[lvl.id]!]}` : "Loading…"} · everyone in the level, within ~10 s
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {TIMES.map(time => (
+                  <button
+                    key={time}
+                    className="btn btn-sm"
+                    style={weather[lvl.id] === time ? targetBtnActive : targetBtn}
+                    onClick={() => setTime(lvl.id, lvl.title, time)}
+                  >
+                    {TIME_LABELS[time]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
 
         {/* Effects grid */}
         <div style={sectionLabel}>Effects</div>

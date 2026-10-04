@@ -392,6 +392,8 @@ export type WalkthroughLevel = {
   inspectables?: Record<string, Inspectable>;
   /** Things lying on furniture to carry in the hand. */
   pickups?: PickupTable[];
+  /** The GM can set the time of day here (src/lib/weather.ts); night is `atmosphere` as built. List the id in WEATHER_LEVELS too. */
+  weather?: boolean;
   /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
   lamps?: { color: number; intensity: number; distance: number };
   atmosphere: {

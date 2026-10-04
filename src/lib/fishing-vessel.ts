@@ -112,6 +112,8 @@ export const VESSEL_LEVEL: WalkthroughLevel = {
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
+  // The GM sets dawn, day, evening or night (`/admin/experience`); night is the atmosphere below.
+  weather: true,
   atmosphere: {
     background: 0x070b10,
     fogColor: 0x070b10,

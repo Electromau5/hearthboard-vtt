@@ -22,6 +22,8 @@ import { joinLevel, type Peer } from './presence';
 import { createWoodsLamp } from './woods-lamp';
 import { createHeldViewmodel, prepareHeldModel } from './held-viewmodel';
 import { heldModelFor } from '@/lib/held-items';
+import { createSkyDome } from './sky-dome';
+import { isTimeOfDay, skyFor, TIME_LABELS, TIMES, type TimeOfDay } from '@/lib/weather';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
 interface Props {
@@ -36,6 +38,8 @@ interface Props {
   investigator?: Investigator;
   /** Rolls a check against an object, posting it to the party chat. */
   onCheck?: (skill: string, target: number, objectTitle: string) => { roll: number; level: CheckLevel };
+  /** The GM: in a level with `weather`, gets a bar to set the time of day for everyone. */
+  isGM?: boolean;
 }
 
 const EYE = 1.6;           // camera height above the feet
@@ -88,7 +92,7 @@ type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
  * share findings to the party chat. What the level contains, and how it is lit,
  * comes from `level` (see src/lib/walkthrough.ts).
  */
-export function WalkthroughModal({ level, onClose, onShare, author, investigator, onCheck }: Props) {
+export function WalkthroughModal({ level, onClose, onShare, author, investigator, onCheck, isGM }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -124,6 +128,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     try { return heldKey ? localStorage.getItem(heldKey) : null; } catch { return null; }
   });
   const [usedNote, setUsedNote] = useState<string | null>(null);
+  // Time of day, where the level has weather: set by the GM, fetched by everyone (see src/lib/weather.ts).
+  const [weatherTime, setWeatherTime] = useState<TimeOfDay>('night');
+  const weatherRef = useRef<TimeOfDay>('night');
+  useEffect(() => { weatherRef.current = weatherTime; }, [weatherTime]);
+  const [weatherError, setWeatherError] = useState(false);
   // A pickup carried from where it lay (a gun off the armory bench), by id. Not inventory: it stays in the level.
   const [carried, setCarried] = useState<string | null>(null);
   const carriedRef = useRef<string | null>(null);
@@ -419,6 +428,43 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect]);
 
+  // ── Weather ───────────────────────────────────────────────────────
+  // Every 10 s while the level is open and the tab is showing — gentle on the
+  // shared store's request quota; the GM's own change applies at once.
+  useEffect(() => {
+    if (!level.weather) return;
+    let cancelled = false;
+    const poll = () => {
+      if (document.hidden) return;
+      fetch(`/api/weather?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null))
+        .then((w: { time?: unknown } | null) => { if (!cancelled) setWeatherTime(isTimeOfDay(w?.time) ? w.time : 'night'); })
+        .catch(() => {});
+    };
+    poll();
+    const timer = window.setInterval(poll, 10_000);
+    document.addEventListener('visibilitychange', poll);
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
+  }, [level]);
+
+  const setWeather = useCallback(async (time: TimeOfDay) => {
+    const before = weatherRef.current;
+    setWeatherTime(time);
+    setWeatherError(false);
+    try {
+      const r = await fetch('/api/weather', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: level.id, time }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+    } catch (err) {
+      console.error('Could not set the time of day:', err);
+      setWeatherTime(before);
+      setWeatherError(true);
+    }
+  }, [level]);
+
   // ── Godot ─────────────────────────────────────────────────────────
   // The iframe walks, lights and works out what the investigator is looking
   // at; it reports focus, pointer lock and the keys this page acts on, and is
@@ -528,10 +574,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     camera.rotation.order = 'YXZ';
     scene.add(camera);
 
-    scene.add(new THREE.HemisphereLight(atmo.sky, atmo.ground, atmo.fill));
-    if (atmo.moon) {
-      const moon = new THREE.DirectionalLight(atmo.moon.color, atmo.moon.intensity);
-      moon.position.set(...atmo.moon.position);
+    const hemi = new THREE.HemisphereLight(atmo.sky, atmo.ground, atmo.fill);
+    scene.add(hemi);
+    // The moon — or, in a level with weather, whichever of sun and moon is up.
+    let moon: THREE.DirectionalLight | null = null;
+    if (atmo.moon || level.weather) {
+      moon = new THREE.DirectionalLight(atmo.moon?.color ?? 0xffffff, atmo.moon?.intensity ?? 0);
+      moon.position.set(...(atmo.moon?.position ?? [-18, 22, -10]));
       moon.castShadow = true;
       moon.shadow.mapSize.set(2048, 2048);
       Object.assign(moon.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 80 });
@@ -539,6 +588,24 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       moon.shadow.normalBias = 0.04;
       scene.add(moon);
     }
+
+    // Time of day: the sky dome, and where the light is now, easing toward the GM's choice.
+    const dome = level.weather ? createSkyDome(50) : null;
+    if (dome) scene.add(dome.mesh);
+    const sky = (() => {
+      const k = skyFor(weatherRef.current, level);
+      return {
+        zenith: new THREE.Color(k.zenith), horizon: new THREE.Color(k.horizon), sunColor: new THREE.Color(k.sunColor),
+        sunDir: new THREE.Vector3(...k.sunDir).normalize(), sunIntensity: k.sunIntensity,
+        fogColor: new THREE.Color(k.fogColor), fogDensity: k.fogDensity,
+        hemiSky: new THREE.Color(k.hemiSky), hemiGround: new THREE.Color(k.hemiGround), fill: k.fill, stars: k.stars,
+      };
+    })();
+    const goal = new THREE.Color();
+    const goalDir = new THREE.Vector3();
+    // The sea is built near-black for night, with nothing to reflect: by day it
+    // takes on the sky's horizon colour instead (found once the level loads).
+    let sea: { mat: THREE.MeshStandardMaterial; night: THREE.Color } | null = null;
 
     // The investigator's flashlight rides on the camera.
     const torch = new THREE.SpotLight(0xffe0b0, 40, 16, 0.52, 0.55, 2);
@@ -1169,6 +1236,43 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
+      // Ease the light toward the time of day over a few seconds.
+      if (level.weather) {
+        const k = skyFor(weatherRef.current, level);
+        const a = 1 - Math.exp(-dt / 1.2);
+        sky.zenith.lerp(goal.set(k.zenith), a);
+        sky.horizon.lerp(goal.set(k.horizon), a);
+        sky.sunColor.lerp(goal.set(k.sunColor), a);
+        sky.sunDir.lerp(goalDir.set(...k.sunDir).normalize(), a).normalize();
+        sky.sunIntensity += (k.sunIntensity - sky.sunIntensity) * a;
+        sky.fogColor.lerp(goal.set(k.fogColor), a);
+        sky.fogDensity += (k.fogDensity - sky.fogDensity) * a;
+        sky.hemiSky.lerp(goal.set(k.hemiSky), a);
+        sky.hemiGround.lerp(goal.set(k.hemiGround), a);
+        sky.fill += (k.fill - sky.fill) * a;
+        sky.stars += (k.stars - sky.stars) * a;
+        const fog = scene.fog as THREE.FogExp2;
+        fog.color.copy(sky.fogColor);
+        fog.density = sky.fogDensity;
+        (scene.background as THREE.Color).copy(sky.horizon);
+        hemi.color.copy(sky.hemiSky);
+        hemi.groundColor.copy(sky.hemiGround);
+        hemi.intensity = sky.fill;
+        if (moon) {
+          moon.color.copy(sky.sunColor);
+          moon.intensity = sky.sunIntensity;
+          moon.position.copy(sky.sunDir).multiplyScalar(30);
+        }
+        dome?.set(sky.zenith, sky.horizon, sky.sunColor, sky.sunDir, sky.stars);
+        if (model && !sea) {
+          model.traverse(o => {
+            const mat = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+            if (!sea && mat?.name === 'sea' && mat.isMeshStandardMaterial) sea = { mat, night: mat.color.clone() };
+          });
+        }
+        if (sea) sea.mat.color.copy(sea.night).lerp(goal.copy(sky.horizon).multiplyScalar(0.32), 1 - sky.stars);
+      }
+
       if (model && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current) {
         // Arrow keys turn, so the level is walkable without pointer lock too.
         if (keys.has('ArrowLeft')) yaw += 1.8 * dt;
@@ -1390,6 +1494,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           : '';
       }
 
+      dome?.mesh.position.copy(camera.position);
       renderer.render(scene, camera);
       if (woods?.visible || inHand.visible) {
         // What is in hand draws over everything, so it never dips into a wall.
@@ -1449,6 +1554,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       woods?.dispose();
       inHand.dispose();
+      dome?.dispose();
       for (const o of owned) o.dispose();
       peeper?.head.dispose();
       for (const r of radios.values()) {
@@ -1528,6 +1634,30 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               </span>
             )}
           </div>
+          {/* The GM sets the time of day here for everyone in the level. */}
+          {level.weather && isGM && (
+            <div role="group" aria-label="Time of day" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', marginRight: 12 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: weatherError ? 'var(--blood)' : 'var(--ink-text-2)', marginRight: 4 }}>
+                {weatherError ? 'Not saved' : 'Time'}
+              </span>
+              {TIMES.map(time => (
+                <button
+                  key={time}
+                  onClick={() => void setWeather(time)}
+                  aria-pressed={weatherTime === time}
+                  style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                    padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                    background: weatherTime === time ? 'rgba(201,148,79,0.18)' : 'transparent',
+                    border: `1px solid ${weatherTime === time ? 'var(--brass)' : 'var(--line)'}`,
+                    color: weatherTime === time ? 'var(--brass)' : 'var(--ink-text-2)',
+                  }}
+                >
+                  {TIME_LABELS[time]}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={onClose}
             aria-label={level.leaveLabel}

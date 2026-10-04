@@ -2794,6 +2794,7 @@ export default function HearthboardPage() {
           author={session?.user?.name ?? 'Unknown'}
           investigator={walkthroughInvestigator}
           onCheck={(label, target, context) => rollCheck(walkthroughInvestigator?.name ?? myDisplayName, label, target, context, true)}
+          isGM={isAdmin}
         />
       )}
 
