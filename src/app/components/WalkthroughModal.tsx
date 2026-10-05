@@ -55,20 +55,18 @@ const LOOK = 0.0022;       // radians per pixel of mouse movement
 const UV_SEEN = 0.12;      // how brightly the lamp must light a stain before it can be examined
 
 /**
- * The level's Godot build, when it has one and this browser has opted in —
- * `?engine=godot` on the page (remembered), or `localStorage['hearthboard:engine']`
- * set to 'godot'; `?engine=three` switches back. Off by default while the
- * Godot levels catch up with the three.js ones.
+ * The level's Godot build, when it has one and the page asks for it with
+ * `?engine=godot`. Only for that visit — the choice is never remembered, so a
+ * test can't leave a browser stuck on the Godot level, which still lacks the
+ * three.js one's lamp, torch and clues. Clears the old remembered opt-in.
  */
 function pickGodot(level: WalkthroughLevel): string | null {
-  if (!level.godot || typeof window === 'undefined') return null;
+  if (typeof window === 'undefined') return null;
   try {
-    const asked = new URLSearchParams(window.location.search).get('engine');
-    if (asked === 'godot' || asked === 'three') localStorage.setItem('hearthboard:engine', asked);
-    return localStorage.getItem('hearthboard:engine') === 'godot' ? level.godot : null;
-  } catch {
-    return null;
-  }
+    localStorage.removeItem('hearthboard:engine');
+  } catch {}
+  if (!level.godot) return null;
+  return new URLSearchParams(window.location.search).get('engine') === 'godot' ? level.godot : null;
 }
 
 /** A message to or from the Godot iframe (see my-summer-game/web/walkthrough.gd). */
