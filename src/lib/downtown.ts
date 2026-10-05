@@ -35,11 +35,11 @@ export const DOWNTOWN_LEVEL: WalkthroughLevel = {
   weather: true,
   // Gulls up from the harbour by day, fewer than over the wreck.
   birds: {
-    model: '/props/seagull.glb', times: ['dawn', 'day'], everySec: 150, count: [2, 4], wingspan: 1.4, over: [-4, 6], height: [14, 22],
+    model: '/props/seagull.glb', times: ['dawn', 'day'], everySec: 150, count: [2, 4], wingspan: 1.4, over: [-10, 12], height: [20, 32],
     cries: ['/sounds/gull-1.mp3', '/sounds/gull-2.mp3', '/sounds/gull-3.mp3', '/sounds/gull-4.mp3', '/sounds/gull-5.mp3'],
   },
-  // The street lamps, warm against a cold night.
-  lamps: { color: 0xffc27a, intensity: 9, distance: 13 },
+  // The street lamps (3.6 m posts), warm against a cold night.
+  lamps: { color: 0xffc27a, intensity: 16, distance: 18 },
   atmosphere: {
     background: 0x05070c,
     fogColor: 0x080b12,
