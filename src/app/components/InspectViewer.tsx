@@ -21,6 +21,9 @@ interface Props {
   onShare: (clueId: string) => void;
   onSave: (clueId: string) => Promise<void>;
   onClose: () => void;
+  /** Things hidden inside this one, each brought out by a button once `ready`. */
+  inside?: { id: string; label: string; ready: boolean }[];
+  onOpenInside?: (id: string) => void;
 }
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)', letterSpacing: '1px', textTransform: 'uppercase' };
@@ -30,6 +33,8 @@ const FOV = 35;
 const NOTICE_SEC = 0.5;
 /** …and drawn at least this many pixels across: it has to be looked at, not glimpsed. */
 const NOTICE_PX = 60;
+/** Raking light: how squarely (camera · surface normal) pressed writing still catches it. */
+const RAKE_FROM = 0.12, RAKE_TO = 0.6;
 /** How brightly the lamp must light a UV clue to see it. */
 const UV_SEEN = 0.3;
 /** The Wood's lamp's violet. */
@@ -42,7 +47,7 @@ const UV_COLOR = 0x5a2cff;
  * once it has faced the viewer, close enough to read, for a moment — and a UV
  * clue only while the lamp is lit.
  */
-export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, found, onFound, shared, saved, onShare, onSave, onClose }: Props) {
+export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, found, onFound, shared, saved, onShare, onSave, onClose, inside, onOpenInside }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -109,7 +114,7 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
     let minDist = 0.2;
     let maxDist = 2;
 
-    type Mark = { id: string; clue: InspectClue; node: THREE.Object3D; mat: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial; seen: number };
+    type Mark = { id: string; clue: InspectClue; node: THREE.Object3D; mat?: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial; seen: number };
     const marks: Mark[] = [];
     const owned: { dispose: () => void }[] = [];
     let disposed = false;
@@ -133,14 +138,18 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
         for (const [id, clue] of Object.entries(inspectable.clues)) {
           const node = model.getObjectByName(`Clue_${id}`);
           if (!node) { console.warn('Inspectable has no marker for clue', id); continue; }
-          const tex = drawMark(clue);
+          // Nothing to draw: the clue is in the model itself.
+          const mark = clue.mark;
+          if (!mark) { marks.push({ id, clue, node, seen: 0 }); continue; }
+          const tex = drawMark({ ...clue, mark });
           const geo = new THREE.PlaneGeometry(clue.size[0], clue.size[1]);
           const mat = clue.uv
             ? new THREE.MeshBasicMaterial({ map: tex, color: 0xb8ffe6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })
             : new THREE.MeshStandardMaterial({
               map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4,
-              // Pressed into brass, or bitten into bare wood.
-              ...(clue.mark.kind === 'gouge' ? { metalness: 0, roughness: 0.9 } : { metalness: 0.7, roughness: 0.55 }),
+              // Pressed into brass; bitten into wood or written on paper.
+              ...(mark.kind === 'stamp' ? { metalness: 0.7, roughness: 0.55 } : { metalness: 0, roughness: 0.9 }),
+              ...(clue.raking ? { opacity: 0 } : {}),
             });
           const decal = new THREE.Mesh(geo, mat);
           decal.position.z = 0.0004;
@@ -278,9 +287,14 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
         const facing = normal.dot(toCam.subVectors(camera.position, pos).normalize());
         // Lit by how squarely the clue faces the lamp.
         const lit = m.clue.uv ? uvPower * THREE.MathUtils.clamp(normal.dot(toLamp.subVectors(lampPos, pos).normalize()) * 1.5, 0, 1) : 1;
-        if (m.clue.uv) (m.mat as THREE.MeshBasicMaterial).opacity = Math.min(1, lit * 1.4) * THREE.MathUtils.clamp(facing * 2, 0, 1);
+        if (m.clue.uv && m.mat) m.mat.opacity = Math.min(1, lit * 1.4) * THREE.MathUtils.clamp(facing * 2, 0, 1);
+        // Pressed writing shows only as the surface turns away, the light skimming across it.
+        const raked = m.clue.raking
+          ? THREE.MathUtils.smoothstep(facing, RAKE_FROM, RAKE_FROM + 0.12) * (1 - THREE.MathUtils.smoothstep(facing, RAKE_TO - 0.15, RAKE_TO))
+          : 0;
+        if (m.clue.raking && m.mat) m.mat.opacity = raked;
         const onScreen = pos.clone().project(camera);
-        const plain = facing > 0.75 && Math.abs(onScreen.x) < 0.85 && Math.abs(onScreen.y) < 0.85
+        const plain = (m.clue.raking ? raked > 0.6 : facing > 0.75) && Math.abs(onScreen.x) < 0.85 && Math.abs(onScreen.y) < 0.85
           && m.clue.size[0] * pxPerMetre / renderer.getPixelRatio() > NOTICE_PX
           && (!m.clue.uv || lit > UV_SEEN);
         m.seen = plain ? m.seen + dt : 0;
@@ -415,7 +429,10 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
             );
           })}
         </div>
-        <div style={{ padding: 10, borderTop: '1px solid rgba(201,148,79,0.12)', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ padding: 10, borderTop: '1px solid rgba(201,148,79,0.12)', display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          {inside?.filter(i => i.ready).map(i => (
+            <button key={i.id} onClick={() => onOpenInside?.(i.id)} style={{ ...smallButton(false), marginRight: 'auto' }}>{i.label}</button>
+          ))}
           <button onClick={onClose} style={{ ...smallButton(false), color: 'var(--ink-text-2)', borderColor: 'var(--line)' }}>Put it down [E]</button>
         </div>
       </div>
@@ -432,7 +449,7 @@ function smallButton(done: boolean): React.CSSProperties {
 }
 
 /** The clue's mark, drawn white-on-clear for UV (tinted by the material), dark for a stamp, or as torn wood for a gouge. */
-function drawMark(clue: InspectClue): THREE.CanvasTexture {
+function drawMark(clue: InspectClue & { mark: NonNullable<InspectClue['mark']> }): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = Math.round(512 * clue.size[1] / clue.size[0]);
@@ -464,6 +481,20 @@ function drawMark(clue: InspectClue): THREE.CanvasTexture {
         ctx.font = `bold ${size}px Georgia, serif`;
         ctx.fillText(line, W / 2, H * (0.72 + i * 0.13) + dy);
       });
+    }
+  } else if (clue.mark.kind === 'writing') {
+    drawWriting(ctx, W, H, clue.mark.lines ?? [], clue.raking ? 'pressed' : clue.uv ? 'glow' : clue.mark.style ?? 'ink');
+  } else if (clue.mark.kind === 'gouge' && clue.mark.lines?.length) {
+    // Letters cut in with a knife, then dug out again: the cuts still show at the edges.
+    drawWriting(ctx, W, H, clue.mark.lines, 'carved');
+    let seed = 5;
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 26; i++) {
+      const x = W * (0.12 + rand() * 0.76), y = H * (0.2 + rand() * 0.6);
+      ctx.strokeStyle = rand() < 0.5 ? 'rgba(168,128,84,0.85)' : 'rgba(40,24,12,0.8)';
+      ctx.lineWidth = W * (0.01 + rand() * 0.012);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + W * (0.05 + rand() * 0.08), y + (rand() - 0.5) * H * 0.5); ctx.stroke();
     }
   } else if (clue.mark.kind === 'gouge') {
     // Pry-bar bites along a board's edge (the canvas's bottom): crescents of
@@ -531,4 +562,42 @@ function drawMark(clue: InspectClue): THREE.CanvasTexture {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   return tex;
+}
+
+/**
+ * Lines of writing filling the canvas: ink in a hand, soft graphite, letters
+ * cut into wood, a stencil, white for the Wood's lamp to tint, or pressed
+ * into paper (a dark dent with a lit lip, for raking light).
+ */
+function drawWriting(ctx: CanvasRenderingContext2D, W: number, H: number, lines: string[], style: 'ink' | 'pencil' | 'carved' | 'stencil' | 'glow' | 'pressed') {
+  if (!lines.length) return;
+  const hand = '"Bradley Hand", "Segoe Script", "Snell Roundhand", cursive';
+  const face = style === 'stencil' ? 'bold {px}px "Courier New", monospace'
+    : style === 'carved' ? 'bold {px}px Georgia, serif'
+    : `italic {px}px ${hand}`;
+  const rows = lines.length;
+  let px = H / rows * 0.72;
+  const fontAt = (size: number) => face.replace('{px}', String(Math.round(size)));
+  // Shrink to the widest line.
+  ctx.font = fontAt(px);
+  const widest = Math.max(...lines.map(l => ctx.measureText(l).width));
+  if (widest > W * 0.94) px *= W * 0.94 / widest;
+  ctx.font = fontAt(px);
+  ctx.textAlign = style === 'stencil' || style === 'carved' ? 'center' : 'left';
+  ctx.textBaseline = 'middle';
+  const x = ctx.textAlign === 'center' ? W / 2 : W * 0.03;
+  const passes: [string, number][] =
+    style === 'pressed' ? [['rgba(255,250,235,0.55)', -px * 0.05], ['rgba(70,58,40,0.75)', px * 0.03]]
+    : style === 'carved' ? [['rgba(214,180,130,0.5)', -px * 0.04], ['rgba(36,22,10,0.92)', 0]]
+    : style === 'pencil' ? [['rgba(62,62,70,0.82)', 0]]
+    : style === 'stencil' ? [['rgba(24,22,20,0.88)', 0]]
+    : style === 'glow' ? [['rgba(255,255,255,0.95)', 0]]
+    : [['rgba(30,26,44,0.9)', 0]];
+  lines.forEach((line, i) => {
+    const y = H * (i + 0.5) / rows;
+    for (const [color, dy] of passes) {
+      ctx.fillStyle = color;
+      ctx.fillText(line, x, y + dy);
+    }
+  });
 }

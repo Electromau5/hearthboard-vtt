@@ -390,6 +390,43 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Loose Floorboards',
     text: 'A patch of parlor floor between the armchair and the hall door where the boards sit a fraction proud of their neighbours, and not quite in line. Kneel and look closer.',
   },
+  bedroom_window: {
+    title: 'Bedroom Window',
+    text: 'A sash window behind the boards, like every window in the house. The boards are nailed fast from inside — but through the gaps the brass sash lock catches your light, and it has been thrown shut.',
+  },
+  // Hidden things, brought out from their containers (see INSPECTABLES).
+  mirror_newspaper: {
+    title: 'Newspaper Lining',
+    text: 'The mirror\'s backboard comes away from the frame, and behind it the glass is packed with a folded front page, yellow and brittle. It has been there a good while, but not since the mirror was made.',
+  },
+  clock_weight: {
+    title: 'Hollow Clock Weight',
+    text: 'Of the three brass weights hanging in the case, one is lighter than the others. Its base turns on a fine thread, worn bright, and comes away in your hand. Something is rolled up inside.',
+  },
+  photo_corner: {
+    title: 'Half-Burned Photograph',
+    text: 'Raked out from under the fuel at the edge of the grate: a curled corner of stiff card, charred black along two sides. It is a studio photograph, or what is left of one.',
+  },
+  toy_boat: {
+    title: 'Toy Boat',
+    text: 'Under the loose boards is a dry hollow between the joists, and in it, wrapped in a scrap of sacking, a child\'s carved sailing boat. Its sail is torn. It was put here to be kept, not thrown away.',
+  },
+  blotter_sheet: {
+    title: 'Curled Sheet',
+    text: 'The sheet lifts off the blotter with a dry crackle. It is good writing paper, blank on both sides as far as the eye can tell.',
+  },
+  hymnal_shelf: {
+    title: 'Half-Emptied Shelf',
+    text: 'A stretch of shelf where most of the books are gone. A few volumes lean at one end, and a hymnal lies open on the bare wood, as if someone set it down mid-reading and walked away.',
+  },
+  oilskin_coat: {
+    title: 'Oilskin Coat',
+    text: 'A heavy fisherman\'s oilskin on a wooden hanger, stiff with dubbin and still faintly tacky. It smells of the harbour. Hung up, it looks almost ordinary.',
+  },
+  window_latch: {
+    title: 'Sash Lock',
+    text: 'Through the gap between two boards you can reach the meeting rails of the sash. The brass lock is thrown, the cam turned hard into its keeper, and the sill below is white with something that crunches under your glove.',
+  },
 };
 
 /**
@@ -581,7 +618,7 @@ const INSPECTABLES: Record<string, Inspectable> = {
       },
     },
   },
-  // Pried up and set back: what was under them is the next clue (a toy boat, not yet placed).
+  // Pried up and set back: the toy boat is in the hollow beneath (toy_boat).
   floorboards: {
     model: '/props/floorboards.glb',
     at: [-3.7, 4.42],
@@ -599,6 +636,142 @@ const INSPECTABLES: Record<string, Inspectable> = {
         uv: true,
         mark: { kind: 'print' },
         size: [0.045, 0.045],
+      },
+    },
+  },
+
+  // ── Hidden inside things: never drawn in the house; a button on the
+  // container's card (or viewer) brings each one out. Models are procedural,
+  // from my-summer-game tools/house_props (build.mjs, textures.py).
+  mirror_newspaper: {
+    model: '/props/mirror-newspaper.glb',
+    in: { from: 'mirror', action: 'Look behind the backing' },
+    clues: {
+      dateline: {
+        title: 'Dated February 1928',
+        text: 'The lining is the front page of the Essex County Courier for Thursday, February 16, 1928: "U.S. AGENTS RAID INNSMOUTH." The morning after the raids. Whoever took the backing off this mirror did it that week, and wanted the date kept behind the glass.',
+        size: [0.22, 0.02],
+      },
+      pencil: {
+        title: 'A Wavelength in Pencil',
+        text: 'In the empty foot of the page, in soft pencil: "550 kc. — bottom of the dial. He speaks at three." The parlor radio is tuned to the very bottom of the band.',
+        mark: { kind: 'writing', style: 'pencil', lines: ['550 kc. — bottom of the dial.', 'He speaks at three.'] },
+        size: [0.15, 0.03],
+      },
+    },
+  },
+  clock_weight: {
+    model: '/props/clock-weight.glb',
+    in: { from: 'grandfather_clock', action: 'Open the case and lift out the weights' },
+    clues: {
+      hollow: {
+        title: 'A Hollow Weight',
+        text: 'The weight is a brass shell, bored out and fitted with a screw base: made to be opened, and opened often, by the wear on the thread. Packed inside was a roll of oilskin, tied with fishing line.',
+        size: [0.05, 0.05],
+      },
+      hour: {
+        title: 'The Tide-Gate',
+        text: 'Unrolled, the oilskin holds a hand-corrected chart of the harbour mouth. A course is pencilled from the old tide-gate on the breakwater out to Devil Reef, and beside it in ink: "L.W. 3·12 — gate stands open. One hour, no more." The same hour the clock was stopped at.',
+        mark: { kind: 'writing', style: 'ink', lines: ['L.W. 3·12 — gate stands open.', 'One hour, no more.'] },
+        size: [0.12, 0.03],
+      },
+    },
+  },
+  photo_corner: {
+    model: '/props/photo-corner.glb',
+    in: { from: 'fireplace', action: 'Rake through the ashes' },
+    clues: {
+      anchor: {
+        title: 'The Stitched Anchor',
+        text: 'It is the same sitting as the 1913 portrait above the sofa: the boy in his sailor blouse. His head is burned away, but the anchor stitched on his breast survived. Someone fed this print to the fire on purpose, and did not stay to see it finish.',
+        size: [0.02, 0.02],
+      },
+      inscription: {
+        title: 'On the Back',
+        text: 'On the back of the card, in a woman\'s careful hand: "Easter 1913." Whatever was written after it has burned away.',
+        size: [0.05, 0.012],
+      },
+    },
+  },
+  toy_boat: {
+    model: '/props/toy-boat.glb',
+    in: { from: 'floorboards', action: 'Lift the loose boards', after: 'pry' },
+    clues: {
+      initials: {
+        title: 'Initials Gouged Out',
+        text: 'Initials were cut into the transom with a penknife, a child\'s careful work, and later dug out again with the point of a blade. You can still make out a J, and the first stroke of an M.',
+        mark: { kind: 'gouge', lines: ['J. M.'] },
+        size: [0.05, 0.022],
+      },
+      notches: {
+        title: 'Notches on the Deck',
+        text: 'Knifed into the deck beside the mast are four dated notches, a boy measuring himself against his boat: 1911, 1912 and 1913 close together, a year\'s growing apart. The last, 1914, is cut a hand\'s width further on. No boy grows that much in a year.',
+        mark: { kind: 'writing', style: 'carved', lines: ['1911 · 1912 · 1913 · · · · 1914'] },
+        size: [0.1, 0.012],
+      },
+    },
+  },
+  blotter_sheet: {
+    model: '/props/blotter-sheet.glb',
+    in: { from: 'writing_desk', action: 'Lift the sheet off the blotter' },
+    clues: {
+      indent: {
+        title: 'Pressed into the Paper',
+        text: 'Tilted against the light, the blank sheet shows the dents of a letter written on the page above it and torn away: "Mother — I will not come down to the reef, not for him and not for you. Tell the Marsh man the boy is not his. Burn this. — J." The reply to the letter in the torn envelope, never sent.',
+        raking: true,
+        mark: { kind: 'writing', lines: ['Mother —', 'I will not come down to the reef,', 'not for him and not for you.', 'Tell the Marsh man the boy is not his.', 'Burn this. — J.'] },
+        size: [0.18, 0.11],
+      },
+    },
+  },
+  hymnal_shelf: {
+    model: '/props/hymnal-shelf.glb',
+    in: { from: 'bookshelf', action: 'Look along the emptied shelves' },
+    clues: {
+      gaps: {
+        title: 'Outlines in the Dust',
+        text: 'Clean shapes stand out of the dust where eleven books stood until lately: tall, thin bindings the size of charts and tide tables, not hymnals. They were taken within the last few weeks; the dust has barely begun to settle into the gaps.',
+        size: [0.3, 0.2],
+      },
+      margin: {
+        title: 'Notes in the Margin',
+        text: 'The hymnal lies open at "For Those at Sea." Beside the burial verse, in the same hand as the letter pressed into the blotter sheet: "not for those at sea — for those who come up out of it. — J."',
+        mark: { kind: 'writing', style: 'ink', lines: ['not for those at sea —', 'for those who come up out of it.', '— J.'] },
+        size: [0.1, 0.035],
+      },
+    },
+  },
+  oilskin_coat: {
+    model: '/props/oilskin-coat.glb',
+    in: { from: 'wardrobe', action: 'Take down the coat' },
+    clues: {
+      sleeves: {
+        title: 'Too Long in the Arm',
+        text: 'The coat is cut for a narrow man, but the sleeves hang a full hand\'s length past where any hand would be, and the back seam has been let out across the shoulders. It was altered to fit a body that is the wrong shape for it.',
+        size: [0.16, 0.16],
+      },
+      stencil: {
+        title: 'Refinery Stencil',
+        text: 'Stencilled across the back in black: "MARSH REF. CO. — STORES · 14." Refinery issue, not a fisherman\'s own. Somewhere in the Marsh refinery there is a stores locker numbered 14.',
+        mark: { kind: 'writing', style: 'stencil', lines: ['MARSH REF. CO.', 'STORES · 14'] },
+        size: [0.22, 0.075],
+      },
+    },
+  },
+  window_latch: {
+    model: '/props/window-latch.glb',
+    in: { from: 'bedroom_window', action: 'Look closely at the latch' },
+    clues: {
+      scratches: {
+        title: 'Worked from Outside',
+        text: 'On the outside face of the lower sash, under the lock, the paint is chewed in a row of small bites where a thin blade was worked up between the sashes to throw the catch. The window was latched from outside, by someone leaving.',
+        mark: { kind: 'gouge' },
+        size: [0.1, 0.022],
+      },
+      salt: {
+        title: 'Salt on the Sill',
+        text: 'The sill is crusted white with sea-salt, thickest under the lock, as if something wet stood streaming here a long while, working at the catch. The same crust rims the boarded back door at the end of the hall.',
+        size: [0.15, 0.08],
       },
     },
   },
@@ -620,6 +793,8 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   photoFrames: PHOTO_FRAMES,
   uvStains: UV_STAINS,
   inspectables: INSPECTABLES,
+  // The bedroom window has no furniture node of its own (the windows are part of the walls).
+  spots: { bedroom_window: { min: [5.72, 0.85, -3.95], max: [5.93, 2.35, -2.85] } },
   atmosphere: {
     background: 0x020202,
     fogColor: 0x030303,

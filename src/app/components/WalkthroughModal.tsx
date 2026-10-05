@@ -312,6 +312,27 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     canvasRef.current?.requestPointerLock?.();
   }, []);
 
+  // Things kept out of sight inside another object (the chart in the clock
+  // weight, the boat under the boards): never drawn in the level, but brought
+  // out by a button on their container's card or viewer.
+  const hiddenTargets = useMemo(() => new Map(Object.entries(level.inspectables ?? {})
+    .filter(([id, insp]) => insp.in && level.examinables[id])
+    .map(([id, insp]): [string, Target] => [id, { id, entry: level.examinables[id], box: new THREE.Box3(), inspect: insp }])), [level]);
+  const hiddenIn = useCallback((fromId: string) => [...hiddenTargets.values()].flatMap(t => {
+    const where = t.inspect?.in;
+    if (where?.from !== fromId) return [];
+    return [{ id: t.id, label: where.action, ready: !where.after || foundClues.has(`${fromId}/${where.after}`) }];
+  }), [hiddenTargets, foundClues]);
+  /** Brings a hidden thing out into the viewer, from its container's card — or its viewer, keeping the lamp as it is. */
+  const openHidden = useCallback((id: string, fromViewer = false) => {
+    const t = hiddenTargets.get(id);
+    if (!t) return;
+    setReading(null);
+    setInspecting(t);
+    if (!fromViewer) setInspectUv(lampOutRef.current && lampOnRef.current);
+    document.exitPointerLock?.();
+  }, [hiddenTargets]);
+
   const shareClue = useCallback((t: Target, clueId: string) => {
     const clue = t.inspect?.clues[clueId];
     if (!clue) return;
@@ -1118,6 +1139,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           }).catch(err => console.error('NPC figure failed to load:', err));
         }
 
+        // Examinables with no furniture of their own: an invisible box each.
+        for (const [id, spot] of Object.entries(level.spots ?? {})) {
+          const entry = level.examinables[id];
+          if (entry) targets.push({ id, entry, box: new THREE.Box3(new THREE.Vector3(...spot.min), new THREE.Vector3(...spot.max)) });
+        }
+
         // Small things to pick up, each stood on its piece of furniture. The level
         // opens once they are down, so their markers and focus boxes exist.
         const placeInspectable = async (id: string, insp: Inspectable) => {
@@ -1186,7 +1213,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           return table.items.map(item => placePickup(item, anchor).catch(err => console.error('Pickup failed to load:', item.id, err)));
         });
         Promise.all([
-          ...Object.entries(level.inspectables ?? {}).map(([id, insp]) =>
+          ...Object.entries(level.inspectables ?? {}).filter(([, insp]) => !insp.in).map(([id, insp]) =>
             placeInspectable(id, insp).catch(err => console.error('Inspectable failed to load:', id, err)),
           ),
           ...pickupLoads,
@@ -2011,6 +2038,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               onShare={clueId => shareClue(inspecting, clueId)}
               onSave={clueId => saveClue(inspecting, clueId)}
               onClose={closeInspect}
+              inside={hiddenIn(inspecting.id)}
+              onOpenInside={id => openHidden(id, true)}
             />
           )}
 
@@ -2155,6 +2184,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                     }}
                     saved={new Set([...savedChecks].filter(k => k.startsWith(`${reading.id}/`)).map(k => k.slice(reading.id.length + 1)))}
                   />
+                )}
+                {hiddenIn(reading.id).some(h => h.ready) && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                    {hiddenIn(reading.id).filter(h => h.ready).map(h => (
+                      <button
+                        key={h.id}
+                        onClick={() => openHidden(h.id)}
+                        style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                          padding: '6px 12px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                          background: 'rgba(201,148,79,0.16)', border: '1px solid var(--brass)', color: 'var(--parchment)',
+                        }}
+                      >
+                        {h.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
                   {canUseSkillOn(reading) && (

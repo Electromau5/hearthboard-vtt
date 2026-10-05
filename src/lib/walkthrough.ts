@@ -238,13 +238,20 @@ export type PhotoFrames = {
  * A small object that can be picked up and turned over in the inspect viewer:
  * E on it opens the viewer instead of the reading card (its examinable gives
  * the viewer's title and intro). The model stands on top of another
- * examinable's furniture in the walkthrough, or on the floor.
+ * examinable's furniture in the walkthrough, on the floor, or out of sight
+ * inside something else (`in`).
  */
 export type Inspectable = {
   /** The .glb under public/. Empty nodes named "Clue_<id>" mark where each clue sits, local +Z out of the surface. */
   model: string;
   /** The examinable whose top it stands on. Without it, the model stands on the floor at `at`. */
   on?: string;
+  /**
+   * Hidden inside another examinable or inspectable, and not drawn in the
+   * level: its card (or viewer) offers `action` as a button that brings this
+   * one out. `after` holds the button back until that clue of the container is found.
+   */
+  in?: { from: string; action: string; after?: string };
   /** World X and Z on the floor, for a model with no `on`. Its y=0 is set on the floor there. */
   at?: [number, number];
   /** Metres from the centre of that top, along world X and Z. */
@@ -261,11 +268,19 @@ export type InspectClue = {
   /** Shows only where the Wood's lamp shines. */
   uv?: boolean;
   /**
+   * Shows only at a glancing angle — writing pressed into paper, read by
+   * tilting it until the light rakes across the dents.
+   */
+  raking?: boolean;
+  /**
    * What is on the surface: `stamp` is lettering pressed into metal, with a
    * ringed sigil above it; `print` is a smeared thumbprint, with any lines
-   * scrawled beneath it; `gouge` is a run of pry-bar bites in a wooden edge.
+   * scrawled beneath it; `gouge` is a run of pry-bar bites in a wooden edge, or
+   * with `lines`, letters cut in and then gouged out; `writing` is the lines in
+   * `style`. With no mark, the clue is already in the model's own texture or
+   * shape and the marker only says where to look.
    */
-  mark: { kind: 'stamp' | 'print' | 'gouge'; lines?: string[] };
+  mark?: { kind: 'stamp' | 'print' | 'gouge' | 'writing'; lines?: string[]; style?: 'ink' | 'pencil' | 'carved' | 'stencil' };
   /** The decal's width and height in metres. */
   size: [number, number];
 };
@@ -425,6 +440,11 @@ export type WalkthroughLevel = {
   uvStains?: UvStain[];
   /** Objects to pick up and turn over, keyed by examinable id. */
   inspectables?: Record<string, Inspectable>;
+  /**
+   * Examinables with no furniture of their own — a window frame, a patch of
+   * wall: an invisible box, in level coordinates, that E examines.
+   */
+  spots?: Record<string, { min: Vec3; max: Vec3 }>;
   /** Things lying on furniture to carry in the hand. */
   pickups?: PickupTable[];
   /** The GM can set the time of day here (src/lib/weather.ts); night is `atmosphere` as built. List the id in WEATHER_LEVELS too. */

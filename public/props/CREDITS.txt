@@ -31,6 +31,14 @@ detective-special.glb
 oil-lamp.glb
   Built procedurally for this project (my-summer-game tools/build_oil_lamp_cli.gd).
 
+mirror-newspaper.glb, clock-weight.glb, photo-corner.glb, toy-boat.glb,
+blotter-sheet.glb, hymnal-shelf.glb, oilskin-coat.glb, window-latch.glb
+  Built procedurally for this project (my-summer-game tools/house_props: build.mjs,
+  textures.py). The photograph corner is cut from this project's own
+  public/family-portraits/1913.webp; the hymn text is "Eternal Father, Strong to
+  Save" (W. Whiting, 1860) and the Book of Common Prayer burial at sea, both in
+  the public domain. The newspaper is fictional.
+
 floorboards.glb
   "Floorboards" by Kowalo — https://sketchfab.com/kowalo
   https://sketchfab.com/3d-models/floorboards-8fc9bdd0ac2c4c5a9f98a9bde43e4945
