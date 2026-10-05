@@ -7,3 +7,9 @@ marsh-refinery.glb
   Changes: scaled to 0.75 of its modelled size, furnished as the Marsh Refinery
   (furnace, vats, benches and props added), textures resized to 2048 px WebP,
   meshes meshopt-compressed.
+
+  The sofa in the refinery hall:
+  "Old and Worn Sofa" by Nurul_Athyrah — https://sketchfab.com/Nurul_Athyrah
+  https://sketchfab.com/3d-models/old-and-worn-sofa-e710608cddac4aa887e05fbad70eea33
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: scaled to 0.75, textures resized to 512 px WebP, meshes meshopt-compressed.

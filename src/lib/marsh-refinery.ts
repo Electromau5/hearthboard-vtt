@@ -253,7 +253,7 @@ export const REFINERY_LEVEL: WalkthroughLevel = {
   errorText: 'The refinery could not be loaded.',
   enterText: 'Click to step into the hall',
   leaveLabel: 'Leave the refinery',
-  credit: '"Old Industrial Building" by Hrvoje Wächter, CC BY 4.0',
+  credit: '"Old Industrial Building" by Hrvoje Wächter; "Old and Worn Sofa" by Nurul_Athyrah — both CC BY 4.0',
   examinables: EXAMINABLES,
   uvStains: UV_STAINS,
   // The GM sets the time of day and the rain; they show through the windows, and the roof is out in it.
