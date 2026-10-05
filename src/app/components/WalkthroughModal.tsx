@@ -140,6 +140,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   useEffect(() => { asleepRef.current = asleep; }, [asleep]);
   const sleepCmdRef = useRef<{ wake: true } | { bed: Target } | null>(null);
   const sleepShadeRef = useRef<HTMLDivElement | null>(null);
+  // The board hands a fresh onShare on every render (it polls chat every few
+  // seconds); read it through a ref so callbacks the 3D scene depends on stay
+  // the same and the level is not rebuilt.
+  const onShareRef = useRef(onShare);
+  useEffect(() => { onShareRef.current = onShare; }, [onShare]);
   // Time of day, where the level has weather: set by the GM, fetched by everyone (see src/lib/weather.ts).
   const [weatherTime, setWeatherTime] = useState<TimeOfDay>('night');
   const weatherRef = useRef<TimeOfDay>('night');
@@ -262,7 +267,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     if (t.bed) {
       if (asleepRef.current === 'no') {
         sleepCmdRef.current = { bed: t };
-        onShare(`lay down in a ${t.entry.title.toLowerCase()} to sleep`);
+        onShareRef.current(`lay down in a ${t.entry.title.toLowerCase()} to sleep`);
       }
       return;
     }
@@ -299,7 +304,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       docs => setBrowsing(b => (b?.target === t ? { ...b, docs } : b)),
       () => setBrowsing(b => (b?.target === t ? { ...b, error: true } : b)),
     );
-  }, [openReading, level, heldKey, onShare]);
+  }, [openReading, level, heldKey]);
 
   const closeInspect = useCallback(() => {
     setInspecting(null);
