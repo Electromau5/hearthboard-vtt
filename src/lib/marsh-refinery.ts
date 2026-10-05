@@ -5,8 +5,10 @@
  * furnished in ~/dev/my-summer-game by `tools/build_refinery_cli.gd` and
  * exported to /marsh-refinery.glb by `tools/export_refinery.sh`.
  *
- * One long brick hall, the freight doors at the south end where the
- * investigator comes in. The refinery is supposed to have been shut since the
+ * Three levels. The ground floor is the furnace hall, the freight doors at
+ * its south end where the investigator comes in; a timber stair up the east
+ * wall climbs to the upper storey, the Marshes' counting loft; a steep stair
+ * up the loft's west wall comes out through a hatch onto the flat roof. The refinery is supposed to have been shut since the
  * Marshes left Innsmouth, but the furnace is banked, not cold, and the sump is
  * wet. It picks up the threads of the derelict house: the ledger page headed
  * "Refinery, Marsh &", J.M.'s four ounces "collect at the reef", and the
@@ -14,7 +16,10 @@
  * suggested findings for the GM to adjust.
  *
  * Coordinates are metres: the hall spans x ±4, z ±12.6, the furnace against
- * the north wall (-Z).
+ * the north wall (-Z). Floors at y 0 (hall), 4.94 (loft) and 11.19 (roof).
+ *
+ * The GM sets the time of day and the rain (`weather`); it shows through the
+ * windows, and the roof is out in it.
  */
 
 import type { Examinable, UvStain, WalkthroughLevel } from './walkthrough';
@@ -115,6 +120,89 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Assay Balance',
     text: 'A brass balance in a glass case on a cabinet of weights, the pans still and level. The cabinet\'s drawers hold the weights in velvet, in grains and troy ounces. The two-ounce weight is missing.',
   },
+  // ── The loft ────────────────────────────────────────────────────
+  strongbox: {
+    title: 'Strongbox',
+    text: 'A green-painted iron safe by the flue, the warmest spot in the loft, as tall as a man\'s chest. The maker\'s plate reads HALL\'S SAFE & LOCK CO., CINCINNATI. The dial has been turned so often that the brass is worn bright at three numbers.',
+    checks: [
+      {
+        skill: 'Locksmith', action: 'Work the dial', difficulty: 'Hard',
+        success: 'The worn numbers give it away: three of them, in some order. On the fourth order the bolts draw. Inside are canvas bags of two-ounce bars, a bundle of deeds to Innsmouth waterfront lots, and a bound book of names with a sum beside each, every one ruled off but the last page.',
+        failure: 'The tumblers will not speak to you. Every turn of the dial sounds loud in the empty loft.',
+        fumble: 'The handle drops with a clang that rings down the stairwell, and below, something in the sump goes still.',
+      },
+      {
+        skill: 'Spot Hidden', action: 'Look round the safe',
+        success: 'Wet marks on the floorboards come up to the safe and stop, as if someone stood there a long time. Wedged in the gap between the safe and the wall is a calling card: "Mrs. A. Marsh — at home Thursdays."',
+        failure: 'Dust, and a flue that ticks as it cools.',
+      },
+    ],
+  },
+  vestments: {
+    title: 'Press of Robes',
+    text: 'A tall open press against the wall, hung with five robes of heavy black wool that smell of the sea and of camphor. The middle one is cloth of gold, stiff with embroidery: waves, and in the waves things that are not fish. The hems are all stained to the knee with salt.',
+    checks: [
+      {
+        skill: 'Occult', action: 'Read the embroidery',
+        success: 'These are vestments of the Esoteric Order of Dagon, three degrees of them. The gold robe is a hierophant\'s. Somebody keeps them here rather than at the Order\'s hall, which means somebody wants them out of the hall\'s sight.',
+        failure: 'Church robes of some coastal sect. The needlework is very fine.',
+      },
+    ],
+  },
+  chart_table: {
+    title: 'Chart Table',
+    text: 'A chart of Innsmouth harbour pinned flat under brass weights, with a tide table for this month beside it and a pair of dividers left open. Devil Reef is ringed in pencil, and so is one hour of one night, ruled in red on the tide table: the lowest water of the month, after midnight.',
+    checks: [
+      {
+        skill: 'Navigate', action: 'Work the chart',
+        success: 'The dividers are set to the distance from the refinery\'s outfall to the reef. At the ringed low water a man could walk out along the breakwater almost to the reef itself, and the outfall would be dry.',
+        failure: 'Soundings and pencil marks. You cannot make out what was being measured.',
+      },
+      {
+        skill: 'Spot Hidden', action: 'Look under the chart',
+        success: 'Under the chart is an older one of the same water, drawn by hand in brown ink and dated 1838. Where the new chart shows open water off the reef, the old one shows steps.',
+        failure: 'Only the table\'s scarred top.',
+      },
+    ],
+  },
+  cot: {
+    title: 'Camp Cot',
+    text: 'An army cot under the south windows with a grey blanket thrown back. The canvas is still damp where somebody lay on it, and the damp smells of the harbour. On the floor beside it are a tin cup, a candle end and a pair of men\'s boots stuffed with newspaper, as if their owner no longer needs them.',
+    checks: [
+      {
+        skill: 'Medicine', action: 'Examine the stain on the canvas',
+        success: 'It is not sweat. The canvas has taken a print of a sleeper\'s back, and the skin there was shedding in flakes, grey and fine as fish scale.',
+        failure: 'Seawater, or sweat. A man slept here recently.',
+      },
+      {
+        skill: 'Psychology', action: 'Think about who sleeps here',
+        success: 'Whoever sleeps here keeps the refinery\'s fire and the safe\'s keys, and has been doing it alone for a long time. The boots say he stopped walking out of here like a man some while ago.',
+        failure: 'A watchman, probably. Watchmen sleep where they work.',
+      },
+    ],
+  },
+  // ── The roof ────────────────────────────────────────────────────
+  chimney: {
+    title: 'Chimney Stack',
+    text: 'The furnace flue comes up through the roof into a squat stack with a clay pot on top. Thin smoke leaks from it, and the brick is warm. Whatever the wind does, the smoke lies flat and drifts out toward the reef.',
+  },
+  signal_lamp: {
+    title: 'Signal Lamp',
+    text: 'A ship\'s signalling lamp on an iron post by the south parapet, its shutter slats aimed out to sea at Devil Reef. The lamp is cold, but the wick is trimmed and the reservoir is full. Matches in a tin are screwed to the post.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Watch the reef',
+        success: 'For a long while there is nothing. Then, far out on the reef, a light opens and shuts three times, and waits. It is answering a signal nobody here has sent.',
+        failure: 'Black water, the white line of the breakwater, and nothing on the reef.',
+      },
+      {
+        skill: 'Mechanical Repair', action: 'Work the shutter',
+        success: 'The shutter is oiled and moves silently. Pencilled inside the lamp\'s door is a short sequence of long and short flashes, and the word "TIDE".',
+        failure: 'It is stiff with salt, and you leave it.',
+      },
+    ],
+  },
+  // ── The hall ────────────────────────────────────────────────────
   crates: {
     title: 'Crated Consignment',
     text: 'Four pine crates, iron-strapped, stencilled MARSH REFINING CO. — INNSMOUTH, MASS., and addressed in grease pencil for Boston. They are nailed shut and very heavy for their size. Nobody has shipped them.',
@@ -168,7 +256,14 @@ export const REFINERY_LEVEL: WalkthroughLevel = {
   credit: '"Old Industrial Building" by Hrvoje Wächter, CC BY 4.0',
   examinables: EXAMINABLES,
   uvStains: UV_STAINS,
-  // Four enamel shades down the hall.
+  // The GM sets the time of day and the rain; they show through the windows, and the roof is out in it.
+  weather: true,
+  // Gulls over the roof by day.
+  birds: {
+    model: '/props/seagull.glb', times: ['dawn', 'day'], everySec: 140, count: [2, 4], wingspan: 1.4, over: [0, 0], height: [16, 26],
+    cries: ['/sounds/gull-1.mp3', '/sounds/gull-2.mp3', '/sounds/gull-3.mp3', '/sounds/gull-4.mp3', '/sounds/gull-5.mp3'],
+  },
+  // Four enamel shades down the hall, two on long chains in the loft.
   lamps: { color: 0xffb46a, intensity: 9, distance: 11 },
   atmosphere: {
     background: 0x030405,
