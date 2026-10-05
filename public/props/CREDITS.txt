@@ -31,6 +31,13 @@ detective-special.glb
 oil-lamp.glb
   Built procedurally for this project (my-summer-game tools/build_oil_lamp_cli.gd).
 
+floorboards.glb
+  "Floorboards" by Kowalo — https://sketchfab.com/kowalo
+  https://sketchfab.com/3d-models/floorboards-8fc9bdd0ac2c4c5a9f98a9bde43e4945
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: scaled to half its modelled size, sunk so the plank tops sit just above
+  the floor, clue markers added.
+
 Sounds (public/sounds/)
 
 gull-1.mp3 … gull-5.mp3

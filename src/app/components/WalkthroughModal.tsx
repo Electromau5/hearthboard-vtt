@@ -1121,23 +1121,29 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         // Small things to pick up, each stood on its piece of furniture. The level
         // opens once they are down, so their markers and focus boxes exist.
         const placeInspectable = async (id: string, insp: Inspectable) => {
-          const anchor = pieceById.get(insp.on);
+          const anchor = insp.on ? pieceById.get(insp.on) : undefined;
           const entry = level.examinables[id];
-          if (!anchor || !entry) { console.warn('Inspectable has nowhere to stand:', id); return; }
+          if ((!anchor && !insp.at) || !entry) { console.warn('Inspectable has nowhere to stand:', id); return; }
           const gltf = await new GLTFLoader().loadAsync(insp.model);
           if (disposed) return;
           const obj = gltf.scene;
-          const base = new THREE.Box3().setFromObject(anchor).getCenter(new THREE.Vector3());
-          const [ox, oz] = insp.offset ?? [0, 0];
-          const x = base.x + ox, z = base.z + oz;
-          // Onto whatever top is under that spot — the desk's, not a hutch above it.
-          const hit = new THREE.Raycaster(new THREE.Vector3(x, base.y + 2, z), new THREE.Vector3(0, -1, 0)).intersectObject(anchor, true)[0];
-          obj.position.set(x, hit ? hit.point.y : base.y, z);
+          if (anchor) {
+            const base = new THREE.Box3().setFromObject(anchor).getCenter(new THREE.Vector3());
+            const [ox, oz] = insp.offset ?? [0, 0];
+            const x = base.x + ox, z = base.z + oz;
+            // Onto whatever top is under that spot — the desk's, not a hutch above it.
+            const hit = new THREE.Raycaster(new THREE.Vector3(x, base.y + 2, z), new THREE.Vector3(0, -1, 0)).intersectObject(anchor, true)[0];
+            obj.position.set(x, hit ? hit.point.y : base.y, z);
+          } else {
+            const [x, z] = insp.at!;
+            const floor = groundAt(x, z, 0);
+            obj.position.set(x, floor === -Infinity ? 0 : floor, z);
+          }
           obj.rotation.y = THREE.MathUtils.degToRad(insp.turnDeg ?? 0);
           obj.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
           scene.add(obj);
           obj.updateMatrixWorld(true);
-          // A little larger than the lamp itself, so it is easy to look at.
+          // A little larger than the object itself, so it is easy to look at.
           const box = new THREE.Box3().setFromObject(obj).expandByScalar(0.04);
           targets.push({ id, entry, box, inspect: insp });
         };

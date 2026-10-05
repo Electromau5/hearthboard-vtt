@@ -137,7 +137,11 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
           const geo = new THREE.PlaneGeometry(clue.size[0], clue.size[1]);
           const mat = clue.uv
             ? new THREE.MeshBasicMaterial({ map: tex, color: 0xb8ffe6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })
-            : new THREE.MeshStandardMaterial({ map: tex, transparent: true, metalness: 0.7, roughness: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+            : new THREE.MeshStandardMaterial({
+              map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4,
+              // Pressed into brass, or bitten into bare wood.
+              ...(clue.mark.kind === 'gouge' ? { metalness: 0, roughness: 0.9 } : { metalness: 0.7, roughness: 0.55 }),
+            });
           const decal = new THREE.Mesh(geo, mat);
           decal.position.z = 0.0004;
           node.add(decal);
@@ -427,7 +431,7 @@ function smallButton(done: boolean): React.CSSProperties {
   };
 }
 
-/** The clue's mark, drawn white-on-clear for UV (tinted by the material) or dark for a stamp. */
+/** The clue's mark, drawn white-on-clear for UV (tinted by the material), dark for a stamp, or as torn wood for a gouge. */
 function drawMark(clue: InspectClue): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 512;
@@ -460,6 +464,35 @@ function drawMark(clue: InspectClue): THREE.CanvasTexture {
         ctx.font = `bold ${size}px Georgia, serif`;
         ctx.fillText(line, W / 2, H * (0.72 + i * 0.13) + dy);
       });
+    }
+  } else if (clue.mark.kind === 'gouge') {
+    // Pry-bar bites along a board's edge (the canvas's bottom): crescents of
+    // pale torn fibre, a dark crushed lip on the side the bar levered against,
+    // and splinters lifting along the grain.
+    let seed = 11;
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const bites = 4;
+    for (let i = 0; i < bites; i++) {
+      const cx = W * (0.14 + 0.72 * i / (bites - 1) + (rand() - 0.5) * 0.06);
+      const rx = W * (0.07 + rand() * 0.03), ry = H * (0.32 + rand() * 0.22);
+      ctx.fillStyle = 'rgba(168,128,84,0.92)';
+      ctx.beginPath(); ctx.ellipse(cx, H, rx, ry, 0, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(30,18,8,0.9)';
+      ctx.lineWidth = W * 0.012;
+      ctx.beginPath(); ctx.ellipse(cx, H, rx, ry, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+      ctx.strokeStyle = 'rgba(150,112,70,0.8)';
+      ctx.lineWidth = W * 0.004;
+      for (let f = 0; f < 5; f++) {
+        const fx = cx + (rand() - 0.5) * rx * 1.4;
+        ctx.beginPath(); ctx.moveTo(fx, H); ctx.lineTo(fx + (rand() - 0.5) * W * 0.02, H - ry * (0.4 + rand() * 0.5)); ctx.stroke();
+      }
+    }
+    ctx.strokeStyle = 'rgba(176,140,96,0.75)';
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 6; i++) {
+      const x0 = W * (0.05 + rand() * 0.85), y0 = H * (0.25 + rand() * 0.45);
+      ctx.lineWidth = W * (0.004 + rand() * 0.004);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + W * (0.06 + rand() * 0.1), y0 + (rand() - 0.5) * H * 0.06); ctx.stroke();
     }
   } else {
     // A thumbprint: broken whorl ridges, and a smear of skin off one side.

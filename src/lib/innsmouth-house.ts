@@ -386,6 +386,10 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Oil Lamp',
     text: 'A brass-footed kerosene lamp on the corner of the desk, its chimney sooted up one side. The wick was trimmed not long ago. It is light enough to pick up and turn over.',
   },
+  floorboards: {
+    title: 'Loose Floorboards',
+    text: 'A patch of parlor floor between the armchair and the hall door where the boards sit a fraction proud of their neighbours, and not quite in line. Kneel and look closer.',
+  },
 };
 
 /**
@@ -551,7 +555,9 @@ const PEEPER: Peeper = { gapSec: [3, 7], holdSec: [1.2, 2.4], shyWithin: 0.8 };
 /**
  * Things to pick up and turn over (E). The lamp is built in Godot
  * (my-summer-game tools/build_oil_lamp_cli.gd), which also places its clue
- * markers. PLACEHOLDER clue text, for the GM to replace.
+ * markers; the floorboards are a Sketchfab patch scaled and marked by
+ * my-summer-game tools/build_floorboards.mjs. PLACEHOLDER clue text, for the
+ * GM to replace.
  */
 const INSPECTABLES: Record<string, Inspectable> = {
   oil_lamp: {
@@ -572,6 +578,27 @@ const INSPECTABLES: Record<string, Inspectable> = {
         uv: true,
         mark: { kind: 'print' },
         size: [0.026, 0.026],
+      },
+    },
+  },
+  // Pried up and set back: what was under them is the next clue (a toy boat, not yet placed).
+  floorboards: {
+    model: '/props/floorboards.glb',
+    at: [-3.7, 4.42],
+    turnDeg: 90,
+    clues: {
+      pry: {
+        title: 'Pry Marks',
+        text: 'The end of one board is bitten all along its edge where a bar was worked under it, and the splinters are still pale. These boards have been lifted and pressed back down, and not long ago. The nails were put back by hand, without a hammer.',
+        mark: { kind: 'gouge' },
+        size: [0.11, 0.035],
+      },
+      print: {
+        title: 'Salt in the Grain',
+        text: "Under the Wood's lamp a thumbprint glows on the next board, crusted with salt, where someone knelt and braced a hand to lever up the floor. It is too broad for a man's thumb, and the ridges smear out sideways into skin.",
+        uv: true,
+        mark: { kind: 'print' },
+        size: [0.045, 0.045],
       },
     },
   },

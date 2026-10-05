@@ -238,13 +238,15 @@ export type PhotoFrames = {
  * A small object that can be picked up and turned over in the inspect viewer:
  * E on it opens the viewer instead of the reading card (its examinable gives
  * the viewer's title and intro). The model stands on top of another
- * examinable's furniture in the walkthrough.
+ * examinable's furniture in the walkthrough, or on the floor.
  */
 export type Inspectable = {
   /** The .glb under public/. Empty nodes named "Clue_<id>" mark where each clue sits, local +Z out of the surface. */
   model: string;
-  /** The examinable whose top it stands on. */
-  on: string;
+  /** The examinable whose top it stands on. Without it, the model stands on the floor at `at`. */
+  on?: string;
+  /** World X and Z on the floor, for a model with no `on`. Its y=0 is set on the floor there. */
+  at?: [number, number];
   /** Metres from the centre of that top, along world X and Z. */
   offset?: [number, number];
   turnDeg?: number;
@@ -261,9 +263,9 @@ export type InspectClue = {
   /**
    * What is on the surface: `stamp` is lettering pressed into metal, with a
    * ringed sigil above it; `print` is a smeared thumbprint, with any lines
-   * scrawled beneath it.
+   * scrawled beneath it; `gouge` is a run of pry-bar bites in a wooden edge.
    */
-  mark: { kind: 'stamp' | 'print'; lines?: string[] };
+  mark: { kind: 'stamp' | 'print' | 'gouge'; lines?: string[] };
   /** The decal's width and height in metres. */
   size: [number, number];
 };
