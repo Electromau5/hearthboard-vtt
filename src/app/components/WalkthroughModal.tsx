@@ -2054,6 +2054,16 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             </div>
           )}
 
+          {webgl && loaded && !locked && level.credit && (
+            <div style={{
+              position: 'absolute', right: 10, bottom: 8, pointerEvents: 'none',
+              fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.5px', color: 'var(--ink-text-2)',
+              opacity: 0.7,
+            }}>
+              {level.credit}
+            </div>
+          )}
+
           {browsing && (
             <ArchiveBrowser
               title={browsing.target.entry.title}

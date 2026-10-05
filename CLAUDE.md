@@ -106,6 +106,7 @@ src/
     npc-personas.ts               # Server-only: who each NPC is, what they know and hide, whom they already know
     bellevue.ts                   # BELLEVUE_LEVEL — the two-storey Bellevue ward: Admissions, the Lower Block (Cells 63–66), the ward upstairs
     downtown.ts                   # DOWNTOWN_LEVEL — the default map's Downtown street (Sketchfab asset, wrapped in my-summer-game)
+    marsh-refinery.ts             # REFINERY_LEVEL — the Innsmouth map's Marsh Refinery: a furnace hall (CC-BY Sketchfab shell, credit in public/CREDITS.txt)
     session-recaps.ts             # Session cliff notes (from the GM's Drive recaps) — typed cards on the Archive's case board
     innsmouth-scenes.ts           # INNSMOUTH_SCENES — Innsmouth map pins, shared by the board and the Archive's wall chart
     vtt-types.ts                  # Shared TypeScript types

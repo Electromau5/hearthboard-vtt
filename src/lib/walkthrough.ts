@@ -403,6 +403,8 @@ export type WalkthroughLevel = {
   enterText: string;
   /** Accessible label for the close button. */
   leaveLabel: string;
+  /** Attribution for a third-party model (CC-BY), shown in a corner whenever the walk is paused. */
+  credit?: string;
   examinables: Record<string, Examinable>;
   gazeHazards?: Record<string, GazeHazard>;
   radios?: Record<string, RadioSet>;

@@ -12,6 +12,7 @@ import { VESSEL_LEVEL } from '@/lib/fishing-vessel';
 import { ARCHIVE_LEVEL } from '@/lib/black-archive';
 import { BELLEVUE_LEVEL } from '@/lib/bellevue';
 import { DOWNTOWN_LEVEL } from '@/lib/downtown';
+import { REFINERY_LEVEL } from '@/lib/marsh-refinery';
 import { INNSMOUTH_SCENES } from '@/lib/innsmouth-scenes';
 import type { WalkthroughLevel } from '@/lib/walkthrough';
 import { InnsmouthTown3D } from './components/InnsmouthTown3D';
@@ -54,6 +55,7 @@ const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; a
   'loc-inn-vessel': { level: VESSEL_LEVEL, preview: '/fishing-vessel-preview.jpeg',  alt: "The wrecked trawler's deck",      cta: 'Board the vessel', hint: 'Click to climb aboard' },
   'loc-blackarchive': { level: ARCHIVE_LEVEL, preview: '/black-archive-preview.jpeg', alt: "The Black Archive's warehouse floor", cta: 'Enter the archive', hint: 'Click to step inside' },
   'loc-bellevue': { level: BELLEVUE_LEVEL, preview: '/bellevue-ward-preview.jpeg', alt: "Bellevue's admissions hall", cta: 'Enter the ward', hint: 'Click to sign in' },
+  'loc-inn-refinery': { level: REFINERY_LEVEL, preview: '/marsh-refinery-preview.jpeg', alt: "The Marsh Refinery's furnace hall", cta: 'Enter the refinery', hint: 'Click to force the doors' },
   'loc-downtown': { level: DOWNTOWN_LEVEL, preview: '/downtown-preview.jpeg', alt: 'A downtown street of brick shopfronts at night', cta: 'Walk downtown', hint: 'Click to walk the street' },
 };
 

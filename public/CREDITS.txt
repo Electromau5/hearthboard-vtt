@@ -1,0 +1,9 @@
+3D models for the walkthrough levels in this folder
+
+marsh-refinery.glb
+  "Old Industrial Building" by Hrvoje Wächter — https://sketchfab.com/gazdahrco
+  https://sketchfab.com/3d-models/old-industrial-building-0dafa7aaadfd4666bb4a32776c84b14e
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: scaled to 0.75 of its modelled size, furnished as the Marsh Refinery
+  (furnace, vats, benches and props added), textures resized to 2048 px WebP,
+  meshes meshopt-compressed.
