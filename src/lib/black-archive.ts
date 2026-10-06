@@ -113,7 +113,7 @@ function LAB_EXAMINABLES(): Record<string, Examinable> {
   return {
     dissection_table: {
       title: 'Dissection Table · DO-3',
-      text: 'A porcelain table on a single pedestal, its drain running down into a zinc pail. On it, on its back, lies something like a man drawn by someone who had only heard men described: a long low skull running forward into a lipless mouth, eyes bulging from the sides of the head with no lids to close them, three slits down each side of the neck. The chest has been opened from the collarbones to the belly and the skin clamped back. A tag on one webbed foot reads DO-3 · QUARANTINE DOCKS.',
+      text: 'A porcelain table on a single pedestal, its drain running down into a zinc pail. On it, on its back, lies something like a man drawn by someone who had only heard men described: a wide skull fringed with needle teeth, yellow eyes with no lids to close them, ribbed fins splayed from the sides of the head, and a crest of spines crushed flat beneath it. One long arm has slid off the table and hangs, its claws almost touching the tiles. The chest has been opened and the skin clamped back. The long webbed feet hang past the end of the table, where a tag tied to the rail reads DO-3 · QUARANTINE DOCKS.',
       checks: [
         {
           skill: 'Science (Forensics)', action: 'Examine the opened chest',
@@ -772,6 +772,7 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
   pinboard: { size: [5.1, 1.95], load: boardPins, refreshSec: 8 },
   // The wall chart is 5 m wide at the image's 1024 × 559 aspect (build_archive_cli.gd).
   mapPins: { size: [5.0, 5.0 * 559 / 1024], pins: MAP_PINS },
+  credit: '"Deep One" by coremort — CC BY 4.0',
   lamps: {
     color: 0xffbf73, intensity: 16, distance: 11,
     // The lab's operating lamps burn cold and white; the bulb over the cold chamber, bluish.

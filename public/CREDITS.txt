@@ -13,3 +13,12 @@ marsh-refinery.glb
   https://sketchfab.com/3d-models/old-and-worn-sofa-e710608cddac4aa887e05fbad70eea33
   Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
   Changes: scaled to 0.75, textures resized to 512 px WebP, meshes meshopt-compressed.
+
+black-archive.glb
+  The Deep One on the pathology lab's dissection table:
+  "Deep One" by coremort — https://sketchfab.com/coremort
+  https://sketchfab.com/3d-models/deep-one-a71d657f33c04d4f8be403cf019c380e
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: rigged and posed lying on its back, dorsal fin folded flat, scaled to
+  life size (my-summer-game tools/pose_deep_one.py); the opened chest, clamps and
+  sheet added; textures resized to 1024 px WebP, meshes meshopt-compressed.
