@@ -102,7 +102,7 @@ src/
     walkthrough.ts                # WalkthroughLevel type + model contract for WalkthroughModal
     innsmouth-house.ts            # HOUSE_LEVEL — the derelict house's clue text and atmosphere
     fishing-vessel.ts             # VESSEL_LEVEL — the wrecked trawler "Esther Gilman"
-    black-archive.ts              # ARCHIVE_LEVEL — the Black Archive warehouse; rooms open live board notes and All Resources; Dr. Finch's Pathology Lab off Records
+    black-archive.ts              # ARCHIVE_LEVEL — the Black Archive warehouse; rooms open live board notes and All Resources; Dr. Finch's Pathology Lab off Records; the architect's Drafting Room off Cartography
     npc-personas.ts               # Server-only: who each NPC is, what they know and hide, whom they already know
     bellevue.ts                   # BELLEVUE_LEVEL — the two-storey Bellevue ward: Admissions, the Lower Block (Cells 63–66), the ward upstairs
     downtown.ts                   # DOWNTOWN_LEVEL — the default map's Downtown street (Sketchfab asset, wrapped in my-summer-game)

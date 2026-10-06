@@ -14,6 +14,12 @@
  * mortuary and operating theatre: a Deep One (DO-3) opened on the table, an
  * Elder Thing (ET-1) on the slab, a cold chamber, a viewing gallery, and the
  * previous pathologist's notes in the desk.
+ *
+ * The Drafting Room, a wing off Cartography through the west wall, is the
+ * architect's room of non-Euclidean work: a model of R'lyeh, drafting tables,
+ * six blueprints (public/blueprints/, painted by fabricate_archive_textures.py),
+ * a tesseract, a Möbius band, and an impossible triangle that closes only from
+ * the brass plate in the floor.
  */
 
 import { allResources, type Resource, type ResourceSection } from './resources';
@@ -95,6 +101,7 @@ const EXAMINABLES: Record<string, Examinable> = {
     text: 'A two-tier steel bunk nearest the door, the blanket pulled tight enough to bounce a coin on. Sgt. Miles keeps her quarters the way she keeps her armory.',
   },
   ...LAB_EXAMINABLES(),
+  ...DRAFTING_EXAMINABLES(),
 };
 
 // ── The Pathology Lab (the wing off Records) ───────────────────────────────
@@ -321,6 +328,193 @@ const LAB_FILES: ArchiveDoc[] = [
   },
 ];
 
+// ── The Drafting Room (the wing off Cartography) ───────────────────────────
+// The architect's room of non-Euclidean work. Like the lab, its text is a first
+// pass for the GM.
+
+/** The six blueprint sheets, shown full size from the plan chest and the wall. */
+const BLUEPRINTS: ArchiveDoc[] = [
+  {
+    id: 'bp-rlyeh', title: 'R’lyeh · Section through the Great Door', meta: 'Sheet 1 of 6 · after the Johansen sketches',
+    image: '/blueprints/rlyeh-door.webp',
+    text: 'A monolith of a door leaning out of true, its jambs not parallel, every angle dimensioned 90° and none of them square. Beside it, a stair that rises nine risers and arrives 108 ft below where it began. Margin note: the door opens outward, along an axis not drawn here.',
+  },
+  {
+    id: 'bp-sevenfold', title: 'Plan · House of Sevenfold Rooms', meta: 'Sheet 2 of 6',
+    image: '/blueprints/sevenfold-house.webp',
+    text: 'A floor plan drawn on a circle: rooms of seven walls, each adjoining seven others, growing no smaller toward the rim though they are drawn smaller. “There is no outer wall.”',
+  },
+  {
+    id: 'bp-tesseract', title: 'Tesseract · Elevation in Four Directions', meta: 'Sheet 3 of 6',
+    image: '/blueprints/tesseract.webp',
+    text: 'A cube within a cube, corner joined to corner, and four elevations labelled NORTH, EAST, ANA and KATA. “The inner cube is not smaller. It is farther away, in a direction you cannot point.”',
+  },
+  {
+    id: 'bp-sarnath', title: 'Sarnath · Basalt Spire, Elevation', meta: 'Sheet 4 of 6 · after the bas-relief, cat. 1928-IN-44',
+    image: '/blueprints/sarnath-spire.webp',
+    text: 'A 212 ft spire with a stair inside it. The shaft allows three and a half turns; the stair climbs seven. The draughtsman has written: “Both are right.”',
+  },
+  {
+    id: 'bp-stair', title: 'Stair · Ascending Both Ways', meta: 'Sheet 5 of 6 · from the excavation logs, 1919',
+    image: '/blueprints/endless-stair.webp',
+    text: 'A square stair of forty risers, every one marked UP. Walked either way round, it climbs, and arrives where it started 25 ft higher. Drawn by the site foreman the week before he walked off the dig.',
+  },
+  {
+    id: 'bp-vault', title: 'The Vault · Conjectured Plan', meta: 'Sheet 6 of 6 · from 17 years of borings',
+    image: '/blueprints/vault-plan.webp',
+    text: 'The sealed chamber as the borings suggest it: five chambers, A to E, spiralling on a central well. A triangle surveyed by theodolite on site is drawn at upper right; its angles sum to 540°. “We are not digging in the space we think we are digging in.”',
+  },
+];
+
+function DRAFTING_EXAMINABLES(): Record<string, Examinable> {
+  return {
+    rlyeh_model: {
+      title: 'Model of R’lyeh',
+      text: 'A table-sized model in green-black basalt, standing in a shallow tray of painted sea: monoliths leaning against nothing, a Great Door tilted out of true and set in a frame that isn’t parallel to it, and a stair that turns more than it climbs. A man, to scale, stands by the stair. He is very small.',
+      checks: [
+        {
+          skill: 'Architecture & Engineering', action: 'Assess the structure',
+          success: 'None of it should stand. The monoliths lean on nothing, and the loads run off somewhere you cannot follow.',
+          hard: 'It is accurate to drawings, not to a site: every leaning slab is measured from the Johansen sketches. Whoever built this trusted them completely.',
+          extreme: 'Scaled up, the depth of the Great Door’s lintel is exactly the depth of the Deep Bedrock borings. Seventeen years of digging line up with this door, if you turn it on its side.',
+          failure: 'A clever model. It makes your eyes tired.',
+        },
+        {
+          skill: 'History', action: 'Identify the source',
+          success: 'The Johansen account: a Norwegian second mate whose ship found a city rising out of the Pacific in 1925. He died soon after reaching home.',
+          failure: 'A sunken city. You cannot place it.',
+        },
+        {
+          skill: 'Cthulhu Mythos', action: 'Recognise the city',
+          success: 'R’lyeh, where dead Cthulhu waits dreaming. The door is the one that must never be opened outward.',
+          failure: 'Something about the door troubles you, and you cannot say what.',
+        },
+      ],
+    },
+    drafting_table_1: {
+      title: 'Drafting Table',
+      image: '/blueprints/vault-plan.webp',
+      text: 'A drafting board tilted to the window, the conjectured plan of the vault pinned to it: five chambers spiralling on a central well. A T-square lies along the bottom edge. The pencil lines have been rubbed out and redrawn so often the paper has gone thin.',
+      checks: [
+        {
+          skill: 'Science (Mathematics)', action: 'Check the survey triangle',
+          success: 'The surveyed angles are 180°, 180° and 180°. They have been checked three times in three different pencils.',
+          hard: 'For the angles of a triangle to sum to 540°, the ground it was drawn on must curve back on itself very sharply: a space that closes up like the inside of a sphere, a few hundred feet across. The vault is inside it.',
+          failure: 'Numbers that do not add up, checked by someone who thought they should.',
+        },
+      ],
+    },
+    drafting_table_2: {
+      title: 'Drafting Table',
+      image: '/blueprints/sevenfold-house.webp',
+      text: 'The second board carries the plan of the house of sevenfold rooms: a circle of seven-walled rooms that the drawing makes smaller toward the rim. A set square sits on it, at an angle that matches nothing on the sheet.',
+      checks: [
+        {
+          skill: 'Architecture & Engineering', action: 'Read the plan',
+          success: 'A plan in hyperbolic space. Walk outward and the rooms never shrink; the drawing only looks that way because flat paper can’t hold them.',
+          hard: 'There is no outer wall, but there is a door marked on the far side of the central hall, and a note beside it: “In the Marsh refinery the boiler room had seven walls. Count them again.”',
+          failure: 'A circle full of arcs. It looks like a window in a church.',
+        },
+      ],
+    },
+    architect_desk: {
+      title: 'The Architect’s Desk',
+      text: 'A desk under the blueprint wall: a slide rule, a pair of brass compasses, an open notebook in which the same angle has been worked out seven times to seven answers, three rolled drawings, and a spirit level whose bubble will not sit in the middle.',
+      checks: [
+        {
+          skill: 'Spot Hidden', action: 'Watch the spirit level',
+          success: 'The bubble sits toward the east end. Turn the level end for end and it still sits toward the east.',
+          hard: 'It sits toward the east, wherever you point the level, and a little further toward it each time you look.',
+          failure: 'A spirit level that needs adjusting.',
+        },
+        {
+          skill: 'Science (Mathematics)', action: 'Read the notebook',
+          success: 'Seven workings of one angle, each correct, each different. Under the last: “It is not the arithmetic.”',
+          failure: 'Pages of figures.',
+        },
+      ],
+    },
+    blueprint_wall: {
+      title: 'Blueprint Wall',
+      text: 'Six blueprint sheets pinned to a wall of cork above the desk, red string running from the vault plan to the Great Door of R’lyeh and to the Sarnath spire.',
+    },
+    plan_chest: {
+      title: 'Plan Chest',
+      text: 'A wide oak chest of shallow drawers by the door, rolled drawings on top under a brass weight. The fourth drawer stands open, a sheet lying in it.',
+    },
+    chalkboard: {
+      title: 'Chalkboard',
+      text: 'Chalk on a board across the south wall: “α + β + γ < π (K = −1)”; the Gauss–Bonnet theorem; and in red, “on the tomb site: α + β + γ = 540° ?!” Below, two triangles, one with its sides bowed in and one with them bowed out, and an arrow: “which space are we in?”',
+      checks: [
+        {
+          skill: 'Science (Mathematics)', action: 'Check the working',
+          success: 'The first two lines are textbook Lobachevsky and Gauss. The third is not mathematics; it is a field measurement, and nothing in the first two lines allows it.',
+          hard: 'It isn’t impossible, only very small: a closed, curved space no bigger than a city block, with the vault at its centre, folded into the bedrock under Boston.',
+          failure: 'Equations. Somebody was upset when they wrote the last one.',
+        },
+      ],
+    },
+    theodolite: {
+      title: 'Theodolite',
+      text: 'A surveyor’s theodolite on its tripod, its telescope trained across the room on the model’s Great Door.',
+      checks: [
+        {
+          skill: 'Navigate', action: 'Sight through it',
+          success: 'Through the eyepiece the door leans at 18°. Step away, look back, and it leans at 23°. The model hasn’t moved.',
+          hard: 'Each time you look, the lean has grown by about five degrees. At this rate, after another dozen sightings it will be lying flat, wide open.',
+          failure: 'Crosshairs on a stone door.',
+        },
+      ],
+    },
+    tesseract: {
+      title: 'Tesseract',
+      text: 'A brass wire model on a plinth: a cube inside a cube, every corner joined to its twin. The shadow, in three dimensions, of something with four.',
+      checks: [
+        {
+          skill: 'Science (Mathematics)', action: 'Count its cells',
+          success: 'Eight cubes: the outer one, the inner one, and six lopsided ones between them that are cubes too, seen from a direction you cannot point in.',
+          hard: 'One joint has been unsoldered and soldered back. Someone tried to fold it.',
+          failure: 'A wire puzzle.',
+        },
+      ],
+    },
+    mobius: {
+      title: 'Möbius Band',
+      text: 'A strip of polished brass given a half twist and joined at the ends. It has one side and one edge.',
+      checks: [
+        {
+          skill: 'Spot Hidden', action: 'Look closer',
+          success: 'Tiny lettering is engraved along it in one continuous line. It is the R’lyehian chant, “Ph’nglui mglw’nafh…”, and it reads right way up all the way round, because there is only one side.',
+          failure: 'Polished brass, warm from the lamp.',
+        },
+      ],
+    },
+    impossible_triangle: {
+      title: 'Impossible Triangle',
+      text: 'Three bars of painted wood held up on a brass rod. From most of the room they are three bars that don’t meet. From the brass plate in the floor marked STAND HERE, they close into a triangle each of whose corners is a right angle.',
+      checks: [
+        {
+          skill: 'Architecture & Engineering', action: 'Work out the trick',
+          success: 'Three edges of a cube, seen straight down its diagonal: the two loose ends line up from that one spot. A draughtsman’s joke.',
+          hard: 'A joke, and a lesson: a structure that is impossible from everywhere but one place. The vault’s builders would only need to know where to stand.',
+          failure: 'It shouldn’t work, and it does.',
+        },
+      ],
+    },
+  };
+}
+
+/** Between the drafting room's windows, in invisible ink. */
+const DRAFTING_STAINS: UvStain[] = [
+  {
+    id: 'drafting_note', kind: 'ink', mark: 'note',
+    words: ['MEASURED THIS ROOM AT NIGHT', '31 FT. BY DAY IT IS 27.', 'THE WALLS DID NOT MOVE.'],
+    wall: { from: [-16.5, 1.65, 6.6], toward: [-1, 0, 0], size: [0.6, 0.3] },
+    title: 'Writing between the Windows',
+    text: 'In invisible ink between the two windows, glowing a cold blue-white: “Measured this room at night. 31 ft. By day it is 27. The walls did not move.”',
+  },
+];
+
 /** Under the Wood's lamp: what left the open drawer, a warning over the sink, a print by the door. */
 const LAB_STAINS: UvStain[] = [
   {
@@ -430,6 +624,8 @@ const COLLECTIONS: Record<string, Collection> = {
   innsmouth_map: { load: async () => INNSMOUTH_MAP, emptyText: '' },
   map_table: { load: async () => INNSMOUTH_MAP, emptyText: '' },
   finch_desk: { load: async () => LAB_FILES, emptyText: 'The drawers are empty.' },
+  plan_chest: { load: async () => BLUEPRINTS, emptyText: 'The drawers are empty.' },
+  blueprint_wall: { load: async () => BLUEPRINTS, emptyText: 'Nothing is pinned up.' },
 };
 
 // Corkboard layout, in case-board pixels (the pinboard scales it to the cork):
@@ -523,6 +719,8 @@ const MAP_PINS: MapPin[] = [
 /** ET-1's eyes: look too long and the view swims. */
 const GAZE_HAZARDS: Record<string, GazeHazard> = {
   elder_thing: { angleDeg: 4, range: 3, maxBlurPx: 3, onsetSec: 6, recoverSec: 2 },
+  // The model's angles are hard to hold in the eye for long.
+  rlyeh_model: { angleDeg: 5, range: 2.5, maxBlurPx: 2.5, onsetSec: 8, recoverSec: 2 },
 };
 
 /** The wireless carries Sgt. Miles's message. */
@@ -585,7 +783,7 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
   },
   pickups: [WORKBENCH],
   beds: BEDS,
-  uvStains: LAB_STAINS,
+  uvStains: [...LAB_STAINS, ...DRAFTING_STAINS],
   gazeHazards: GAZE_HAZARDS,
   atmosphere: {
     background: 0x080706,
