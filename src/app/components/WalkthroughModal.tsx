@@ -53,6 +53,7 @@ const RUN = 3.0;
 const REACH = 2.3;         // how far away something can be examined from
 const LOOK = 0.0022;       // radians per pixel of mouse movement
 const UV_SEEN = 0.12;      // how brightly the lamp must light a stain before it can be examined
+const LAMP_POOL = 6;       // ceiling lamps lit at once, nearest first (each costs every pixel)
 
 /**
  * The level's Godot build, when it has one and the page asks for it with
@@ -742,6 +743,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       })();
       for (let i = 0; i < MAX_LAMPS - 1; i++) {
         const light = uvWash(new THREE.SpotLight(0x6b2dff));
+        light.visible = false;
         const glowMat = new THREE.SpriteMaterial({ map: glowMap, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
         const glow = new THREE.Sprite(glowMat);
         glow.scale.setScalar(0.12);
@@ -793,7 +795,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // state of its current look.
     let peeper: { head: ReturnType<typeof createDeepOneHead>; rest: THREE.Vector3; side: THREE.Vector3; hole: THREE.Vector3 } | null = null;
     const peek = { phase: 'away' as 'away' | 'in' | 'hold' | 'out', t: 0, next: 0, hold: 0, from: 1 };
-    const lamps: { light: THREE.PointLight; base: number; dipUntil: number }[] = [];
+    // Every lamp in the level, but only the nearest LAMP_POOL are lit by real
+    // lights: each light costs every pixel, and 18 of them made the Archive
+    // crawl. `w` fades a lamp in and out of the pool so none ever pops.
+    const lamps: { pos: THREE.Vector3; color: THREE.Color; base: number; distance: number; dipUntil: number; w: number; d: number; slot: THREE.PointLight | null }[] = [];
+    const lampPool: THREE.PointLight[] = [];
     let pinboard: ReturnType<typeof createPinboard> | null = null;
     let markers: ReturnType<typeof createInteractMarkers> | null = null;
     let stains: ReturnType<typeof createUvStains> | null = null;
@@ -960,11 +966,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           model.traverse((o) => {
             if (!o.name.startsWith('Lamp_')) return;
             const { color, intensity, distance } = { ...cfg, ...cfg.only?.[o.name] };
-            const light = new THREE.PointLight(color, intensity, distance, 2);
-            o.getWorldPosition(light.position);
-            scene.add(light);
-            lamps.push({ light, base: intensity, dipUntil: 0 });
+            lamps.push({ pos: o.getWorldPosition(new THREE.Vector3()), color: new THREE.Color(color), base: intensity, distance, dipUntil: 0, w: 0, d: 0, slot: null });
           });
+          for (let i = 0; i < Math.min(LAMP_POOL, lamps.length); i++) {
+            const light = new THREE.PointLight(0xffffff, 0, 1, 2);
+            scene.add(light);
+            lampPool.push(light);
+          }
         }
 
         // Live notes on the corkboard, refetched while the level is open.
@@ -1559,12 +1567,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           r.light.position.copy(r.lamp.pos);
           r.light.target.position.copy(r.lamp.pos).add(r.lamp.dir);
           r.light.intensity = 20;
+          r.light.visible = true;
           r.glow.position.copy(r.lamp.pos);
           r.glow.visible = true;
           uvLamps.push(r.lamp);
         }
         for (let i = slot; i < remoteLamps.length; i++) {
-          remoteLamps[i].light.intensity = 0;
+          // Off, not just dark: an unlit light still costs every pixel.
+          remoteLamps[i].light.visible = false;
           remoteLamps[i].glow.visible = false;
         }
         stains?.setLamps(uvLamps);
@@ -1659,9 +1669,31 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
       for (const r of radios.values()) if (!r.el.paused) r.glow.intensity = 0.55 + Math.random() * 0.1;
       // Old wiring: now and then a bulb browns out for a moment.
-      for (const l of lamps) {
-        if (t > l.dipUntil && Math.random() < 0.0008) l.dipUntil = t + 0.08 + Math.random() * 0.25;
-        l.light.intensity = t < l.dipUntil ? l.base * (0.25 + Math.random() * 0.3) : l.base;
+      if (lamps.length) {
+        // The nearest lamps get the lights; one already lit keeps its light
+        // until another is a metre nearer, so two lamps never trade back and forth.
+        for (const l of lamps) l.d = l.pos.distanceTo(camera.position) - (l.slot ? 1 : 0);
+        const wanted = new Set([...lamps].sort((a, b) => a.d - b.d).slice(0, lampPool.length));
+        const fade = dt / 0.35;
+        for (const l of lamps) {
+          l.w = wanted.has(l) && l.slot ? Math.min(1, l.w + fade) : Math.max(0, l.w - fade);
+          if (l.w === 0 && l.slot && !wanted.has(l)) { l.slot.intensity = 0; l.slot = null; }
+        }
+        // A wanted lamp takes a light as soon as one is free.
+        for (const l of wanted) {
+          if (l.slot) continue;
+          const free = lampPool.find(p => !lamps.some(o => o.slot === p));
+          if (!free) break;
+          l.slot = free;
+          free.position.copy(l.pos);
+          free.color.copy(l.color);
+          free.distance = l.distance;
+        }
+        for (const l of lamps) {
+          // Old wiring: now and then a bulb browns out for a moment.
+          if (t > l.dipUntil && Math.random() < 0.0008) l.dipUntil = t + 0.08 + Math.random() * 0.25;
+          if (l.slot) l.slot.intensity = l.w * (t < l.dipUntil ? l.base * (0.25 + Math.random() * 0.3) : l.base);
+        }
       }
       for (const fire of fires) fire.intensity = 5 + Math.sin(t * 9) * 0.8 + Math.sin(t * 23) * 0.5 + Math.random() * 0.6;
 
