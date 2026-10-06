@@ -8,10 +8,11 @@ import * as THREE from 'three';
 
 const MAX = 60;
 const GRAVITY = 9.8;
+const UP = new THREE.Vector3(0, 1, 0);
 
 export type Shells = {
-  /** A case leaving `at` (world) along `dir`, `shell` its radius and length. */
-  throw: (at: THREE.Vector3, dir: THREE.Vector3, shell: [number, number]) => void;
+  /** A case leaving `at` (world) along `dir`, `shell` its radius and length; `drop`ped (a revolver's, off the ejector) rather than flung from a port. */
+  throw: (at: THREE.Vector3, dir: THREE.Vector3, shell: [number, number], drop?: boolean) => void;
   /** `floorAt` gives the floor's height under a point; `onTink` is called on a case's first few bounces. */
   update: (dt: number, floorAt: (x: number, z: number) => number, onTink: (loud: number) => void) => void;
   dispose: () => void;
@@ -27,7 +28,7 @@ export function createShells(scene: THREE.Scene): Shells {
   const e = new THREE.Euler();
 
   return {
-    throw(at, dir, [radius, length]) {
+    throw(at, dir, [radius, length], drop) {
       let c = pool[next];
       if (!c) {
         c = { mesh: new THREE.Mesh(geo, mat), vel: new THREE.Vector3(), spin: new THREE.Vector3(), resting: false, bounces: 0, radius };
@@ -39,11 +40,20 @@ export function createShells(scene: THREE.Scene): Shells {
       c.mesh.position.copy(at);
       c.mesh.scale.set(radius, length, radius);
       c.mesh.quaternion.setFromEuler(e.set(0, 0, Math.PI / 2));
-      c.vel.copy(dir).multiplyScalar(1.5 + Math.random() * 0.8);
-      c.vel.x += (Math.random() - 0.5) * 0.4;
-      c.vel.y += 0.4 + Math.random() * 0.5;
-      c.vel.z += (Math.random() - 0.5) * 0.4;
-      c.spin.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 12, 18 + Math.random() * 20);
+      if (drop) {
+        // Falling out of the chambers, nose up, scattering a little.
+        c.mesh.quaternion.setFromUnitVectors(UP, dir.clone().normalize().negate());
+        c.vel.copy(dir).multiplyScalar(0.8 + Math.random() * 0.6);
+        c.vel.x += (Math.random() - 0.5) * 0.25;
+        c.vel.z += (Math.random() - 0.5) * 0.25;
+        c.spin.set((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 14);
+      } else {
+        c.vel.copy(dir).multiplyScalar(1.5 + Math.random() * 0.8);
+        c.vel.x += (Math.random() - 0.5) * 0.4;
+        c.vel.y += 0.4 + Math.random() * 0.5;
+        c.vel.z += (Math.random() - 0.5) * 0.4;
+        c.spin.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 12, 18 + Math.random() * 20);
+      }
       c.resting = false;
       c.bounces = 0;
       c.radius = radius;

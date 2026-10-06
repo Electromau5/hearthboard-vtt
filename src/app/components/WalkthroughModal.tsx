@@ -21,7 +21,7 @@ import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
 import { joinLevel, type Peer } from './presence';
 import { createWoodsLamp } from './woods-lamp';
 import { createHeldViewmodel, prepareHeldModel } from './held-viewmodel';
-import { heldModelFor } from '@/lib/held-items';
+import { heldModelFor, type HeldModel } from '@/lib/held-items';
 import { createSkyDome } from './sky-dome';
 import { createFlock } from './birds';
 import { createGunSounds, type GunSounds } from './gun-sounds';
@@ -101,6 +101,13 @@ type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
  * share findings to the party chat. What the level contains, and how it is lit,
  * comes from `level` (see src/lib/walkthrough.ts).
  */
+
+/** What is in the investigator's hand with a model: a pickup carried, or else an inventory item — none while the Wood's lamp has the hand. */
+function gunOf(level: WalkthroughLevel, carried: string | null, held: string | null, lampOut: boolean): HeldModel | null {
+  if (lampOut) return null;
+  const pickup = carried ? level.pickups?.flatMap(t => t.items).find(p => p.id === carried) : undefined;
+  return pickup ? pickup.view : heldModelFor(held);
+}
 export function WalkthroughModal({ level, onClose, onShare, author, investigator, onCheck, isGM }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
@@ -225,6 +232,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // An item struck off the sheet since it was taken in hand is gone from the hand too.
   const heldItem = held && items.includes(held) ? held : null;
   useEffect(() => { heldItemRef.current = heldItem; }, [heldItem]);
+  // A gun in hand that fires (the AK-74u, the Tommy, the revolver): clicks fire it rather than examine.
+  const gunView = gunOf(level, carried, heldItem, lampOut);
+  const fires = !!(gunView?.arms || gunView?.revolver);
 
   // Takes an item in hand, or puts it away; remembered per investigator across levels.
   const holdItem = useCallback((item: string) => {
@@ -475,8 +485,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       // With a gun that reloads in hand, R reloads it (skills are still on the open card).
       if (e.code === 'KeyR' && !e.repeat && !readingRef.current && !browsingRef.current) {
-        const gun = carriedRef.current ? level.pickups?.flatMap(tb => tb.items).find(p => p.id === carriedRef.current) : undefined;
-        if (gun?.view.reload || gun?.view.arms) { reloadRef.current?.(); return; }
+        const gun = gunOf(level, carriedRef.current, heldItemRef.current, lampOutRef.current);
+        if (gun?.reload || gun?.arms || gun?.revolver) { reloadRef.current?.(); return; }
       }
       // V turns a gun with arms over in the hands, to look it over.
       if (e.code === 'KeyV' && !e.repeat && !readingRef.current && !browsingRef.current) inspectRef.current?.();
@@ -726,7 +736,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       gunSounds ??= createGunSounds(ear.context, ear.getInput());
       inHand.reload(gunSounds);
     };
-    inspectRef.current = () => { inHand.inspect(); };
+    inspectRef.current = () => {
+      const ear = ensureListener();
+      gunSounds ??= createGunSounds(ear.context, ear.getInput());
+      inHand.inspect(gunSounds);
+    };
     // Where the shots land.
     const bulletHoles = createBulletHoles(scene);
     const shells = createShells(scene);
@@ -1415,7 +1429,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * look));
     };
     // A gun with arms in hand: left button fires, right aims, and a click examines nothing.
-    const armed = () => !!(carriedRef.current && pickupById.get(carriedRef.current)?.item.view.arms);
+    const armed = () => { const gun = gunOf(level, carriedRef.current, heldItemRef.current, lampOutRef.current); return !!(gun?.arms || gun?.revolver); };
     const onCanvasClick = () => {
       if (level.birds?.cries || level.weather) ensureListener();
       if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
@@ -1780,7 +1794,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       // Shots: the flash lights the room ahead, the round lands, the sound.
       const fired = inHand.takeShots();
       for (let i = 0; i < fired.shots; i++) {
-        gunSounds?.fire('shot');
+        gunSounds?.fire(fired.report);
         muzzleFlash = 1;
         const spread = 0.07 * (1 - inHand.aim * 0.88);   // radians across: loose from the hip, tight down the sights
         camera.getWorldDirection(lookDir);
@@ -1804,7 +1818,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       if (fired.dry) gunSounds?.fire('dry');
       // Spent cases: from the hands' view into the level, then onto the floor.
-      for (const c of fired.cases) shells.throw(c.at.applyMatrix4(camera.matrixWorld), c.dir.transformDirection(camera.matrixWorld), c.shell);
+      for (const c of fired.cases) shells.throw(c.at.applyMatrix4(camera.matrixWorld), c.dir.applyMatrix4(new THREE.Matrix4().extractRotation(camera.matrixWorld)), c.shell, c.drop);
       shells.update(dt, () => feet.y, loud => gunSounds?.fire('tink', 0.25 + loud * 0.5));
       if (muzzleFlash > 0) {
         torch.intensity = Math.max(torch.intensity, muzzleFlash * 90);
@@ -2042,7 +2056,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? `WASD move · Shift run · Mouse look · ${carriedPickup?.view.arms ? 'E examine · click fire · right-click aim · R reload · V inspect' : `E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}`}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
+      ? `WASD move · Shift run · Mouse look · ${fires ? 'E examine · click fire · right-click aim · R reload · V inspect' : `E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}`}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -2202,7 +2216,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               ) : (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}</>
               )}
-              {canUseSkillOn(focus) && !carriedPickup?.view.reload && !carriedPickup?.view.arms && (
+              {canUseSkillOn(focus) && !carriedPickup?.view.reload && !fires && (
                 <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> use a skill</span>
               )}
               {(carriedPickup || heldItem) && !focus.pickup && (
@@ -2222,7 +2236,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               {usedNote ?? <>
                 <span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{carriedPickup ? `the ${carriedPickup.title}` : heldItem}
                 {carriedPickup?.view.reload && <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> reload</span>}
-                {carriedPickup?.view.arms && <span style={{ color: 'var(--ink-text-2)' }}> · <span ref={ammoRef} style={{ color: 'var(--brass)' }} /></span>}
+                {fires && <span style={{ color: 'var(--ink-text-2)' }}> · <span ref={ammoRef} style={{ color: 'var(--brass)' }} /></span>}
               </>}
             </div>
           )}

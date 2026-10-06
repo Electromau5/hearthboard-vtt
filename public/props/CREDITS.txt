@@ -67,3 +67,12 @@ ratchet.mp3
   Licence: CC0 (public domain)
   Changes: one second of ratcheting cut out, high-passed, loudness-normalised, mono MP3.
   Used for spanning the wheel-lock's wheel; the other reload sounds are synthesised.
+
+revolver-shot.mp3
+  "9 mm gunshot" by Dantedun, via Wikimedia Commons
+  https://commons.wikimedia.org/wiki/File:9_mm_gunshot-mike-koenig-123.wav
+  Licence: CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
+  Changes: the first 0.75 s (the shot and its decay) cut out, high-passed at 70 Hz,
+  faded out, mixed to mono, loudness-normalised, MP3. This file is shared under the
+  same licence. The Detective Special's report in the walkthroughs; a 9 mm handgun
+  shot stands in for the .38 Special, whose report is much the same.

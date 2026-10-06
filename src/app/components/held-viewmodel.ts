@@ -5,7 +5,8 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { ArmsRig, HeldModel } from '@/lib/held-items';
 import { rigReload, type ReloadRig } from './reloads';
-import type { GunSounds } from './gun-sounds';
+import type { GunSound, GunSounds } from './gun-sounds';
+import { createRevolver, type Revolver } from './revolver';
 
 /**
  * The inventory item in the investigator's right hand, first-person, for the
@@ -19,7 +20,8 @@ import type { GunSounds } from './gun-sounds';
  * A gun made with its own arms and clips (`HeldModel.arms`, the AK-74u) is
  * played rather than posed: drawn, idled, fired, reloaded, inspected and
  * holstered by its clips, seen from the eye it was made for, which slides to
- * the sights while aiming.
+ * the sights while aiming. The revolver (`HeldModel.revolver`) borrows those
+ * arms but poses them itself (revolver.ts).
  */
 
 /** Seconds to bring an item up, or put it away. */
@@ -72,8 +74,8 @@ export function prepareHeldModel(model: THREE.Object3D, view: HeldModel): { root
   return { root, support };
 }
 
-/** A case thrown from the ejection port: where and which way, in the hands' camera space, and its size. */
-export type SpentCase = { at: THREE.Vector3; dir: THREE.Vector3; shell: [number, number] };
+/** A case thrown from the ejection port (or `drop`ped from a revolver's chambers): where and which way, in the hands' camera space, and its size. */
+export type SpentCase = { at: THREE.Vector3; dir: THREE.Vector3; shell: [number, number]; drop?: boolean };
 
 export type HeldViewmodel = {
   /** Render after the level: `renderer.clearDepth()` then this. */
@@ -91,10 +93,10 @@ export type HeldViewmodel = {
   /** A gun with arms: the trigger held or let go, aiming down the sights or not. */
   setTrigger: (down: boolean) => void;
   setAim: (down: boolean) => void;
-  /** A gun with arms: turn it over to look at it; false if busy. */
-  inspect: () => boolean;
-  /** Shots and dry clicks since the last call (for the flash on the level, the holes and the sound). */
-  takeShots: () => { shots: number; dry: number; cases: SpentCase[] };
+  /** A gun with arms: turn it over to look at it (the revolver: open it and spin it); false if busy. */
+  inspect: (sounds?: GunSounds | null) => boolean;
+  /** Shots and dry clicks since the last call (for the flash on the level, the holes and the sound), and what a shot sounds like. */
+  takeShots: () => { shots: number; dry: number; cases: SpentCase[]; report: GunSound };
   /** How far into aiming down the sights, 0..1. */
   readonly aim: number;
   /** Rounds left, for a gun with arms in hand; null otherwise. */
@@ -164,6 +166,10 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   const rigs = new Map<THREE.Group, ReloadRig>();
   /** Built guns with arms, and how each is being played. */
   const armsBy = new Map<THREE.Group, ArmsPlay>();
+  /** Built revolvers. */
+  const revolvers = new Map<THREE.Group, Revolver>();
+  let report: GunSound = 'shot';
+  let revFlash = 0;
   let trigger = false;
   let aiming = false;
   let shotsOut = 0;
@@ -297,8 +303,24 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   const build = (view: HeldModel) => {
     let p = built.get(view.model);
     if (!p) {
-      const borrowed = view.arms?.rig ? loader.loadAsync(view.arms.rig) : Promise.resolve(null);
+      const rigUrl = view.revolver?.rig ?? view.arms?.rig;
+      const borrowed = rigUrl ? loader.loadAsync(rigUrl) : Promise.resolve(null);
       p = Promise.all([loader.loadAsync(view.model), borrowed]).then(([gltf, rigGltf]) => {
+        if (view.revolver && rigGltf) {
+          const rev = createRevolver(
+            view as HeldModel & { revolver: NonNullable<HeldModel['revolver']> }, gltf.scene, rigGltf, prepareHeldModel, camera,
+            own(new THREE.SpriteMaterial({ map: flashTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })),
+            {
+              shot: () => { shotsOut++; report = 'revolver'; revFlash = 0.05; },
+              dry: () => { dryOut++; },
+              drop: c => { casesOut.push(c); },
+            },
+          );
+          revolvers.set(rev.item, rev);
+          rev.item.visible = false;
+          rig.add(rev.item);
+          return rev.item;
+        }
         if (view.arms) {
           const item = buildArms(view as HeldModel & { arms: ArmsRig }, gltf, rigGltf);
           item.visible = false;
@@ -384,6 +406,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   // The reload playing, if any: its rig, how far in, and how to silence it.
   let reloading: { rig: ReloadRig; t: number; hush: () => void } | null = null;
   const armsNow = () => (shownItem ? armsBy.get(shownItem) ?? null : null);
+  const revolverNow = () => (shownItem ? revolvers.get(shownItem) ?? null : null);
   const endReload = () => {
     if (!reloading) return;
     reloading.rig.reset();
@@ -413,6 +436,8 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
         // A gun with arms is holstered by its own clip.
         const st = armsNow();
         if (st && st.busy !== 'holster') { st.hush?.(); st.hush = null; play(st, 'holster', 0.08, 'holster'); }
+        const rv0 = revolverNow();
+        if (rv0?.busy) rv0.stop();
         raise = Math.max(0, raise - dt / (st ? st.acts.holster.getClip().duration : DRAW_SEC));
         if (raise === 0) {
           if (st) stopArms(st);
@@ -438,7 +463,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       sway.y = THREE.MathUtils.damp(sway.y, THREE.MathUtils.clamp(dPitch * 2.2, -0.05, 0.05), 10, dt);
       bobPhase += dt * (4 + pace * 5);
       // Down the sights, the gun is held steady.
-      const steady = 1 - 0.85 * (armsNow()?.aim ?? 0);
+      const steady = 1 - 0.85 * (armsNow()?.aim ?? revolverNow()?.aim ?? 0);
       const bob = pace * 0.006 * steady;
       rig.position.set((sway.x * 0.4 + Math.cos(bobPhase) * bob) * steady, (-sway.y * 0.4 + Math.abs(Math.sin(bobPhase)) * bob * 1.3) * steady, 0);
       rig.rotation.set(sway.y * 0.6 * steady, sway.x * 0.8 * steady, 0);
@@ -486,12 +511,21 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
         muzzleLight.intensity = st.flashFor > 0 ? 6 : 0;
         const fov = st.rig.fov + (st.rig.aimFov - st.rig.fov) * st.aim;
         if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
-      } else {
+      }
+      const rv = revolverNow();
+      if (rv && shownItem && shown) {
+        shownItem.position.set(0, 0, 0);
+        shownItem.quaternion.identity();
+        rv.update(dt, { raise, trigger, aiming, ready: shown === wanted && raise >= 1 });
+        revFlash -= dt;
+        muzzleLight.intensity = revFlash > 0 ? 6 : 0;
+        if (Math.abs(camera.fov - rv.fov) > 0.01) { camera.fov = rv.fov; camera.updateProjectionMatrix(); }
+      } else if (!st) {
         muzzleLight.intensity = 0;
         if (camera.fov !== 55) { camera.fov = 55; camera.updateProjectionMatrix(); }
       }
 
-      if (shownItem && shown && !st) {
+      if (shownItem && shown && !st && !rv) {
         // Coming up from below and to the right, muzzle low.
         const r = ease(raise);
         const [x, y, z] = shown.pos;
@@ -512,6 +546,8 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
     },
     reload(sounds) {
       if (reloading || !shownItem || shown !== wanted || raise < 0.99) return false;
+      const rv = revolverNow();
+      if (rv) return rv.reload(sounds);
       const st = armsNow();
       if (st) {
         if ((st.busy && st.busy !== 'shoot' && st.busy !== 'inspect') || st.rounds === st.rig.rounds) return false;
@@ -525,24 +561,29 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       reloading = { rig: r, t: 0, hush: sounds ? sounds.play(r.cues) : () => {} };
       return true;
     },
-    get reloading() { return !!reloading || armsNow()?.busy === 'reload'; },
+    get reloading() { return !!reloading || armsNow()?.busy === 'reload' || revolverNow()?.busy === 'reload'; },
     setTrigger(down) { trigger = down; },
     setAim(down) { aiming = down; },
-    inspect() {
+    inspect(sounds) {
+      const rv = revolverNow();
+      if (rv) return shown === wanted && raise >= 0.99 && rv.inspect(sounds ?? null);
       const st = armsNow();
       if (!st || st.busy || shown !== wanted || raise < 0.99) return false;
       play(st, 'inspect', 0.2, 'inspect');
       return true;
     },
     takeShots() {
-      const out = { shots: shotsOut, dry: dryOut, cases: casesOut };
+      const out = { shots: shotsOut, dry: dryOut, cases: casesOut, report };
       shotsOut = dryOut = 0;
       casesOut = [];
+      report = 'shot';
       return out;
     },
-    get aim() { return armsNow()?.aim ?? 0; },
+    get aim() { return armsNow()?.aim ?? revolverNow()?.aim ?? 0; },
     get ammo() {
       const st = armsNow();
+      const rv = revolverNow();
+      if (rv && shown === wanted) return { rounds: rv.rounds, max: rv.max };
       return st && shown === wanted ? { rounds: st.rounds, max: st.rig.rounds } : null;
     },
     get visible() { return raise > 0.001 && !!shownItem; },
@@ -554,6 +595,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       disposed = true;
       endReload();
       for (const st of armsBy.values()) stopArms(st);
+      for (const rv of revolvers.values()) rv.stop();
       for (const p of built.values()) {
         void p.then(item => item.traverse(o => {
           const m = o as THREE.Mesh;

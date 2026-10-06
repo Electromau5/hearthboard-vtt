@@ -25,10 +25,10 @@ export type ReloadRig = {
   reset: () => void;
 };
 
-type Key = [number, ...number[]];
+export type Key = [number, ...number[]];
 
 /** The value of a keyframe track at `t`, eased between keys. */
-function sample(track: Key[], t: number): number[] {
+export function sample(track: Key[], t: number): number[] {
   if (t <= track[0][0]) return track[0].slice(1);
   for (let i = 1; i < track.length; i++) {
     const [t1, ...b] = track[i];

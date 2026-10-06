@@ -39,6 +39,42 @@ export type HeldModel = {
   reload?: 'muzzle';
   /** A first-person rig made with its own arms and animations: it is played, not posed (see ArmsRig). */
   arms?: ArmsRig;
+  /** A revolver in borrowed arms, posed rather than played (see RevolverRig). */
+  revolver?: RevolverRig;
+};
+
+type V3 = [number, number, number];
+
+/**
+ * A revolver worked by another rig's arms (the AK-74u's), its own gun hidden
+ * (see revolver.ts): the idle clip gives the fingers and the breathing, and
+ * each hand is reached to the revolver by IK, so they can open the crane,
+ * punch the ejector and feed the chambers, which no clip in the rig does.
+ */
+export type RevolverRig = {
+  /** The glb with the arms, its gun's materials (left out), and the clip to breathe with. */
+  rig: string;
+  hide: string[];
+  idle: string;
+  /** Where the eye sits in the rig as made (metres; it looks along -Z). */
+  eye: V3;
+  /** The rig's gun bone, and where on it (rig as made, at rest) its right hand closes: the revolver's grip goes there, so the hand holds it as it held its own. */
+  gunBone: string;
+  mount: V3;
+  /** Upper arm, forearm and hand bones; and the right thumb and index tips, which pinch a round. */
+  arms: { right: [string, string, string]; left: [string, string, string]; rightTips: [string, string] };
+  /** The gun's moving parts (bones) and the rounds' material. */
+  parts: { hammer: string; trigger: string; crane: string; cylinder: string; rounds: string };
+  /** The grip in view at the hip: camera space (metres) and turn (radians). Down the sights, the rear sight is `sightAt` ahead of the eye. */
+  hold: { pos: V3; rot: V3 };
+  sightAt: number;
+  /** The left hand at the hip, wrapped under the right, in the gun's frame (grip at the origin, barrel along -Z): the wrist, and which way its fingers run and its palm faces. */
+  support: { at: V3; fingers: V3; palm: V3 };
+  /** The hands' field of view (degrees) at the hip and down the sights. */
+  fov: number;
+  aimFov: number;
+  /** A spent case: radius and length. */
+  shell: [number, number];
 };
 
 /**
@@ -129,10 +165,32 @@ const AK_ARMS: ArmsRig = {
 };
 
 export const HELD_MODELS = {
-  // Colt Detective Special, the snub-nosed .38; barrel already along -Z.
+  // Colt Detective Special, the snub-nosed .38; barrel already along -Z. Held
+  // two-handed in the AK-74u's arms (its gun hidden), fired double-action and
+  // reloaded through the swung-out cylinder (revolver.ts).
   detectiveSpecial: {
     model: '/props/detective-special.glb', orient: [0, 0, 0], length: 0.1875,
     gripAt: [0.5, 0.28, 0.867], ...PISTOL_POSE, hand: true,
+    revolver: {
+      rig: '/props/ak74u.glb',
+      hide: ['Krinkov', 'Magazine', 'Null.001'],
+      idle: 'IDLE',
+      eye: [0, 1.6, 0.04],
+      gunBone: 'Bone_043',
+      mount: [0.072, 1.452, -0.155],
+      arms: {
+        right: ['mixamorig7RightArm_021', 'mixamorig7RightForeArm_022', 'mixamorig7RightHand_023'],
+        left: ['mixamorig7LeftArm_03', 'mixamorig7LeftForeArm_04', 'mixamorig7LeftHand_05'],
+        rightTips: ['mixamorig7RightHandThumb3_026', 'mixamorig7RightHandIndex3_029'],
+      },
+      parts: { hammer: 'Hammer', trigger: 'Trigger', crane: 'Hinge', cylinder: 'Cylinder', rounds: 'Bullet' },
+      hold: { pos: [0.13, -0.15, -0.38], rot: [0.0, 0.28, 0.12] },
+      sightAt: 0.33,
+      support: { at: [-0.035, -0.045, 0.035], fingers: [0.55, 0.3, -0.8], palm: [1, 0.1, 0.25] },
+      fov: 60,
+      aimFov: 46,
+      shell: [0.0048, 0.029],     // .38 Special
+    },
   },
   // Colt M1911 .45; made lying along X with the muzzle toward -X.
   coltM1911: {
