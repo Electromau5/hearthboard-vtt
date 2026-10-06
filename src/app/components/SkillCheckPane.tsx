@@ -85,8 +85,10 @@ function outcome(check: ObjectCheck | undefined, skill: string, level: CheckLeve
 }
 
 /**
- * "Use a skill" on an examined object: the checks written for it first, then
- * every characteristic, Luck and skill the investigator has. A roll lands in
+ * "Use a skill" on an examined object: every characteristic, Luck and skill,
+ * listed the same way whether or not the object answers to it — the checks
+ * written for it are never singled out or described, so the players have to
+ * work out for themselves what is worth trying. A roll lands in
  * the party chat like any other check; what it turns up shows here, for the
  * investigator to share or keep. Each skill gets one roll per object — a
  * failure can be pushed once, as in Call of Cthulhu, at the risk of worse.
@@ -120,16 +122,15 @@ export function SkillCheckPane({ objectTitle, checks, investigator, attempts, ro
     setSaveFailed(null);
   };
 
-  const others = useMemo(() => {
+  const options = useMemo(() => {
     const q = norm(query);
-    const authored = new Set(checks.map(c => norm(c.skill)));
     const chars = [...CHARACTERISTICS.filter(k => k in investigator.characteristics), ...(investigator.luck !== undefined ? ['Luck'] : [])]
       .map(name => ({ name, value: targetFor(investigator, name) }));
-    // With no search, the skills the investigator has trained; a search reaches every skill.
-    const skills = investigator.skills.filter(s => (q ? norm(s.name).includes(q) : s.trained));
-    return [...chars.filter(c => !q || norm(c.name).includes(q)), ...skills.map(s => ({ name: s.name, value: s.value }))]
-      .filter(s => !authored.has(norm(s.name)));
-  }, [query, checks, investigator]);
+    // Trained skills first, then the rest of the catalogue; nothing marks the ones the object answers to.
+    const skills = [...investigator.skills.filter(s => s.trained), ...investigator.skills.filter(s => !s.trained)]
+      .map(s => ({ name: s.name, value: s.value }));
+    return [...chars, ...skills].filter(s => !q || norm(s.name).includes(q));
+  }, [query, investigator]);
 
   const result = shown ? attempts[shown] : undefined;
 
@@ -188,43 +189,9 @@ export function SkillCheckPane({ objectTitle, checks, investigator, attempts, ro
         </div>
       )}
 
-      {checks.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-          {checks.map(c => {
-            const done = attempts[c.skill];
-            return (
-              <button
-                key={c.skill}
-                type="button"
-                onClick={() => attempt(c.skill)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', cursor: 'pointer',
-                  padding: '7px 10px', borderRadius: 'var(--r-sm)',
-                  background: shown === c.skill ? 'rgba(201,148,79,0.14)' : 'rgba(201,148,79,0.06)',
-                  border: '1px solid var(--brass-dim)', color: 'var(--parchment)',
-                }}
-              >
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--brass)', minWidth: 150 }}>
-                  {c.skill} {targetFor(investigator, c.skill)}%
-                  {c.difficulty && c.difficulty !== 'Regular' && (
-                    <span style={{ color: 'var(--blood)', marginLeft: 6 }}>{c.difficulty.toUpperCase()}</span>
-                  )}
-                </span>
-                <span style={{ fontSize: 12, flex: 1 }}>{c.action}</span>
-                {done && (
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: LEVEL_COLOR[done.level] }}>
-                    {LEVEL_TEXT[done.level]}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       <input
         type="text"
-        placeholder="Try another skill…"
+        placeholder="Find a skill…"
         value={query}
         onChange={e => setQuery(e.target.value)}
         // Keep typing out of the walkthrough's own keys (F torch, E back, Tab markers).
@@ -235,11 +202,11 @@ export function SkillCheckPane({ objectTitle, checks, investigator, attempts, ro
           background: 'rgba(0,0,0,0.4)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
         }}
       />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-        {others.length === 0 && (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: '32vh', overflowY: 'auto', paddingRight: 2 }}>
+        {options.length === 0 && (
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-text-2)' }}>No skill matches “{query}”.</span>
         )}
-        {others.map(s => {
+        {options.map(s => {
           const done = attempts[s.name];
           return (
             <button
