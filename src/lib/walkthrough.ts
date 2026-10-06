@@ -314,6 +314,25 @@ export type PickupTable = {
  * A bed to sleep in: E lies down in it and the view fades out; E again wakes
  * and gets up beside it. Keyed by examinable id (the bed's "Examine_<id>").
  */
+/**
+ * A light switch on the wall outside a room: E switches the lamps it names
+ * on or off, and with them the glow of their bulbs (emissive triangles near
+ * those lamps). Its lamps start off. Per investigator: others' rooms stay as
+ * they left them.
+ */
+export type LightSwitch = {
+  id: string;
+  /** The room it lights, as the prompt names it: "Records". */
+  room: string;
+  /** The "Lamp_<n>" nodes it works. */
+  lamps: string[];
+  /** Where it goes: a ray from `from` (level x, z) along `toward` (x, z) finds the wall. */
+  from: [number, number];
+  toward: [number, number];
+  /** Height of its centre above the floor; 1.35 m if not given. */
+  height?: number;
+};
+
 export type Bed = {
   /** The way the head lies from the middle of the bed — world X and Z, unit length. */
   head: [number, number];
@@ -462,6 +481,8 @@ export type WalkthroughLevel = {
     color: number; intensity: number; distance: number;
     only?: Record<string, Partial<{ color: number; intensity: number; distance: number }>>;
   };
+  /** Switches by room doors: the lamps each one names start dark, and E flips them. */
+  lightSwitches?: LightSwitch[];
   atmosphere: {
     background: number;
     fogColor: number;

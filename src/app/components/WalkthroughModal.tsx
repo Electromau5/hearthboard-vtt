@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, Inspectable, NpcSpot, Pickup, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, Inspectable, LightSwitch, NpcSpot, Pickup, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
 import { createPinboard } from './pinboard';
@@ -28,6 +28,7 @@ import { createGunSounds, type GunSounds } from './gun-sounds';
 import { isRain, isTimeOfDay, RAIN_LABELS, RAIN_SPECS, RAINS, skyFor, TIME_LABELS, TIMES, withRain, type Rain, type TimeOfDay } from '@/lib/weather';
 import { buildCover, createRain, createRainSound, type Cover, type RainSound } from './rain';
 import { createBulletHoles } from './bullet-holes';
+import { createLightSwitch } from './light-switch';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
 interface Props {
@@ -88,6 +89,8 @@ type Target = {
   pickup?: Pickup;
   /** A bed: E lies down and sleeps in it. */
   bed?: Bed;
+  /** A light switch: E switches its room's lamps on or off. */
+  lightSwitch?: LightSwitch;
 };
 type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
 
@@ -125,6 +128,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [lampOn, setLampOn] = useState(true);
   const [markersOn, setMarkersOn] = useState(true);
   const [radiosOn, setRadiosOn] = useState<Set<string>>(() => new Set());
+  // Light switches turned on (by id); every switched room starts dark.
+  const [switchesOn, setSwitchesOn] = useState<Set<string>>(() => new Set());
   // The investigator's sheet equipment (I), the item in hand, and the last use, shown briefly.
   const items = useMemo(() => investigator?.equipment ?? [], [investigator]);
   const heldKey = investigator?.slug ? `hearthboard:held:${investigator.slug}` : null;
@@ -196,6 +201,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Set by the scene once the level loads; switches a radio on or off.
   const toggleRadioRef = useRef<((id: string) => void) | null>(null);
+  const toggleSwitchRef = useRef<((id: string) => void) | null>(null);
   // Set by the scene: reloads the gun in hand, if it can be.
   const reloadRef = useRef<(() => void) | null>(null);
   const inspectRef = useRef<(() => void) | null>(null);
@@ -266,6 +272,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // each time; a typewriter opens a sheet to type on; anything else opens the
   // reading card.
   const openTarget = useCallback((t: Target) => {
+    if (t.lightSwitch) { toggleSwitchRef.current?.(t.lightSwitch.id); return; }
     // A bed: lie down and sleep. The scene takes it from here.
     if (t.bed) {
       if (asleepRef.current === 'no') {
@@ -808,7 +815,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // Every lamp in the level, but only the nearest LAMP_POOL are lit by real
     // lights: each light costs every pixel, and 18 of them made the Archive
     // crawl. `w` fades a lamp in and out of the pool so none ever pops.
-    const lamps: { pos: THREE.Vector3; color: THREE.Color; base: number; distance: number; dipUntil: number; w: number; d: number; slot: THREE.PointLight | null }[] = [];
+    const lamps: { name: string; on: boolean; pos: THREE.Vector3; color: THREE.Color; base: number; distance: number; dipUntil: number; w: number; d: number; slot: THREE.PointLight | null }[] = [];
+    // Each switch: whether it is on, its model, and the bulb glow it governs.
+    const switches = new Map<string, { sw: LightSwitch; on: boolean; set: (on: boolean) => void; glows: { group: { materialIndex?: number } }[] }>();
     const lampPool: THREE.PointLight[] = [];
     let pinboard: ReturnType<typeof createPinboard> | null = null;
     let markers: ReturnType<typeof createInteractMarkers> | null = null;
@@ -976,12 +985,91 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           model.traverse((o) => {
             if (!o.name.startsWith('Lamp_')) return;
             const { color, intensity, distance } = { ...cfg, ...cfg.only?.[o.name] };
-            lamps.push({ pos: o.getWorldPosition(new THREE.Vector3()), color: new THREE.Color(color), base: intensity, distance, dipUntil: 0, w: 0, d: 0, slot: null });
+            // A lamp a switch works starts dark.
+            const on = !level.lightSwitches?.some(sw => sw.lamps.includes(o.name));
+            lamps.push({ name: o.name, on, pos: o.getWorldPosition(new THREE.Vector3()), color: new THREE.Color(color), base: intensity, distance, dipUntil: 0, w: 0, d: 0, slot: null });
           });
           for (let i = 0; i < Math.min(LAMP_POOL, lamps.length); i++) {
             const light = new THREE.PointLight(0xffffff, 0, 1, 2);
             scene.add(light);
             lampPool.push(light);
+          }
+        }
+
+        // Light switches: a plate on the wall outside each room, and the glow
+        // of that room's bulbs split off the level's glowing meshes so it can
+        // go dark with them.
+        if (level.lightSwitches?.length) {
+          const lampAt = new Map(lamps.map(l => [l.name, l.pos]));
+          for (const sw of level.lightSwitches) {
+            const [fx, fz] = sw.from;
+            const floor = groundAt(fx, fz, 0);
+            const dir = new THREE.Vector3(sw.toward[0], 0, sw.toward[1]).normalize();
+            ray.set(new THREE.Vector3(fx, (floor === -Infinity ? 0 : floor) + (sw.height ?? 1.35), fz), dir);
+            ray.far = 6;
+            const hit = ray.intersectObjects(walls, false)[0];
+            if (!hit?.face) { console.warn('Light switch found no wall:', sw.id); continue; }
+            const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+            const plate = createLightSwitch();
+            plate.group.position.copy(hit.point);
+            plate.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+            scene.add(plate.group);
+            owned.push(plate);
+            plate.group.updateMatrixWorld(true);
+            switches.set(sw.id, { sw, on: false, set: plate.set, glows: [] });
+            targets.push({
+              id: `switch-${sw.id}`, entry: { title: `${sw.room} light switch`, text: '' },
+              box: new THREE.Box3().setFromObject(plate.group).expandByScalar(0.08), lightSwitch: sw,
+            });
+          }
+          // Bulbs: triangles of a glowing material within reach of a switched
+          // lamp go to that switch, and show unlit glass while it is off.
+          const REACH_BULB = 0.9;
+          const owner = (p: THREE.Vector3) => {
+            for (const { sw } of switches.values()) {
+              if (sw.lamps.some(n => { const at = lampAt.get(n); return !!at && at.distanceTo(p) < REACH_BULB; })) return sw.id;
+            }
+            return '';
+          };
+          const glowing: THREE.Mesh[] = [];
+          model.traverse(o => {
+            const mesh = o as THREE.Mesh;
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            if (mesh.isMesh && !Array.isArray(mat) && mat.isMeshStandardMaterial && mat.emissive.getHex() !== 0 && mesh.geometry.index) glowing.push(mesh);
+          });
+          const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+          for (const mesh of glowing) {
+            const geo = mesh.geometry;
+            const index = geo.index!;
+            const pos = geo.attributes.position;
+            const byOwner = new Map<string, number[]>();
+            for (let i = 0; i < index.count; i += 3) {
+              a.fromBufferAttribute(pos, index.getX(i));
+              b.fromBufferAttribute(pos, index.getX(i + 1));
+              c.fromBufferAttribute(pos, index.getX(i + 2));
+              const centre = a.add(b).add(c).divideScalar(3).applyMatrix4(mesh.matrixWorld);
+              const id = owner(centre);
+              let list = byOwner.get(id);
+              if (!list) byOwner.set(id, (list = []));
+              list.push(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+            }
+            if (byOwner.size === 1 && byOwner.has('')) continue;
+            // Re-order the triangles by owner, one draw group each.
+            const lit = mesh.material as THREE.MeshStandardMaterial;
+            const dark = lit.clone();
+            dark.emissive.setHex(0x000000);
+            dark.color.setHex(0x3a342c);
+            dark.roughness = 0.25;
+            owned.push(dark);
+            const order: number[] = [];
+            for (const [id, list] of byOwner) {
+              geo.addGroup(order.length, list.length, id ? 1 : 0);
+              const group = geo.groups[geo.groups.length - 1];
+              if (id) switches.get(id)!.glows.push({ group });
+              order.push(...list);
+            }
+            geo.setIndex(order);
+            mesh.material = [lit, dark];
           }
         }
 
@@ -1253,6 +1341,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
     // Audio is wired up on the first switch-on: browsers only let an
     // AudioContext start from a user gesture, and that key press is one.
+    toggleSwitchRef.current = (id) => {
+      const s = switches.get(id);
+      if (!s) return;
+      s.on = !s.on;
+      s.set(s.on);
+      for (const l of lamps) if (s.sw.lamps.includes(l.name)) l.on = s.on;
+      for (const { group } of s.glows) group.materialIndex = s.on ? 0 : 1;
+      const ear = ensureListener();
+      gunSounds ??= createGunSounds(ear.context, ear.getInput());
+      gunSounds.fire('click');
+      setSwitchesOn(prev => {
+        const next = new Set(prev);
+        if (s.on) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    };
     toggleRadioRef.current = (id) => {
       const r = radios.get(id);
       if (!r) return;
@@ -1745,7 +1850,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         // The nearest lamps get the lights; one already lit keeps its light
         // until another is a metre nearer, so two lamps never trade back and forth.
         for (const l of lamps) l.d = l.pos.distanceTo(camera.position) - (l.slot ? 1 : 0);
-        const wanted = new Set([...lamps].sort((a, b) => a.d - b.d).slice(0, lampPool.length));
+        const wanted = new Set(lamps.filter(l => l.on).sort((a, b) => a.d - b.d).slice(0, lampPool.length));
         const fade = dt / 0.35;
         for (const l of lamps) {
           l.w = wanted.has(l) && l.slot ? Math.min(1, l.w + fade) : Math.max(0, l.w - fade);
@@ -1871,6 +1976,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       canvas.style.filter = '';
       window.removeEventListener('resize', onResize);
       toggleRadioRef.current = null;
+      toggleSwitchRef.current = null;
       reloadRef.current = null;
       refreshPinsRef.current = null;
       window.clearInterval(pinTimer);
@@ -1903,6 +2009,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         r.sound?.disconnect();
       }
       setRadiosOn(new Set());
+      setSwitchesOn(new Set());
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       model?.traverse((o) => {
         const mesh = o as THREE.Mesh;
@@ -2067,6 +2174,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             }}>
               {focus.npc ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Speak to {focus.entry.title.replace(/^The /, 'the ')}</>
+              ) : focus.lightSwitch ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Switch the {focus.lightSwitch.room} lights {switchesOn.has(focus.lightSwitch.id) ? 'off' : 'on'}</>
               ) : focus.bed ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Sleep in the {focus.entry.title.toLowerCase()}</>
               ) : focus.inspect ? (

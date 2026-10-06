@@ -26,7 +26,7 @@ import { allResources, type Resource, type ResourceSection } from './resources';
 import { RECAP_ACT, SESSION_RECAPS } from './session-recaps';
 import { INNSMOUTH_SCENES } from './innsmouth-scenes';
 import { fetchBoard, fileNote, NOTE_SIZE, type BoardItem, type BoardState } from './case-board';
-import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, MapPin, PickupTable, PinNote, RadioSet, Typewriter, UvStain, WalkthroughLevel } from './walkthrough';
+import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, LightSwitch, MapPin, PickupTable, PinNote, RadioSet, Typewriter, UvStain, WalkthroughLevel } from './walkthrough';
 import { HELD_MODELS } from './held-items';
 
 const EXAMINABLES: Record<string, Examinable> = {
@@ -758,6 +758,23 @@ const WORKBENCH: PickupTable = {
   ],
 };
 
+/**
+ * Every room off the hall is dark until someone finds the switch outside its
+ * door; the hall and the discussion table stay lit. The four rooms' doors are
+ * in the hall's side walls (x = ±3.86, z = ±6), and each switch sits 1.4 m
+ * toward the table. The Quarters, Pathology Lab and Drafting Room are reached
+ * through those rooms, so their switches are inside them, beside their doors.
+ */
+const LIGHT_SWITCHES: LightSwitch[] = [
+  { id: 'case', room: 'Case Room', lamps: ['Lamp_case'], from: [-2.9, -4.6], toward: [-1, 0] },
+  { id: 'records', room: 'Records', lamps: ['Lamp_records'], from: [2.9, -4.6], toward: [1, 0] },
+  { id: 'maps', room: 'Cartography', lamps: ['Lamp_maps'], from: [-2.9, 4.6], toward: [-1, 0] },
+  { id: 'armory', room: 'Armory', lamps: ['Lamp_armory'], from: [2.9, 4.6], toward: [1, 0] },
+  { id: 'quarters', room: 'Quarters', lamps: ['Lamp_quarters'], from: [-9.0, -0.6], toward: [-1, 0] },
+  { id: 'lab', room: 'Pathology Lab', lamps: ['Lamp_lab_desk', 'Lamp_theatre_1', 'Lamp_theatre_2', 'Lamp_lab_cold'], from: [9.0, -1.3], toward: [1, 0] },
+  { id: 'drafting', room: 'Drafting Room', lamps: ['Lamp_drafting_model', 'Lamp_drafting_1', 'Lamp_drafting_2', 'Lamp_drafting_models'], from: [-9.0, 1.5], toward: [-1, 0] },
+];
+
 export const ARCHIVE_LEVEL: WalkthroughLevel = {
   id: 'archive',
   model: '/black-archive.glb',
@@ -783,6 +800,7 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
       Lamp_lab_cold: { color: 0xcfe0ff, intensity: 6, distance: 6 },
     },
   },
+  lightSwitches: LIGHT_SWITCHES,
   pickups: [WORKBENCH],
   beds: BEDS,
   uvStains: [...LAB_STAINS, ...DRAFTING_STAINS],
