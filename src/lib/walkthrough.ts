@@ -452,8 +452,15 @@ export type WalkthroughLevel = {
   birds?: Birds;
   /** Beds to sleep in, keyed by examinable id. */
   beds?: Record<string, Bed>;
-  /** A light at every "Lamp_<n>" node — bare bulbs and hanging shades. */
-  lamps?: { color: number; intensity: number; distance: number };
+  /**
+   * A light at every "Lamp_<n>" node — bare bulbs and hanging shades. `only`
+   * gives particular lamps, keyed by node name, their own colour, strength or
+   * reach: the cold white of an operating lamp among warm bulbs.
+   */
+  lamps?: {
+    color: number; intensity: number; distance: number;
+    only?: Record<string, Partial<{ color: number; intensity: number; distance: number }>>;
+  };
   atmosphere: {
     background: number;
     fogColor: number;

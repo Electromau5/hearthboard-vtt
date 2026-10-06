@@ -956,9 +956,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         }
 
         if (level.lamps) {
-          const { color, intensity, distance } = level.lamps;
+          const cfg = level.lamps;
           model.traverse((o) => {
             if (!o.name.startsWith('Lamp_')) return;
+            const { color, intensity, distance } = { ...cfg, ...cfg.only?.[o.name] };
             const light = new THREE.PointLight(color, intensity, distance, 2);
             o.getWorldPosition(light.position);
             scene.add(light);
