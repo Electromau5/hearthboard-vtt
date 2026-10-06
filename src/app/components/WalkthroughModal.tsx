@@ -27,6 +27,7 @@ import { createFlock } from './birds';
 import { createGunSounds, type GunSounds } from './gun-sounds';
 import { isRain, isTimeOfDay, RAIN_LABELS, RAIN_SPECS, RAINS, skyFor, TIME_LABELS, TIMES, withRain, type Rain, type TimeOfDay } from '@/lib/weather';
 import { buildCover, createRain, createRainSound, type Cover, type RainSound } from './rain';
+import { createBulletHoles } from './bullet-holes';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
 interface Props {
@@ -197,6 +198,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const toggleRadioRef = useRef<((id: string) => void) | null>(null);
   // Set by the scene: reloads the gun in hand, if it can be.
   const reloadRef = useRef<(() => void) | null>(null);
+  const inspectRef = useRef<(() => void) | null>(null);
+  // The magazine count over the view, written each frame without a re-render.
+  const ammoRef = useRef<HTMLSpanElement>(null);
   // Set by the scene when the level has a pinboard; refetches its notes now.
   const refreshPinsRef = useRef<(() => void) | null>(null);
 
@@ -464,8 +468,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       // With a gun that reloads in hand, R reloads it (skills are still on the open card).
       if (e.code === 'KeyR' && !e.repeat && !readingRef.current && !browsingRef.current) {
         const gun = carriedRef.current ? level.pickups?.flatMap(tb => tb.items).find(p => p.id === carriedRef.current) : undefined;
-        if (gun?.view.reload) { reloadRef.current?.(); return; }
+        if (gun?.view.reload || gun?.view.arms) { reloadRef.current?.(); return; }
       }
+      // V turns a gun with arms over in the hands, to look it over.
+      if (e.code === 'KeyV' && !e.repeat && !readingRef.current && !browsingRef.current) inspectRef.current?.();
       // R brings up the investigator's skills — on the open card, or straight from the crosshair.
       if (e.code === 'KeyR' && !e.repeat && !browsingRef.current) {
         const t = readingRef.current ?? focusRef.current;
@@ -712,6 +718,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       gunSounds ??= createGunSounds(ear.context, ear.getInput());
       inHand.reload(gunSounds);
     };
+    inspectRef.current = () => { inHand.inspect(); };
+    // Where the shots land.
+    const bulletHoles = createBulletHoles(scene);
+    let muzzleFlash = 0;
     const uvWash = (light: THREE.SpotLight) => {
       light.angle = CONE_OUTER;
       light.penumbra = 0.55;
@@ -1199,12 +1209,17 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           const shown = (o: THREE.Object3D | null): boolean => !o || (o.visible && shown(o.parent));
           const hit = new THREE.Raycaster(new THREE.Vector3(x, base.y + 2, z), new THREE.Vector3(0, -1, 0))
             .intersectObject(anchor, true).find(h => shown(h.object));
-          obj.updateMatrixWorld(true);
+          // A skinned model's vertices follow its bones, which only catch up with a move when told.
+          const settle = () => {
+            obj.updateMatrixWorld(true);
+            obj.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) (o as THREE.SkinnedMesh).skeleton.update(); });
+          };
+          settle();
           const box = new THREE.Box3().setFromObject(obj, true);
           const centre = box.getCenter(new THREE.Vector3());
           obj.position.set(x - centre.x, (hit ? hit.point.y : base.y) - box.min.y + 0.002, z - centre.z);
           scene.add(obj);
-          obj.updateMatrixWorld(true);
+          settle();
           pickupById.set(item.id, { item, obj });
           // Ready in the hand too, so it comes up and reloads the moment it is taken.
           inHand.preload(item.view);
@@ -1287,18 +1302,35 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const onBlur = () => keys.clear();
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return;
-      yaw -= e.movementX * LOOK;
-      pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * LOOK));
+      // Finer down the sights, in step with the zoom.
+      const look = LOOK * camera.fov / 70;
+      yaw -= e.movementX * look;
+      pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * look));
     };
+    // A gun with arms in hand: left button fires, right aims, and a click examines nothing.
+    const armed = () => !!(carriedRef.current && pickupById.get(carriedRef.current)?.item.view.arms);
     const onCanvasClick = () => {
       if (level.birds?.cries || level.weather) ensureListener();
       if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
-      else if (focusRef.current) openTarget(focusRef.current);
+      else if (focusRef.current && !armed()) openTarget(focusRef.current);
     };
+    const onMouseDown = (e: MouseEvent) => {
+      if (document.pointerLockElement !== canvas || !armed()) return;
+      if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
+      const ear = ensureListener();
+      gunSounds ??= createGunSounds(ear.context, ear.getInput());
+      if (e.button === 0) inHand.setTrigger(true);
+      if (e.button === 2) inHand.setAim(true);
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 0) inHand.setTrigger(false);
+      if (e.button === 2) inHand.setAim(false);
+    };
+    const onContextMenu = (e: MouseEvent) => e.preventDefault();
     const onLockChange = () => {
       const isLocked = document.pointerLockElement === canvas;
-      if (!isLocked) { unlockedAtRef.current = performance.now(); keys.clear(); }
+      if (!isLocked) { unlockedAtRef.current = performance.now(); keys.clear(); inHand.setTrigger(false); inHand.setAim(false); }
       setLocked(isLocked);
     };
     window.addEventListener('keydown', onKeyDown);
@@ -1307,6 +1339,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('pointerlockchange', onLockChange);
     canvas.addEventListener('click', onCanvasClick);
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('contextmenu', onContextMenu);
 
     // ── Other investigators ─────────────────────────────────────────
     // Everyone in the same level sees everyone else, as an animated figure
@@ -1635,6 +1670,43 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         torch.intensity = 0;
       }
       inHand.setTorch(torch.intensity / 40);
+      // Shots: the flash lights the room ahead, the round lands, the sound.
+      const fired = inHand.takeShots();
+      for (let i = 0; i < fired.shots; i++) {
+        gunSounds?.fire('shot');
+        muzzleFlash = 1;
+        const spread = 0.07 * (1 - inHand.aim * 0.88);   // radians across: loose from the hip, tight down the sights
+        camera.getWorldDirection(lookDir);
+        lookDir.x += (Math.random() - 0.5) * spread;
+        lookDir.y += (Math.random() - 0.5) * spread;
+        lookDir.z += (Math.random() - 0.5) * spread;
+        lookDir.normalize();
+        ray.set(camera.position, lookDir);
+        ray.far = 60;
+        const wall = ray.intersectObjects(walls, false)[0];
+        let near = wall ? wall.distance : Infinity;
+        let piece: THREE.Vector3 | null = null;
+        for (const b of blockers) {
+          const at = ray.ray.intersectBox(b, tmpV);
+          if (!at) continue;
+          const d = at.distanceTo(camera.position);
+          if (d < near && d > 0.3) { near = d; piece = at.clone(); }
+        }
+        if (piece) bulletHoles.hit(piece, null);
+        else if (wall?.face) bulletHoles.hit(wall.point, wall.face.normal.clone().transformDirection(wall.object.matrixWorld));
+      }
+      if (fired.dry) gunSounds?.fire('dry');
+      if (muzzleFlash > 0) {
+        torch.intensity = Math.max(torch.intensity, muzzleFlash * 90);
+        muzzleFlash = Math.max(0, muzzleFlash - dt / 0.06);
+      }
+      bulletHoles.update(dt);
+      // Down the sights the view narrows.
+      const fov = 70 - 18 * inHand.aim;
+      if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+      const ammo = inHand.ammo;
+      const ammoText = ammo ? `${ammo.rounds} / ${ammo.max}${inHand.reloading ? ' · reloading' : ''}` : '';
+      if (ammoRef.current && ammoRef.current.textContent !== ammoText) ammoRef.current.textContent = ammoText;
       // The Deep One: slide in behind the hole from one side, stare, withdraw.
       if (peeper && level.peeper) {
         const cfg = level.peeper;
@@ -1843,6 +1915,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         }
       });
       torch.shadow.map?.dispose();
+      bulletHoles.dispose();
+      inspectRef.current = null;
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('contextmenu', onContextMenu);
       renderer.dispose();
       canvasRef.current = null;
       if (el.contains(canvas)) el.removeChild(canvas);
@@ -1852,7 +1929,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? `WASD move · Shift run · Mouse look · E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
+      ? `WASD move · Shift run · Mouse look · ${carriedPickup?.view.arms ? 'E examine · click fire · right-click aim · R reload · V inspect' : `E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}`}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -2010,7 +2087,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               ) : (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}</>
               )}
-              {canUseSkillOn(focus) && !carriedPickup?.view.reload && (
+              {canUseSkillOn(focus) && !carriedPickup?.view.reload && !carriedPickup?.view.arms && (
                 <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> use a skill</span>
               )}
               {(carriedPickup || heldItem) && !focus.pickup && (
@@ -2030,6 +2107,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               {usedNote ?? <>
                 <span style={{ color: 'var(--ink-text-2)' }}>In hand · </span>{carriedPickup ? `the ${carriedPickup.title}` : heldItem}
                 {carriedPickup?.view.reload && <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[R]</span> reload</span>}
+                {carriedPickup?.view.arms && <span style={{ color: 'var(--ink-text-2)' }}> · <span ref={ammoRef} style={{ color: 'var(--brass)' }} /></span>}
               </>}
             </div>
           )}

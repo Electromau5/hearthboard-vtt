@@ -13,8 +13,11 @@
  *  - "Colt M1911" by Ole Gunnar Isager (sketchfab.com/FrenchBaguette), CC-BY-4.0
  *  - "Renaissance Rifle" by denis_cliofas (sketchfab.com/denis_cliofas), CC-BY-4.0
  *  - "Tommy Gun" by lokeig (sketchfab.com/lokeig), CC-BY-NC-4.0 (non-commercial)
+ *  - "AK74U | FREE ANIMATION." by BURNER (sketchfab.com/Alexander_Ovelar), CC-BY-4.0
  * Also in public/props/CREDITS.txt.
  */
+
+import type { GunSound } from '@/app/components/gun-sounds';
 
 export type HeldModel = {
   /** A .glb under public/; meshopt-compressed is fine. */
@@ -34,6 +37,37 @@ export type HeldModel = {
   hand: boolean;
   /** R reloads it (see reloads.ts): a Thompson's drum, or a muzzle-loader's powder, ball and ramrod. */
   reload?: 'drum' | 'muzzle';
+  /** A first-person rig made with its own arms and animations: it is played, not posed (see ArmsRig). */
+  arms?: ArmsRig;
+};
+
+/**
+ * A gun that comes with its own arms and clips, made for a first-person
+ * camera: drawn, idled, fired, reloaded, inspected and holstered by playing
+ * its clips, seen from `eye`. Its `pos`/`rot`/`gripAt` only matter for the
+ * copy lying on a bench.
+ */
+export type ArmsRig = {
+  /** Where the eye sits in the model as made (metres; it looks along -Z), at the hip and aiming down the sights. */
+  eye: [number, number, number];
+  aimEye: [number, number, number];
+  /** The hands' field of view (degrees) at the hip and down the sights. */
+  fov: number;
+  aimFov: number;
+  /** Clip names in the glb. */
+  clips: { draw: string; idle: string; shoot: string; reload: string; reloadEmpty: string; inspect: string; holster: string };
+  /** The bone the gun hangs from, and its muzzle in that bone's space (for the flash). */
+  gunBone: string;
+  muzzle: [number, number, number];
+  rounds: number;
+  /** Rounds a minute, held on the trigger. */
+  rpm: number;
+  /** Sounds through each reload, seconds in: a partial magazine, and an empty one (bolt racked too). */
+  reloadCues: [number, GunSound][];
+  reloadEmptyCues: [number, GunSound][];
+  /** Left off the copy on a bench: the arms' meshes (by material name), and bones folded to nothing (the spare magazine). */
+  benchHide: string[];
+  benchCollapse: string[];
 };
 
 type Pose = Pick<HeldModel, 'pos' | 'rot'>;
@@ -68,6 +102,29 @@ export const HELD_MODELS = {
   tommyGun: {
     model: '/props/tommy-gun.glb', orient: [0, Math.PI / 2, 0], length: 0.85,
     gripAt: [0.42, 0.38, 0.5], supportAt: [0.73, 0.4, 0.5], ...SMG_POSE, hand: false, reload: 'drum',
+  },
+  // AK-74u with its own arms and clips; made in metres, muzzle along -Z, the
+  // eye near the origin. Bones as made: Bone_043 the gun, carg_044 the
+  // magazine in it, carg2_048 the fresh one (kept out of sight below), recam_045
+  // the bolt. Timings measured off those bones.
+  ak74u: {
+    model: '/props/ak74u.glb', orient: [0, 0, 0], length: 0.66,
+    gripAt: [0.5, 0.4, 0.6], ...SMG_POSE, hand: false,
+    arms: {
+      eye: [0, 1.6, 0.04],
+      aimEye: [0.067, 1.581, 0.09],
+      fov: 64,
+      aimFov: 50,
+      clips: { draw: 'DRAW', idle: 'IDLE', shoot: 'SHOOT', reload: 'RELOAD1', reloadEmpty: 'RELOAD2', inspect: 'INSPEC', holster: 'OLSER' },
+      gunBone: 'Bone_043',
+      muzzle: [0, 0.396, -0.021],
+      rounds: 30,
+      rpm: 650,
+      reloadCues: [[0.5, 'latch'], [0.6, 'scrape'], [1.42, 'clack']],
+      reloadEmptyCues: [[0.3, 'latch'], [1.2, 'scrape'], [1.28, 'clack'], [2.22, 'boltBack'], [2.5, 'boltHome']],
+      benchHide: ['Ch08_body', 'Ch08_body1', 'Null.001'],
+      benchCollapse: ['carg2_048'],
+    },
   },
 } satisfies Record<string, HeldModel>;
 

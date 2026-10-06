@@ -1,15 +1,18 @@
 /**
- * The noises a gun makes in the hands, for the reloads in held-viewmodel.ts.
+ * The noises a gun makes in the hands: the reloads in held-viewmodel.ts, and
+ * a shot or a dry click from a gun that fires (`fire`).
  * All made with Web Audio except the wheel-lock's spanning ratchet, which is a
  * recording (public/sounds/ratchet.mp3, CC0). Each reload plays through its
  * own bus, so putting the gun down mid-reload silences what is still to come.
  */
 
-export type GunSound = 'latch' | 'scrape' | 'clack' | 'boltBack' | 'boltHome' | 'pour' | 'rod' | 'thunk' | 'ratchet' | 'click';
+export type GunSound = 'latch' | 'scrape' | 'clack' | 'boltBack' | 'boltHome' | 'pour' | 'rod' | 'thunk' | 'ratchet' | 'click' | 'shot' | 'dry';
 
 export type GunSounds = {
   /** Plays `cues` (seconds after now) on a fresh bus; call the returned function to cut them off. */
   play: (cues: [number, GunSound][]) => () => void;
+  /** One sound, now, on a bus that is never cut: a shot, a dry click. */
+  fire: (name: GunSound) => void;
 };
 
 let ratchet: Promise<AudioBuffer | null> | null = null;
@@ -87,7 +90,19 @@ export function createGunSounds(ctx: AudioContext, out: AudioNode): GunSounds {
     },
     // A small sharp snap: the pan cover, the dog coming down.
     click: (bus, at) => { burst(bus, at, 4000, 7, 0.5, 0.025); tone(bus, at, 3500, 0.05, 0.04); },
+    // A rifle round indoors: the crack, the boom in the chest, the room ringing after.
+    shot: (bus, at) => {
+      burst(bus, at, 2400, 0.7, 1.4, 0.07);
+      burst(bus, at, 600, 0.8, 1.2, 0.16);
+      tone(bus, at, 95, 1.0, 0.22, 'triangle');
+      burst(bus, at + 0.03, 1200, 0.5, 0.18, 0.55, 500);
+    },
+    // The hammer on an empty chamber.
+    dry: (bus, at) => { burst(bus, at, 3000, 5, 0.45, 0.03); tone(bus, at, 1800, 0.06, 0.04); },
   };
+  const fireBus = ctx.createGain();
+  fireBus.gain.value = 0.55;
+  fireBus.connect(out);
 
   return {
     play(cues) {
@@ -97,6 +112,9 @@ export function createGunSounds(ctx: AudioContext, out: AudioNode): GunSounds {
       const now = ctx.currentTime + 0.02;
       for (const [after, name] of cues) sounds[name](bus, now + after);
       return () => { bus.gain.setValueAtTime(0, ctx.currentTime); bus.disconnect(); };
+    },
+    fire(name) {
+      sounds[name](fireBus, ctx.currentTime + 0.005);
     },
   };
 }

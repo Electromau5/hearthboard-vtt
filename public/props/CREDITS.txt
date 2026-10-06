@@ -18,6 +18,12 @@ tommy-gun.glb
   Licence: CC BY-NC 4.0 (http://creativecommons.org/licenses/by-nc/4.0/) — non-commercial use only
   Changes: textures resized to 1024 px WebP, meshes joined and meshopt-compressed.
 
+ak74u.glb
+  "AK74U | FREE ANIMATION." by BURNER — https://sketchfab.com/Alexander_Ovelar
+  https://sketchfab.com/3d-models/ak74u-free-animation-2ab66220c48b465e9501067667965569
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: textures resized to 1024 px WebP, meshopt-compressed; arms and animations kept as made.
+
 seagull.glb
   "Low-Poly Seagull (with Animation & Rigged)" by simonaskLDE — https://sketchfab.com/simonaskLDE
   https://sketchfab.com/3d-models/low-poly-seagull-with-animation-rigged-985024328902444c8270c0f09acc897e
