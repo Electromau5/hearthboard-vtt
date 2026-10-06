@@ -35,8 +35,8 @@ export type HeldModel = {
   rot: [number, number, number];
   /** Draw hands. Off for the long guns, which are shown on their own (the GM's call). */
   hand: boolean;
-  /** R reloads it (see reloads.ts): a Thompson's drum, or a muzzle-loader's powder, ball and ramrod. */
-  reload?: 'drum' | 'muzzle';
+  /** R reloads it (see reloads.ts): a muzzle-loader's powder, ball and ramrod. */
+  reload?: 'muzzle';
   /** A first-person rig made with its own arms and animations: it is played, not posed (see ArmsRig). */
   arms?: ArmsRig;
 };
@@ -46,8 +46,24 @@ export type HeldModel = {
  * camera: drawn, idled, fired, reloaded, inspected and holstered by playing
  * its clips, seen from `eye`. Its `pos`/`rot`/`gripAt` only matter for the
  * copy lying on a bench.
+ *
+ * A gun without arms of its own can borrow another's (`rig` + `mount`): that
+ * rig's gun is hidden, this one is fixed to its gun bone with the grip in
+ * the right hand, and its magazine parts ride the rig's magazine bones, so
+ * the same hands fire and reload it. Points are in the rig as made, at rest
+ * (metres), and measured from renders.
  */
 export type ArmsRig = {
+  /** The glb with the arms and clips, when it is not the gun's own `model`. */
+  rig?: string;
+  mount?: {
+    /** Where the gun's grip (`gripAt`) goes. */
+    at: [number, number, number];
+    /** The rig's own gun, left out: material names. */
+    hide: string[];
+    /** Parts of the gun named with this prefix ride the magazine bones: the Tommy's drum. */
+    magParts: string;
+  };
   /** Where the eye sits in the model as made (metres; it looks along -Z), at the hip and aiming down the sights. */
   eye: [number, number, number];
   aimEye: [number, number, number];
@@ -56,9 +72,15 @@ export type ArmsRig = {
   aimFov: number;
   /** Clip names in the glb. */
   clips: { draw: string; idle: string; shoot: string; reload: string; reloadEmpty: string; inspect: string; holster: string };
-  /** The bone the gun hangs from, and its muzzle in that bone's space (for the flash). */
+  /** The bone the gun hangs from; the magazine in it, and the fresh one a reload brings. */
   gunBone: string;
+  magBone: string;
+  spareBone: string;
+  /** The muzzle (for the flash), and the port spent cases fly from. */
   muzzle: [number, number, number];
+  eject: [number, number, number];
+  /** A spent case: radius and length. */
+  shell: [number, number];
   rounds: number;
   /** Rounds a minute, held on the trigger. */
   rpm: number;
@@ -81,6 +103,31 @@ const PISTOL_POSE: Pose = { pos: [0.13, -0.125, -0.44], rot: [0.03, 0.24, -0.04]
 const RIFLE_POSE: Pose = { pos: [0.17, -0.13, -0.3], rot: [-0.07, 0.08, -0.06] };
 const SMG_POSE: Pose = { pos: [0.17, -0.15, -0.44], rot: [-0.04, 0.1, -0.06] };
 
+/**
+ * The AK-74u's arms. Bones as made: Bone_043 the gun, carg_044 the magazine in
+ * it, carg2_048 the fresh one (kept out of sight below), recam_045 the bolt.
+ * Timings measured off those bones.
+ */
+const AK_ARMS: ArmsRig = {
+  eye: [0, 1.6, 0.04],
+  aimEye: [0.067, 1.581, 0.09],
+  fov: 64,
+  aimFov: 50,
+  clips: { draw: 'DRAW', idle: 'IDLE', shoot: 'SHOOT', reload: 'RELOAD1', reloadEmpty: 'RELOAD2', inspect: 'INSPEC', holster: 'OLSER' },
+  gunBone: 'Bone_043',
+  magBone: 'carg_044',
+  spareBone: 'carg2_048',
+  muzzle: [0.067, 1.531, -0.552],
+  eject: [0.095, 1.545, -0.27],
+  shell: [0.0047, 0.039],      // 5.45 × 39
+  rounds: 30,
+  rpm: 650,
+  reloadCues: [[0.5, 'latch'], [0.6, 'scrape'], [1.42, 'clack']],
+  reloadEmptyCues: [[0.3, 'latch'], [1.2, 'scrape'], [1.28, 'clack'], [2.22, 'boltBack'], [2.5, 'boltHome']],
+  benchHide: ['Ch08_body', 'Ch08_body1', 'Null.001'],
+  benchCollapse: ['carg2_048'],
+};
+
 export const HELD_MODELS = {
   // Colt Detective Special, the snub-nosed .38; barrel already along -Z.
   detectiveSpecial: {
@@ -99,32 +146,33 @@ export const HELD_MODELS = {
   },
   // Thompson submachine gun with the drum; along X, muzzle toward +X. (The
   // model's loose cartridge, "bullet_low", is stripped before compressing.)
+  // Fired and reloaded by the AK-74u's hands (its gun hidden): the right hand on
+  // the rear grip, the left on the fore-grip, the drum carried by the magazine
+  // bones, so the hands pull it out and seat a fresh one.
   tommyGun: {
     model: '/props/tommy-gun.glb', orient: [0, Math.PI / 2, 0], length: 0.85,
-    gripAt: [0.42, 0.38, 0.5], supportAt: [0.73, 0.4, 0.5], ...SMG_POSE, hand: false, reload: 'drum',
+    gripAt: [0.42, 0.38, 0.5], supportAt: [0.73, 0.4, 0.5], ...SMG_POSE, hand: false,
+    arms: {
+      ...AK_ARMS,
+      rig: '/props/ak74u.glb',
+      mount: { at: [0.072, 1.46, -0.16], hide: ['Krinkov', 'Magazine', 'Null.001'], magParts: 'mag' },
+      // Its receiver is tall and near the eye: seen from a little higher and further back.
+      eye: [-0.03, 1.66, 0.1],
+      // Through the rear sight's ears to the blade on the compensator.
+      aimEye: [0.0724, 1.603, 0.12],
+      muzzle: [0.072, 1.569, -0.651],
+      eject: [0.094, 1.565, -0.26],
+      shell: [0.006, 0.023],      // .45 ACP
+      rounds: 50,
+      rpm: 700,
+    },
   },
   // AK-74u with its own arms and clips; made in metres, muzzle along -Z, the
-  // eye near the origin. Bones as made: Bone_043 the gun, carg_044 the
-  // magazine in it, carg2_048 the fresh one (kept out of sight below), recam_045
-  // the bolt. Timings measured off those bones.
+  // eye near the origin.
   ak74u: {
     model: '/props/ak74u.glb', orient: [0, 0, 0], length: 0.66,
     gripAt: [0.5, 0.4, 0.6], ...SMG_POSE, hand: false,
-    arms: {
-      eye: [0, 1.6, 0.04],
-      aimEye: [0.067, 1.581, 0.09],
-      fov: 64,
-      aimFov: 50,
-      clips: { draw: 'DRAW', idle: 'IDLE', shoot: 'SHOOT', reload: 'RELOAD1', reloadEmpty: 'RELOAD2', inspect: 'INSPEC', holster: 'OLSER' },
-      gunBone: 'Bone_043',
-      muzzle: [0, 0.396, -0.021],
-      rounds: 30,
-      rpm: 650,
-      reloadCues: [[0.5, 'latch'], [0.6, 'scrape'], [1.42, 'clack']],
-      reloadEmptyCues: [[0.3, 'latch'], [1.2, 'scrape'], [1.28, 'clack'], [2.22, 'boltBack'], [2.5, 'boltHome']],
-      benchHide: ['Ch08_body', 'Ch08_body1', 'Null.001'],
-      benchCollapse: ['carg2_048'],
-    },
+    arms: AK_ARMS,
   },
 } satisfies Record<string, HeldModel>;
 

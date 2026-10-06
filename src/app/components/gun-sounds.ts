@@ -6,13 +6,13 @@
  * own bus, so putting the gun down mid-reload silences what is still to come.
  */
 
-export type GunSound = 'latch' | 'scrape' | 'clack' | 'boltBack' | 'boltHome' | 'pour' | 'rod' | 'thunk' | 'ratchet' | 'click' | 'shot' | 'dry';
+export type GunSound = 'latch' | 'scrape' | 'clack' | 'boltBack' | 'boltHome' | 'pour' | 'rod' | 'thunk' | 'ratchet' | 'click' | 'shot' | 'dry' | 'tink';
 
 export type GunSounds = {
   /** Plays `cues` (seconds after now) on a fresh bus; call the returned function to cut them off. */
   play: (cues: [number, GunSound][]) => () => void;
-  /** One sound, now, on a bus that is never cut: a shot, a dry click. */
-  fire: (name: GunSound) => void;
+  /** One sound, now, on a bus that is never cut: a shot, a dry click, a case landing (`loud` 0..1). */
+  fire: (name: GunSound, loud?: number) => void;
 };
 
 let ratchet: Promise<AudioBuffer | null> | null = null;
@@ -97,6 +97,8 @@ export function createGunSounds(ctx: AudioContext, out: AudioNode): GunSounds {
       tone(bus, at, 95, 1.0, 0.22, 'triangle');
       burst(bus, at + 0.03, 1200, 0.5, 0.18, 0.55, 500);
     },
+    // A spent brass case landing on the floor.
+    tink: (bus, at) => { tone(bus, at, 5200 + Math.random() * 1600, 0.05, 0.09); tone(bus, at, 8300 + Math.random() * 900, 0.025, 0.05); },
     // The hammer on an empty chamber.
     dry: (bus, at) => { burst(bus, at, 3000, 5, 0.45, 0.03); tone(bus, at, 1800, 0.06, 0.04); },
   };
@@ -113,8 +115,14 @@ export function createGunSounds(ctx: AudioContext, out: AudioNode): GunSounds {
       for (const [after, name] of cues) sounds[name](bus, now + after);
       return () => { bus.gain.setValueAtTime(0, ctx.currentTime); bus.disconnect(); };
     },
-    fire(name) {
-      sounds[name](fireBus, ctx.currentTime + 0.005);
+    fire(name, loud = 1) {
+      const bus = loud === 1 ? fireBus : ctx.createGain();
+      if (bus !== fireBus) {
+        (bus as GainNode).gain.value = 0.55 * loud;
+        bus.connect(out);
+        window.setTimeout(() => bus.disconnect(), 400);
+      }
+      sounds[name](bus, ctx.currentTime + 0.005);
     },
   };
 }

@@ -4,10 +4,9 @@ import type { GunSound } from './gun-sounds';
 
 /**
  * Reloads for the guns that have one (`HeldModel.reload`), played on the gun
- * in the investigator's hands by held-viewmodel.ts:
+ * in the investigator's hands by held-viewmodel.ts (guns with arms, the
+ * AK-74u and the Tommy gun, reload with their own clips instead):
  *
- *  - `drum` — the Thompson: canted over, the drum slid out sideways and let
- *    fall, a fresh one slid home, the cocking knob drawn back and let go.
  *  - `muzzle` — the wheel-lock, a muzzle-loader: muzzle up, powder poured,
  *    the ball rammed home with two strokes of the ramrod, then brought down
  *    and spanned with its key and the dog lowered onto the pan (the model's
@@ -51,59 +50,8 @@ const out = { pos: new THREE.Vector3(), rot: new THREE.Euler() };
  * `clips` the glTF's animations.
  */
 export function rigReload(view: HeldModel, item: THREE.Group, model: THREE.Object3D, clips: THREE.AnimationClip[]): ReloadRig | null {
-  if (view.reload === 'drum') return drumReload(item);
   if (view.reload === 'muzzle') return muzzleReload(item, model, clips);
   return null;
-}
-
-// ── Thompson ──────────────────────────────────────────────────────
-
-function drumReload(item: THREE.Group): ReloadRig | null {
-  // Gather the drum's parts (all named mag*) into one group in the gun's frame.
-  item.updateMatrixWorld(true);
-  const parts: THREE.Object3D[] = [];
-  item.traverse(o => {
-    if (o.name.startsWith('mag') && !o.parent?.name.startsWith('mag')) parts.push(o);
-  });
-  if (!parts.length) return null;
-  const drum = new THREE.Group();
-  item.add(drum);
-  drum.updateMatrixWorld(true);
-  for (const p of parts) drum.attach(p);
-
-  // Gun: [t, x, y, z, pitch, yaw, roll]
-  const gun: Key[] = [
-    [0, 0, 0, 0, 0, 0, 0],
-    [0.35, -0.04, 0.035, 0.02, 0.12, 0, 0.55],
-    [2.0, -0.04, 0.035, 0.02, 0.12, 0, 0.55],
-    [2.3, -0.02, 0.012, 0.01, 0.05, 0, 0.15],
-    [2.48, 0, 0, 0.035, 0.08, 0, 0.05],     // knob drawn back: the gun jerks
-    [2.68, 0, 0, -0.01, -0.02, 0, 0],       // and snaps home
-    [3.0, 0, 0, 0, 0, 0, 0],
-  ];
-  // Drum: [t, x, y, z] — out sideways, dropped, a new one up and in.
-  const mag: Key[] = [
-    [0, 0, 0, 0],
-    [0.45, 0, 0, 0],
-    [0.8, 0.17, 0, 0],
-    [1.15, 0.24, -0.7, 0.05],
-    [1.2, 0.24, -0.7, 0.05],
-    [1.6, 0.17, 0, 0],
-    [2.0, 0, 0, 0],
-  ];
-  return {
-    duration: 3.0,
-    cues: [[0.42, 'latch'], [0.48, 'scrape'], [1.62, 'scrape'], [1.98, 'clack'], [2.36, 'boltBack'], [2.6, 'boltHome']],
-    apply(t) {
-      const [x, y, z, rx, ry, rz] = sample(gun, t);
-      const [dx, dy, dz] = sample(mag, t);
-      drum.position.set(dx, dy, dz);
-      out.pos.set(x, y, z);
-      out.rot.set(rx, ry, rz);
-      return out;
-    },
-    reset() { drum.position.set(0, 0, 0); },
-  };
 }
 
 // ── Wheel-lock ────────────────────────────────────────────────────

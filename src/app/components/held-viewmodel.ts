@@ -33,7 +33,8 @@ const DRAW_SEC = 0.32;
  */
 export function prepareHeldModel(model: THREE.Object3D, view: HeldModel): { root: THREE.Group; support: THREE.Vector3 | null } {
   // A rig with arms lies on a bench as the gun alone: no arms, no spare magazine.
-  if (view.arms) {
+  // (A gun that borrows another's arms has none to take off.)
+  if (view.arms && !view.arms.rig) {
     const { benchHide, benchCollapse, gunBone } = view.arms;
     const drop: THREE.Object3D[] = [];
     const fold: THREE.Object3D[] = [];
@@ -71,6 +72,9 @@ export function prepareHeldModel(model: THREE.Object3D, view: HeldModel): { root
   return { root, support };
 }
 
+/** A case thrown from the ejection port: where and which way, in the hands' camera space, and its size. */
+export type SpentCase = { at: THREE.Vector3; dir: THREE.Vector3; shell: [number, number] };
+
 export type HeldViewmodel = {
   /** Render after the level: `renderer.clearDepth()` then this. */
   render: (renderer: THREE.WebGLRenderer) => void;
@@ -90,7 +94,7 @@ export type HeldViewmodel = {
   /** A gun with arms: turn it over to look at it; false if busy. */
   inspect: () => boolean;
   /** Shots and dry clicks since the last call (for the flash on the level, the holes and the sound). */
-  takeShots: () => { shots: number; dry: number };
+  takeShots: () => { shots: number; dry: number; cases: SpentCase[] };
   /** How far into aiming down the sights, 0..1. */
   readonly aim: number;
   /** Rounds left, for a gun with arms in hand; null otherwise. */
@@ -164,6 +168,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   let aiming = false;
   let shotsOut = 0;
   let dryOut = 0;
+  let casesOut: SpentCase[] = [];
 
   type Clip = keyof ArmsRig['clips'];
   type ArmsPlay = {
@@ -182,34 +187,86 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
     aim: number;
     flash: THREE.Sprite;
     flashFor: number;
+    /** The gun bone, and on it the ejection port and the way cases leave it. */
+    bone: THREE.Object3D | null;
+    port: THREE.Vector3;
+    portDir: THREE.Vector3;
     hush: (() => void) | null;
   };
 
-  const buildArms = (view: HeldModel & { arms: ArmsRig }, gltf: { scene: THREE.Group; animations: THREE.AnimationClip[] }) => {
+  type Gltf = { scene: THREE.Group; animations: THREE.AnimationClip[] };
+  /**
+   * A gun with arms: its own rig, or (`rig.rig`) another's, with that rig's gun
+   * hidden and this one mounted on its gun bone, its magazine on the magazine bones.
+   */
+  const buildArms = (view: HeldModel & { arms: ArmsRig }, gun: Gltf, borrowed: Gltf | null) => {
     const rig = view.arms;
     const item = new THREE.Group();
-    const model = gltf.scene;
+    const src = borrowed ?? gun;
+    const model = src.scene;
     item.add(model);
+    model.updateMatrixWorld(true);
+    const bone = model.getObjectByName(rig.gunBone) ?? null;
+    if (borrowed && rig.mount && bone) {
+      const { at, hide, magParts } = rig.mount;
+      model.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && [m.material].flat().some(mat => hide.includes(mat.name))) m.visible = false;
+      });
+      // The gun as for a bench (grip at its origin, barrel along -Z), set with
+      // the grip where the right hand closes, then carried by the gun bone.
+      const { root } = prepareHeldModel(gun.scene, view);
+      const holder = new THREE.Group();
+      holder.position.set(...at);
+      holder.add(root);
+      model.add(holder);
+      model.updateMatrixWorld(true);
+      bone.attach(holder);
+      // The magazine's parts, gathered and handed to the magazine bone; a copy for the fresh one.
+      const parts: THREE.Object3D[] = [];
+      gun.scene.traverse(o => { if (o.name.startsWith(magParts) && !o.parent?.name.startsWith(magParts)) parts.push(o); });
+      const mag = model.getObjectByName(rig.magBone);
+      const spare = model.getObjectByName(rig.spareBone);
+      if (parts.length && mag) {
+        model.updateMatrixWorld(true);
+        const drum = new THREE.Group();
+        mag.add(drum);
+        drum.updateMatrixWorld(true);
+        for (const p of parts) drum.attach(p);
+        if (spare) {
+          const copy = drum.clone();
+          copy.position.copy(drum.position);
+          copy.quaternion.copy(drum.quaternion);
+          copy.scale.copy(drum.scale);
+          spare.add(copy);
+        }
+      }
+    }
     const mixer = new THREE.AnimationMixer(model);
     const acts = Object.fromEntries(Object.entries(rig.clips).map(([k, name]) => {
-      const clip = THREE.AnimationClip.findByName(gltf.animations, name);
-      if (!clip) throw new Error(`${view.model} has no clip ${name}`);
+      const clip = THREE.AnimationClip.findByName(src.animations, name);
+      if (!clip) throw new Error(`${rig.rig ?? view.model} has no clip ${name}`);
       const act = mixer.clipAction(clip);
       if (k !== 'idle') { act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true; }
       return [k, act];
     })) as Record<Clip, THREE.AnimationAction>;
-    // The flash rides the gun's own bone, so it follows the recoil.
+    // The flash and the ejection port ride the gun's bone, so they follow the recoil.
     const flash = new THREE.Sprite(own(new THREE.SpriteMaterial({ map: flashTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })));
     flash.visible = false;
-    const bone = model.getObjectByName(rig.gunBone);
+    const port = new THREE.Vector3();
+    const portDir = new THREE.Vector3();
     if (bone) {
-      bone.add(flash);
-      flash.position.set(...rig.muzzle);
       model.updateMatrixWorld(true);
+      bone.add(flash);
+      flash.position.copy(bone.worldToLocal(new THREE.Vector3(...rig.muzzle)));
       flash.scale.setScalar(0.13 / bone.getWorldScale(new THREE.Vector3()).x);
+      port.copy(bone.worldToLocal(new THREE.Vector3(...rig.eject)));
+      // Out to the right, up, and a little back.
+      const toBone = new THREE.Matrix4().copy(bone.matrixWorld).invert();
+      portDir.set(1, 0.55, 0.25).transformDirection(toBone);
     }
     model.traverse(o => { o.frustumCulled = false; });
-    armsBy.set(item, { rig, model, mixer, acts, current: null, busy: null, left: 0, rounds: rig.rounds, cooldown: 0, clicked: false, aim: 0, flash, flashFor: 0, hush: null });
+    armsBy.set(item, { rig, model, mixer, acts, current: null, busy: null, left: 0, rounds: rig.rounds, cooldown: 0, clicked: false, aim: 0, flash, flashFor: 0, hush: null, bone, port, portDir });
     return item;
   };
 
@@ -240,9 +297,10 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   const build = (view: HeldModel) => {
     let p = built.get(view.model);
     if (!p) {
-      p = loader.loadAsync(view.model).then(gltf => {
+      const borrowed = view.arms?.rig ? loader.loadAsync(view.arms.rig) : Promise.resolve(null);
+      p = Promise.all([loader.loadAsync(view.model), borrowed]).then(([gltf, rigGltf]) => {
         if (view.arms) {
-          const item = buildArms(view as HeldModel & { arms: ArmsRig }, gltf);
+          const item = buildArms(view as HeldModel & { arms: ArmsRig }, gltf, rigGltf);
           item.visible = false;
           rig.add(item);
           return item;
@@ -400,6 +458,13 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
             st.flashFor = 0.05;
             st.flash.material.rotation = Math.random() * Math.PI;
             shotsOut++;
+            if (st.bone && casesOut.length < 8) {
+              casesOut.push({
+                at: st.bone.localToWorld(st.port.clone()),
+                dir: st.portDir.clone().transformDirection(st.bone.matrixWorld),
+                shell: st.rig.shell,
+              });
+            }
           } else if (st.rounds === 0 && !st.clicked) {
             st.clicked = true;
             dryOut++;
@@ -470,8 +535,9 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       return true;
     },
     takeShots() {
-      const out = { shots: shotsOut, dry: dryOut };
+      const out = { shots: shotsOut, dry: dryOut, cases: casesOut };
       shotsOut = dryOut = 0;
+      casesOut = [];
       return out;
     },
     get aim() { return armsNow()?.aim ?? 0; },

@@ -28,6 +28,7 @@ import { createGunSounds, type GunSounds } from './gun-sounds';
 import { isRain, isTimeOfDay, RAIN_LABELS, RAIN_SPECS, RAINS, skyFor, TIME_LABELS, TIMES, withRain, type Rain, type TimeOfDay } from '@/lib/weather';
 import { buildCover, createRain, createRainSound, type Cover, type RainSound } from './rain';
 import { createBulletHoles } from './bullet-holes';
+import { createShells } from './shells';
 import { createLightSwitch } from './light-switch';
 import { createUvStains, uvLightAt, CONE_OUTER, LAMP_RANGE, MAX_LAMPS, type UvLamp } from './uv-stains';
 
@@ -728,6 +729,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     inspectRef.current = () => { inHand.inspect(); };
     // Where the shots land.
     const bulletHoles = createBulletHoles(scene);
+    const shells = createShells(scene);
     let muzzleFlash = 0;
     const uvWash = (light: THREE.SpotLight) => {
       light.angle = CONE_OUTER;
@@ -1801,6 +1803,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         else if (wall?.face) bulletHoles.hit(wall.point, wall.face.normal.clone().transformDirection(wall.object.matrixWorld));
       }
       if (fired.dry) gunSounds?.fire('dry');
+      // Spent cases: from the hands' view into the level, then onto the floor.
+      for (const c of fired.cases) shells.throw(c.at.applyMatrix4(camera.matrixWorld), c.dir.transformDirection(camera.matrixWorld), c.shell);
+      shells.update(dt, () => feet.y, loud => gunSounds?.fire('tink', 0.25 + loud * 0.5));
       if (muzzleFlash > 0) {
         torch.intensity = Math.max(torch.intensity, muzzleFlash * 90);
         muzzleFlash = Math.max(0, muzzleFlash - dt / 0.06);
@@ -2023,6 +2028,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       });
       torch.shadow.map?.dispose();
       bulletHoles.dispose();
+      shells.dispose();
       inspectRef.current = null;
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('mouseup', onMouseUp);
