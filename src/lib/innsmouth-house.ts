@@ -868,7 +868,8 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
     iron_safe: {
       opened: {
         title: 'Iron Safe — Open',
-        text: 'The door swings out on a dry squeal. Inside, on a single shelf: a bundle of papers tied with faded ribbon, a cash box with its lid prised up and nothing in it, and a ring of keys on a tag stamped with a number. The steel walls are beaded with salt, as if the sea got in without opening the door.',
+        image: '/innsmouth/abigail-1924.webp',
+        text: 'The door swings out on a dry squeal. Lying face up on the single shelf, where it would be the first thing seen, is a photograph: a young woman in a cloche hat and a heavy coat on a Boston street, looking straight into the lens. Beneath it, in a careful hand: "Abigail · Boston, 1924", and under that, in different ink, "Abigail : Pre Transformation". Behind it: a bundle of papers tied with faded ribbon, a cash box with its lid prised up and nothing in it, and a ring of keys on a tag stamped with a number. The steel walls are beaded with salt, as if the sea got in without opening the door.',
       },
     },
   },
