@@ -2800,6 +2800,7 @@ export default function HearthboardPage() {
           investigator={walkthroughInvestigator}
           onCheck={(label, target, context) => rollCheck(walkthroughInvestigator?.name ?? myDisplayName, label, target, context, true)}
           isGM={isAdmin}
+          isGamelord={isGamelord}
         />
       )}
 

@@ -55,6 +55,7 @@ src/
       NpcConversation.tsx         # Talking to a walkthrough NPC (E) — free text, answered in character via /api/npc/[id]
       woods-lamp.ts               # First-person Wood's lamp (Q) — the 1930s UV lamp held in view, drawn over the level
       uv-stains.ts                # Blood/brine decals only the Wood's lamp reveals (level.uvStains)
+      SafeCracker.tsx             # Safe-dial mini game (level.locks) — hit the marks as the pip passes, 15 s; open safes shared via /api/locks
     characters/
       page.tsx                    # Investigator dossier grid — all 7 characters
       [slug]/page.tsx             # Individual character sheet page
@@ -88,6 +89,7 @@ src/
       effects/route.ts            # GET — player-facing effects polling
       dev-assets/[...path]/route.ts      # GET — serves files out of data/ in local dev
       npc/[id]/route.ts           # POST — talk to an NPC; per-investigator memory in redis-storage (npc/<id>/<slug>)
+      locks/route.ts              # GET/POST — which walkthrough safes stand open (locks/<level>); admins can relock
   auth.ts                         # Full NextAuth config (Node.js runtime only)
   auth.config.ts                  # Edge-safe config (no fs/bcrypt) — used by proxy
   proxy.ts                        # Next.js 16 edge middleware (replaces middleware.ts)

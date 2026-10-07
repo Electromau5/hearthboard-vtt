@@ -5,9 +5,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, Inspectable, LightSwitch, NpcSpot, Pickup, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, NpcSpot, Pickup, Prop, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
+import { createHunter } from './hunter';
 import { createPinboard } from './pinboard';
 import { createInteractMarkers } from './interact-markers';
 import { ArchiveBrowser } from './ArchiveBrowser';
@@ -15,6 +16,9 @@ import { TypewriterPane } from './TypewriterPane';
 import { NpcConversation } from './NpcConversation';
 import { InventoryPane } from './InventoryPane';
 import { InspectViewer } from './InspectViewer';
+import { ModelBuilder } from './ModelBuilder';
+import { SafeCracker } from './SafeCracker';
+import { createModelInLevel } from './model-pieces';
 import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
 import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
@@ -46,6 +50,8 @@ interface Props {
   onCheck?: (skill: string, target: number, objectTitle: string) => { roll: number; level: CheckLevel };
   /** The GM: in a level with `weather`, gets a bar to set the time of day for everyone. */
   isGM?: boolean;
+  /** gamelord himself: in a level with lamps, can throw the mains for everyone (L, or the header button). */
+  isGamelord?: boolean;
 }
 
 const EYE = 1.6;           // camera height above the feet
@@ -108,7 +114,7 @@ function gunOf(level: WalkthroughLevel, carried: string | null, held: string | n
   const pickup = carried ? level.pickups?.flatMap(t => t.items).find(p => p.id === carried) : undefined;
   return pickup ? pickup.view : heldModelFor(held);
 }
-export function WalkthroughModal({ level, onClose, onShare, author, investigator, onCheck, isGM }: Props) {
+export function WalkthroughModal({ level, onClose, onShare, author, investigator, onCheck, isGM, isGamelord }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -118,6 +124,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [reading, setReading] = useState<Target | null>(null);
   const [browsing, setBrowsing] = useState<Browsing | null>(null);
   const [typing, setTyping] = useState<Target | null>(null);
+  // The level's safes that stand open, shared by the party (/api/locks).
+  const [openLocks, setOpenLocks] = useState<LocksState>({});
+  const openLocksRef = useRef(openLocks);
+  useEffect(() => { openLocksRef.current = openLocks; }, [openLocks]);
   const [shared, setShared] = useState<Set<string>>(() => new Set());
   const [sharedDocs, setSharedDocs] = useState<Set<string>>(() => new Set());
   // The reading card's skill panel, and every skill tried this visit, by "<object>/<skill>".
@@ -166,6 +176,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const rainRef = useRef<Rain>('none');
   useEffect(() => { rainRef.current = rain; }, [rain]);
   const [weatherError, setWeatherError] = useState(false);
+  // The level's mains: gamelord throws them for everyone (see /api/lights). Room switches sit underneath.
+  const [power, setPower] = useState(true);
+  const powerRef = useRef(true);
+  useEffect(() => { powerRef.current = power; }, [power]);
+  const [powerError, setPowerError] = useState(false);
+  // When gamelord last threw the mains here: a poll sent before then answers with the old state.
+  const powerSetAt = useRef(0);
   // A pickup carried from where it lay (a gun off the armory bench), by id. Not inventory: it stays in the level.
   const [carried, setCarried] = useState<string | null>(null);
   const carriedRef = useRef<string | null>(null);
@@ -217,6 +234,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const ammoRef = useRef<HTMLSpanElement>(null);
   // Set by the scene when the level has a pinboard; refetches its notes now.
   const refreshPinsRef = useRef<(() => void) | null>(null);
+  // Refetches the shared state of the level's models (builders) and redraws them on their tables.
+  const refreshModelsRef = useRef<(() => void) | null>(null);
 
   useEffect(() => { readingRef.current = reading; }, [reading]);
   useEffect(() => { browsingRef.current = browsing; }, [browsing]);
@@ -279,6 +298,39 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // Collections, typewriters and map pins open their own panes, not the reading card.
   const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !t.pickup && !t.bed && !level.typewriters?.[t.id], [canCheck, level]);
 
+  // Safes: which stand open, fetched when the level opens and again whenever one is tried.
+  const fetchLocks = useCallback(() => {
+    if (!level.locks) return Promise.resolve(openLocksRef.current);
+    return fetch(`/api/locks?level=${level.id}`)
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((s: LocksState) => { openLocksRef.current = s; setOpenLocks(s); return s; })
+      .catch(err => { console.warn('Could not load the locks:', err); return openLocksRef.current; });
+  }, [level]);
+  useEffect(() => { void fetchLocks(); }, [fetchLocks]);
+
+  /** An open safe's inside, read like any other card (its own id, so saving it is its own find). */
+  const insideOf = useCallback((t: Target): Target | null => {
+    const lock = level.locks?.[t.id];
+    return lock ? { id: `${t.id}-inside`, entry: lock.opened, box: t.box } : null;
+  }, [level]);
+
+  const setLock = useCallback((id: string, relock = false) => {
+    // Open at once here; the server's answer settles it.
+    if (!relock) {
+      const next = { ...openLocksRef.current, [id]: { by: author, at: Date.now() } };
+      openLocksRef.current = next;
+      setOpenLocks(next);
+    }
+    fetch('/api/locks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: level.id, id, relock }),
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((s: LocksState) => { openLocksRef.current = s; setOpenLocks(s); })
+      .catch(err => console.error('Could not set the lock:', err));
+  }, [level, author]);
+
   // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
   // each time; a typewriter opens a sheet to type on; anything else opens the
   // reading card.
@@ -311,8 +363,20 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       document.exitPointerLock?.();
       return;
     }
-    // A typewriter or a person takes the keyboard: both open over the level in `typing`.
-    if (level.typewriters?.[t.id] || t.npc) {
+    // A safe: cracked open, E looks inside; still locked, E turns the dial —
+    // unless someone else has opened it since, which the fresh state shows.
+    if (level.locks?.[t.id]) {
+      const inside = insideOf(t)!;
+      if (openLocksRef.current[t.id]) { openReading(inside); return; }
+      setTyping(t);
+      document.exitPointerLock?.();
+      void fetchLocks().then(s => {
+        if (s[t.id] && typingRef.current === t) { setTyping(null); openReading(inside); }
+      });
+      return;
+    }
+    // A typewriter, a person or a model to build takes the keyboard: each opens over the level in `typing`.
+    if (level.typewriters?.[t.id] || t.npc || level.builders?.[t.id]) {
       setTyping(t);
       document.exitPointerLock?.();
       return;
@@ -325,7 +389,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       docs => setBrowsing(b => (b?.target === t ? { ...b, docs } : b)),
       () => setBrowsing(b => (b?.target === t ? { ...b, error: true } : b)),
     );
-  }, [openReading, level, heldKey]);
+  }, [openReading, level, heldKey, insideOf, fetchLocks]);
 
   const closeInspect = useCallback(() => {
     setInspecting(null);
@@ -379,6 +443,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
   const closeTyping = useCallback(() => {
     setTyping(null);
+    refreshModelsRef.current?.();
     canvasRef.current?.requestPointerLock?.();
   }, []);
 
@@ -422,6 +487,47 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     window.clearTimeout(usedTimer.current);
     usedTimer.current = window.setTimeout(() => setUsedNote(null), 3500);
   }, [onShare]);
+
+  // ── Lights ────────────────────────────────────────────────────────
+  // Polled like the weather, every 10 s while the tab is showing.
+  useEffect(() => {
+    if (!level.lamps) return;
+    let cancelled = false;
+    const poll = () => {
+      if (document.hidden) return;
+      const sent = performance.now();
+      fetch(`/api/lights?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null))
+        .then((l: { on?: unknown } | null) => { if (!cancelled && sent > powerSetAt.current) setPower(l?.on !== false); })
+        .catch(() => {});
+    };
+    poll();
+    const timer = window.setInterval(poll, 10_000);
+    document.addEventListener('visibilitychange', poll);
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
+  }, [level]);
+
+  // gamelord throws the mains: it applies here at once, and reverts if it could not be saved.
+  const togglePower = useCallback(async () => {
+    const next = !powerRef.current;
+    powerSetAt.current = performance.now();
+    powerRef.current = next;
+    setPower(next);
+    setPowerError(false);
+    try {
+      const r = await fetch('/api/lights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: level.id, on: next }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+    } catch (err) {
+      console.error('Could not set the lights:', err);
+      powerRef.current = !next;
+      setPower(!next);
+      setPowerError(true);
+    }
+  }, [level]);
 
   // Escape closes the reading card first, then the level. Pressing Escape to
   // leave pointer lock must not also close the modal, so a key arriving just
@@ -504,6 +610,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (lampOutRef.current) setLampOn(v => !v);
         else setTorchOn(v => !v);
       }
+      // L throws the level's mains — gamelord only.
+      if (e.code === 'KeyL' && !e.repeat && isGamelord && level.lamps) void togglePower();
       // Tab shows or hides the markers over interactive objects (and must not move browser focus).
       if (e.code === 'Tab') {
         e.preventDefault();
@@ -513,7 +621,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     keyRef.current = onKey;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect, onShare]);
+  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect, onShare, isGamelord, togglePower]);
 
   // ── Weather ───────────────────────────────────────────────────────
   // Every 10 s while the level is open and the tab is showing — gentle on the
@@ -835,6 +943,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // Each switch: whether it is on, its model, and the bulb glow it governs.
     const switches = new Map<string, { sw: LightSwitch; on: boolean; set: (on: boolean) => void; glows: { group: { materialIndex?: number } }[] }>();
     const lampPool: THREE.PointLight[] = [];
+    // Glowing bulb materials, put out while the mains are off.
+    const bulbGlows: { mat: THREE.MeshStandardMaterial; base: number }[] = [];
+    let shownPower = true;
     let pinboard: ReturnType<typeof createPinboard> | null = null;
     let markers: ReturnType<typeof createInteractMarkers> | null = null;
     let stains: ReturnType<typeof createUvStains> | null = null;
@@ -977,6 +1088,30 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           }
         });
 
+        // Models to build: the pieces in place (and those still loose) drawn
+        // on the real table, from the party's shared progress — fetched now,
+        // after the builder closes, and every 20 s while the level is open.
+        if (level.builders) {
+          const built = Object.values(level.builders).map(build => {
+            const m = createModelInLevel(build);
+            scene.add(m.group);
+            owned.push(m);
+            return { build, m };
+          });
+          const refresh = () => {
+            for (const { build, m } of built) {
+              fetch(`/api/models/${build.id}`)
+                .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+                .then(s => { if (!disposed) m.update(s); })
+                .catch(err => console.warn('Could not load the model:', build.id, err));
+            }
+          };
+          refresh();
+          refreshModelsRef.current = refresh;
+          const timer = window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 20000);
+          owned.push({ dispose: () => { window.clearInterval(timer); refreshModelsRef.current = null; } });
+        }
+
         const start = model.getObjectByName('PlayerStart');
         if (start) {
           start.getWorldPosition(feet);
@@ -1087,6 +1222,30 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             geo.setIndex(order);
             mesh.material = [lit, dark];
           }
+        }
+
+        // The bulbs' glow, so the mains can put it out: any glowing material
+        // with a vertex within reach of a lamp.
+        if (lamps.length) {
+          const v = new THREE.Vector3();
+          const seen = new Set<THREE.Material>();
+          model.traverse(o => {
+            const mesh = o as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.MeshStandardMaterial[];
+            const glowing = mats.filter(m => m.isMeshStandardMaterial && m.emissive.getHex() !== 0 && !seen.has(m));
+            if (!glowing.length) return;
+            const pos = mesh.geometry.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+              v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+              if (lamps.some(l => l.pos.distanceTo(v) < 0.9)) {
+                for (const m of glowing) { seen.add(m); bulbGlows.push({ mat: m, base: m.emissiveIntensity }); }
+                return;
+              }
+            }
+          });
+          // The mains may have been thrown before the model arrived.
+          for (const g of bulbGlows) g.mat.emissiveIntensity = shownPower ? g.base : 0;
         }
 
         // Live notes on the corkboard, refetched while the level is open.
@@ -1266,6 +1425,37 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           if (entry) targets.push({ id, entry, box: new THREE.Box3(new THREE.Vector3(...spot.min), new THREE.Vector3(...spot.max)) });
         }
 
+        // Furniture from its own model, stood on the floor: it blocks and is
+        // examined like the level's own, and things can be set on it.
+        const placeProp = async (id: string, prop: Prop) => {
+          const entry = level.examinables[id];
+          if (!entry) { console.warn('Prop has no examinable:', id); return; }
+          const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(prop.model);
+          if (disposed) return;
+          const obj = gltf.scene;
+          const [x, z] = prop.at;
+          const base = prop.floorY ?? 0;
+          ray.set(tmpV.set(x, base + STEP + 0.05, z), down);
+          ray.far = 6;
+          const floor = ray.intersectObjects(walls, false)[0];
+          obj.position.set(x, floor ? floor.point.y : base, z);
+          const upY = new THREE.Vector3(0, 1, 0);
+          obj.quaternion.setFromAxisAngle(upY, THREE.MathUtils.degToRad(prop.turnDeg ?? 0));
+          // On a listing deck it leans with the floor, all four feet down.
+          const slope = floor?.face?.normal.clone().transformDirection(floor.object.matrixWorld);
+          if (slope && slope.y > 0.9) obj.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(upY, slope));
+          obj.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          scene.add(obj);
+          obj.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(obj);
+          blockers.push(box);
+          targets.push({ id, entry, box, collection: level.collections?.[id] });
+          pieceById.set(id, obj);
+        };
+        const propLoads = Promise.all(Object.entries(level.props ?? {}).map(([id, prop]) =>
+          placeProp(id, prop).catch(err => console.error('Prop failed to load:', id, err)),
+        ));
+
         // Small things to pick up, each stood on its piece of furniture. The level
         // opens once they are down, so their markers and focus boxes exist.
         const placeInspectable = async (id: string, insp: Inspectable) => {
@@ -1339,8 +1529,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           return table.items.map(item => placePickup(item, anchor).catch(err => console.error('Pickup failed to load:', item.id, err)));
         });
         Promise.all([
+          propLoads,
+          // After the props, which some of them stand on.
           ...Object.entries(level.inspectables ?? {}).filter(([, insp]) => !insp.in).map(([id, insp]) =>
-            placeInspectable(id, insp).catch(err => console.error('Inspectable failed to load:', id, err)),
+            propLoads.then(() => placeInspectable(id, insp)).catch(err => console.error('Inspectable failed to load:', id, err)),
           ),
           ...pickupLoads,
         ]).then(() => {
@@ -1411,9 +1603,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     };
 
     // ── Input ───────────────────────────────────────────────────────
+    const needsEar = !!(level.birds?.cries || level.weather || level.hunter?.sound || level.hunter?.chaseMusic);
     const onKeyDown = (e: KeyboardEvent) => {
-      // A level with birds calling needs sound from the start; a key press lets it begin.
-      if (level.birds?.cries || level.weather) ensureListener();
+      // A level with birds calling (or a hunter growling) needs sound from the start; a key press lets it begin.
+      if (needsEar) ensureListener();
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
         keys.add(e.code);
         if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -1431,7 +1624,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // A gun with arms in hand: left button fires, right aims, and a click examines nothing.
     const armed = () => { const gun = gunOf(level, carriedRef.current, heldItemRef.current, lampOutRef.current); return !!(gun?.arms || gun?.revolver); };
     const onCanvasClick = () => {
-      if (level.birds?.cries || level.weather) ensureListener();
+      if (needsEar) ensureListener();
       if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
       else if (focusRef.current && !armed()) openTarget(focusRef.current);
@@ -1492,6 +1685,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }).catch(err => console.error('Wanderer failed to load:', w.model, err));
     }
     const wanderAhead = new THREE.Vector3();
+
+    // Something hunting the investigator (see Hunter). It walks by the same collision.
+    const litChest = new THREE.Vector3();
+    const toLamp = new THREE.Vector3();
+    const hunter = level.hunter ? createHunter(level.hunter, scene, el, {
+      groundAt, wallDist, hitsFurniture, radius: RADIUS, step: STEP, listener: () => listener,
+      // In lamplight: near a lit bulb on this storey, with nothing between.
+      litAt: (p) => lamps.some(l => {
+        if (!l.on || !powerRef.current || l.pos.y < p.y || l.pos.y - p.y > 3.4) return false;
+        litChest.set(p.x, p.y + 1.2, p.z);
+        const dist = l.pos.distanceTo(litChest);
+        if (dist > l.distance * 0.55) return false;
+        toLamp.subVectors(litChest, l.pos).normalize();
+        return wallDist(l.pos.clone(), toLamp, dist) >= dist - 0.1;
+      }),
+    }) : null;
+    const hunterLook = new THREE.Vector3();
     const onPeers = (peers: Peer[]) => {
       if (disposed) return;
       const live = new Set(peers.map(p => p.id));
@@ -1770,6 +1980,15 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         w.curve.getTangentAt(u, wanderAhead);
         w.root.rotation.y = Math.atan2(wanderAhead.x, wanderAhead.z);
       }
+      if (hunter) {
+        camera.getWorldDirection(hunterLook);
+        hunter.update(dt, {
+          active: !!model && !sleep && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current,
+          feet, eye: camera.position, look: hunterLook,
+          torchOn: torchRef.current && !woods?.visible,
+        });
+        camera.position.add(hunter.jolt);
+      }
 
       // People turn to watch whoever comes near, and settle back when they leave.
       // Their names show only close to, so a name never gives them away through a wall.
@@ -1865,11 +2084,15 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
       for (const r of radios.values()) if (!r.el.paused) r.glow.intensity = 0.55 + Math.random() * 0.1;
       // Old wiring: now and then a bulb browns out for a moment.
+      if (powerRef.current !== shownPower) {
+        shownPower = powerRef.current;
+        for (const g of bulbGlows) g.mat.emissiveIntensity = shownPower ? g.base : 0;
+      }
       if (lamps.length) {
         // The nearest lamps get the lights; one already lit keeps its light
         // until another is a metre nearer, so two lamps never trade back and forth.
         for (const l of lamps) l.d = l.pos.distanceTo(camera.position) - (l.slot ? 1 : 0);
-        const wanted = new Set(lamps.filter(l => l.on).sort((a, b) => a.d - b.d).slice(0, lampPool.length));
+        const wanted = new Set(lamps.filter(l => l.on && powerRef.current).sort((a, b) => a.d - b.d).slice(0, lampPool.length));
         const fade = dt / 0.35;
         for (const l of lamps) {
           l.w = wanted.has(l) && l.slot ? Math.min(1, l.w + fade) : Math.max(0, l.w - fade);
@@ -1943,8 +2166,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
 
       // Ease in, and let the blur swell and ebb a little so it feels alive.
-      const eased = dread * dread * (3 - 2 * dread);
-      const blur = dreadHazard ? eased * dreadHazard.maxBlurPx * (1 + 0.15 * Math.sin(t * 2.3)) : 0;
+      // Facing the hunter blurs too; the stronger of the two wins.
+      const hunterBlur = hunter ? hunter.blur * (1 + 0.15 * Math.sin(t * 2.3)) : 0;
+      const eased = Math.max(dread * dread * (3 - 2 * dread), hunter ? hunter.blur / 3.5 : 0);
+      const blur = Math.max(dreadHazard ? eased * dreadHazard.maxBlurPx * (1 + 0.15 * Math.sin(t * 2.3)) : 0, hunterBlur);
       const rounded = Math.round(blur * 10) / 10;
       if (rounded !== shownBlur) {
         shownBlur = rounded;
@@ -2041,6 +2266,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         }
       });
       torch.shadow.map?.dispose();
+      hunter?.dispose();
       bulletHoles.dispose();
       shells.dispose();
       inspectRef.current = null;
@@ -2150,6 +2376,28 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               ))}
             </div>
           )}
+          {/* gamelord throws the mains here (or with L) for everyone in the level. */}
+          {level.lamps && isGamelord && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: level.weather && isGM ? 0 : 'auto', marginRight: 12 }}>
+              {powerError && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--blood)' }}>Not saved</span>
+              )}
+              <button
+                onClick={() => void togglePower()}
+                aria-pressed={power}
+                title="Turn every lamp in the level on or off, for everyone [L]"
+                style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                  padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                  background: power ? 'rgba(201,148,79,0.18)' : 'transparent',
+                  border: `1px solid ${power ? 'var(--brass)' : 'var(--line)'}`,
+                  color: power ? 'var(--brass)' : 'var(--ink-text-2)',
+                }}
+              >
+                Lights {power ? 'on' : 'off'} [L]
+              </button>
+            </div>
+          )}
           <button
             onClick={onClose}
             aria-label={level.leaveLabel}
@@ -2208,6 +2456,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Open {focus.entry.title}</>
               ) : level.typewriters?.[focus.id] ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Type at the {focus.entry.title}</>
+              ) : level.locks?.[focus.id] ? (
+                openLocks[focus.id]
+                  ? <><span style={{ color: 'var(--brass)' }}>[E]</span> Look inside the {focus.entry.title.toLowerCase()}</>
+                  : <><span style={{ color: 'var(--brass)' }}>[E]</span> Crack the {focus.entry.title.toLowerCase()}</>
+              ) : level.builders?.[focus.id] ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Work on the {focus.entry.title.charAt(0).toLowerCase()}{focus.entry.title.slice(1)}</>
               ) : level.radios?.[focus.id] ? (
                 <>
                   <span style={{ color: 'var(--brass)' }}>[E]</span> Turn {radiosOn.has(focus.id) ? 'off' : 'on'} {focus.entry.title}
@@ -2352,6 +2606,35 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
           {typing?.npc && <NpcConversation npc={typing.npc} onClose={closeTyping} />}
 
+          {typing && level.builders?.[typing.id] && (
+            <ModelBuilder
+              title={typing.entry.title}
+              text={typing.entry.text}
+              build={level.builders[typing.id]}
+              isGM={isGM}
+              onPlaced={piece => onShareRef.current(`set ${piece.title} into the ${typing.entry.title.charAt(0).toLowerCase()}${typing.entry.title.slice(1)}`)}
+              onClose={closeTyping}
+            />
+          )}
+
+          {typing && level.locks?.[typing.id] && (
+            <SafeCracker
+              title={typing.entry.title}
+              text={typing.entry.text}
+              lock={level.locks[typing.id]}
+              onOpened={() => {
+                setLock(typing.id);
+                onShareRef.current(`cracked the ${typing.entry.title.toLowerCase()}`);
+              }}
+              // Opened, it steps straight to what is inside; otherwise back into the level.
+              onClose={() => {
+                const inside = openLocksRef.current[typing.id] ? insideOf(typing) : null;
+                setTyping(null);
+                if (inside) openReading(inside); else closeTyping();
+              }}
+            />
+          )}
+
           {typing && level.typewriters?.[typing.id] && (
             <TypewriterPane
               title={typing.entry.title}
@@ -2492,6 +2775,19 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                   >
                     {shared.has(reading.id) ? 'Shared with party' : 'Share with party'}
                   </button>
+                  {isGM && reading.id.endsWith('-inside') && level.locks?.[reading.id.slice(0, -'-inside'.length)] && (
+                    <button
+                      onClick={() => { setLock(reading.id.slice(0, -'-inside'.length), true); closeReading(); }}
+                      title="GM: shut the safe again for everyone"
+                      style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                        padding: '5px 10px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                        background: 'transparent', border: '1px solid var(--line)', color: 'var(--ink-text-2)',
+                      }}
+                    >
+                      Lock it again
+                    </button>
+                  )}
                   <button
                     onClick={closeReading}
                     style={{

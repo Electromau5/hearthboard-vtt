@@ -107,6 +107,10 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Medicine Cabinet',
     text: 'A glass-fronted cabinet of brown bottles: chloral hydrate, paraldehyde, bromide, laudanum. The lock is good and the key is not in it.',
   },
+  iron_safe: {
+    title: 'Iron Safe',
+    text: 'An iron safe against the back wall of the nurses\' station, between the window and the medicine cabinet. Where the night staff would lock up whatever patients arrive with. The door is shut, and the dial has been wiped clean of fingermarks.',
+  },
   gramophone: {
     title: 'Day Room Gramophone',
     text: 'A cabinet gramophone on a side table in the day room, a record still on the platter. The patients are allowed it on Sundays.',
@@ -237,11 +241,33 @@ export const BELLEVUE_LEVEL: WalkthroughLevel = {
   errorText: 'The ward could not be loaded.',
   enterText: 'Click to step inside',
   leaveLabel: 'Leave the ward',
+  credit: '"Antique Iron Safe" by pixelgrapher — CC BY 4.0',
   examinables: EXAMINABLES,
   radios: RADIOS,
   uvStains: UV_STAINS,
+  // Upstairs in the nurses' station, its back to the south wall beside the window.
+  props: { iron_safe: { model: '/props/iron-safe.glb', at: [-1.5, 7.5], turnDeg: 180, floorY: FH } },
+  // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.
+  locks: {
+    iron_safe: {
+      opened: {
+        title: 'Iron Safe — Open',
+        text: 'Rows of brown envelopes, each sealed and labelled with a cell or room number and a date of admission: wedding rings, pocket watches, a rosary, a child\'s tooth in a twist of paper. The envelope for Cell 66 has been slit open and is empty.',
+      },
+    },
+  },
   // He keeps the admissions cage at the ward's entrance. What he knows, hides and remembers: src/lib/npc-personas.ts.
   npcs: [{ id: 'chief-attendant', node: 'Npc_attendant', name: 'The Chief Attendant', outfit: 'chief-attendant' }],
+  // TEST: a Deep One loose on the ward floor. It roams both storeys and comes for whoever it
+  // sees — ten feet off under the lamps, or from anywhere it can see if a torch beam is on it.
+  hunter: {
+    model: '/avatars/deep-one.glb', walkClip: 'Walk', attackClip: 'Attack',
+    start: [-4, FH, 0], walkSpeed: 1.0, chaseSpeed: 2.7,
+    sightLit: 3.05,
+    sound: '/deep-one.mp3', chaseMusic: '/chase-music.mp3',
+    // Baked with the hunter's bake() — rebake if bellevue-ward.glb changes.
+    nav: '/bellevue-nav.json',
+  },
   // Caged ceiling bulbs: corridors and the rooms the night staff use. Cells, the stairwell,
   // the office and the patient rooms are left dark.
   lamps: { color: 0xffe2b0, intensity: 3.2, distance: 8 },

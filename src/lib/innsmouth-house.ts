@@ -427,6 +427,10 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Sash Lock',
     text: 'Through the gap between two boards you can reach the meeting rails of the sash. The brass lock is thrown, the cam turned hard into its keeper, and the sill below is white with something that crunches under your glove.',
   },
+  iron_safe: {
+    title: 'Iron Safe',
+    text: 'A squat iron safe on cast feet, wedged into the corner by the front door. The maker\'s gilt lettering has worn to a ghost, the paint is scabbed with rust, and the door is shut fast. The dust on its top is undisturbed; the floorboards in front of it are scuffed bare.',
+  },
 };
 
 /**
@@ -581,6 +585,52 @@ const UV_STAINS: UvStain[] = [
         skill: 'Psychology', action: 'Think about who wrote it',
         success: 'Written for the children, not for him — and scrubbed off later by someone else, someone who did not want them to know.',
         failure: 'A warning, or a threat. You cannot tell which.',
+      },
+    ],
+  },
+  // The same name three times, in brine with blood flung across it, leading from the hall to the study.
+  {
+    id: 'uv_find_abigail', kind: 'brine', mark: 'writing', splash: 'blood',
+    words: ['FIND ABIGAIL'],
+    // The hall's west wall above the hall table, beside its oil lamp.
+    wall: { from: [-1.0, 1.5, 0.6], toward: [-1, 0, 0], size: [1.1, 0.36] },
+    title: 'Above the Hall Table',
+    text: 'On the wall over the hall table, beside the lamp, letters drawn in brine that glows green under the lamp, and flung across them a spray of blood that shows black: FIND ABIGAIL. By any other light the wallpaper is only stained.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Study the letters',
+        success: 'The brine went on first, with a finger. The blood came after, flung, not painted: it beads over the letters as if someone was struck down beside them while the words were still wet.',
+        failure: 'Old stains under older paper. You can make nothing more of them.',
+      },
+    ],
+  },
+  {
+    id: 'uv_abigail_parlor', kind: 'brine', mark: 'writing', splash: 'blood',
+    words: ['ABIGAIL'],
+    // The parlor's west wall past the fireplace, facing the door from the hall.
+    wall: { from: [-4.0, 1.5, 4.25], toward: [-1, 0, 0], size: [1.1, 0.42] },
+    title: 'A Name on the Parlor Wall',
+    text: 'Facing the door from the hall, on the wall past the fireplace: one word in glowing brine, spattered over with blood. ABIGAIL.',
+    checks: [
+      {
+        skill: 'Psychology', action: 'Think about who wrote it',
+        success: 'Not a warning this time. The letters are larger and less careful than in the hall, the hand of someone calling a name rather than leaving one.',
+        failure: 'A name, and nothing about who needed it written here.',
+      },
+    ],
+  },
+  {
+    id: 'uv_abigail_door', kind: 'brine', mark: 'writing', splash: 'blood',
+    words: ['ABIGAIL IS', 'BEHIND', 'THE DOOR'],
+    // The study's west wall, beside its door from the hall.
+    wall: { from: [3.5, 1.5, 4.25], toward: [-1, 0, 0], size: [1.2, 0.75] },
+    title: 'Beside the Study Door',
+    text: 'On the wall beside the study door, where you would only see it turning to leave: ABIGAIL IS BEHIND THE DOOR, in glowing brine, flecked all over with blood.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Look at the brine',
+        success: 'The brine has run from the bottom of every letter and dried in long salt tears, the same green as the footprints that lead to the back door.',
+        failure: 'Salt spray and old blood. Which door, it does not say.',
       },
     ],
   },
@@ -803,6 +853,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   errorText: 'The house could not be loaded.',
   enterText: 'Click to step inside',
   leaveLabel: 'Leave the house',
+  credit: '"Antique Iron Safe" by pixelgrapher — CC BY 4.0',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
@@ -810,6 +861,17 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   photoFrames: PHOTO_FRAMES,
   uvStains: UV_STAINS,
   inspectables: INSPECTABLES,
+  // In the hall, in the corner between the study door and the front door, facing the stairs.
+  props: { iron_safe: { model: '/props/iron-safe.glb', at: [1.56, 4.35], turnDeg: -90 } },
+  // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.
+  locks: {
+    iron_safe: {
+      opened: {
+        title: 'Iron Safe — Open',
+        text: 'The door swings out on a dry squeal. Inside, on a single shelf: a bundle of papers tied with faded ribbon, a cash box with its lid prised up and nothing in it, and a ring of keys on a tag stamped with a number. The steel walls are beaded with salt, as if the sea got in without opening the door.',
+      },
+    },
+  },
   // The bedroom window has no furniture node of its own (the windows are part of the walls).
   spots: { bedroom_window: { min: [5.72, 0.85, -3.95], max: [5.93, 2.35, -2.85] } },
   atmosphere: {

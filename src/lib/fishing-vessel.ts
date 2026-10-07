@@ -80,6 +80,10 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Carved Mark',
     text: 'A ring cut deep into the after bulkhead, a three-pronged sign inside it and short strokes spaced around its edge. The cuts are paler and cleaner than the wood around them.',
   },
+  iron_safe: {
+    title: 'Iron Safe',
+    text: 'An iron safe standing in the hold among the crates, where no fishing boat has any use for one. Salt has crusted white along its seams and round the dial, and the hinges weep rust down the door. Scrapes in the planking lead to it from under the hatch.',
+  },
   // Engine room
   engine: {
     title: 'Engine',
@@ -109,9 +113,21 @@ export const VESSEL_LEVEL: WalkthroughLevel = {
   errorText: 'The vessel could not be loaded.',
   enterText: 'Click to climb aboard',
   leaveLabel: 'Leave the vessel',
+  credit: '"Antique Iron Safe" by pixelgrapher — CC BY 4.0',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
+  // In the fish hold, against the starboard side aft of the crates, facing across the hold.
+  props: { iron_safe: { model: '/props/iron-safe.glb', at: [0.85, 1.0], turnDeg: -90, floorY: -2.3 } },
+  // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.
+  locks: {
+    iron_safe: {
+      opened: {
+        title: 'Iron Safe — Open',
+        text: 'Seawater sloshes out over your boots as the door comes open. Inside, wrapped in oilcloth and still dry, is a ship\'s manifest for a cargo that never reached any harbourmaster\'s books, and a pouch heavy with something that clinks. The bottom of the safe is lined with the same broad grey-green scales as the hold floor.',
+      },
+    },
+  },
   // The GM sets dawn, day, evening or night (`/admin/experience`); night is the atmosphere below.
   weather: true,
   // Herring gulls over the wreck by day: a flock every two minutes, out and back.

@@ -224,6 +224,30 @@ function paintSpatter(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => nu
   }
 }
 
+/**
+ * Liquid flung across a wall from no one place: drops scattered over the
+ * whole patch, thickest in the middle, a few big enough to run.
+ */
+function paintSplash(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => number) {
+  for (let i = 0; i < 220; i++) {
+    // Gaussian-ish about the centre, so the edges thin out.
+    const x = w / 2 + (rnd() + rnd() + rnd() - 1.5) * w * 0.55;
+    const y = h / 2 + (rnd() + rnd() + rnd() - 1.5) * h * 0.55;
+    if (x < 4 || y < 4 || x > w - 4 || y > h - 4) continue;
+    const size = (0.002 + Math.pow(rnd(), 3) * 0.016) * ppm;
+    const ang = rnd() * Math.PI * 2;
+    ctx.globalAlpha = 0.5 + rnd() * 0.4;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * (1 + rnd() * 1.4), size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    if (size > 0.008 * ppm && rnd() < 0.5) run(ctx, rnd, x, y, (0.04 + rnd() * 0.2) * ppm, size * 0.8, 0.6);
+  }
+}
+
 /** A circle, a three-tined staff with wavering tines, and a wave beneath — drawn with a wet finger. */
 function paintGlyph(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => number) {
   const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.4;
@@ -536,6 +560,21 @@ export function createUvStains(
       else if (stain.mark === 'note') paintNote(ctx, c.width, c.height, rnd, stain.words ?? []);
       const geo = new THREE.PlaneGeometry(w, h);
       owned.push(geo);
+      if (stain.splash) {
+        // The flung liquid goes on first, a little wider than the mark, so the mark reads over it.
+        const sw = w * 1.3, sh = h * 1.4;
+        const sppm = Math.min(700, 900 / Math.max(sw, sh));
+        const [sc, sctx] = canvasFor(sw, sh, sppm);
+        paintSplash(sctx, sc.width, sc.height, sppm, seeded(`${stain.id}/splash`));
+        const sgeo = new THREE.PlaneGeometry(sw, sh);
+        owned.push(sgeo);
+        const splash = new THREE.Mesh(sgeo, material(stain.splash, texture(sc)));
+        splash.position.copy(hit.point).addScaledVector(hit.normal, 0.003);
+        splash.lookAt(hit.point.clone().add(hit.normal));
+        splash.rotateZ(THREE.MathUtils.degToRad(turnDeg));
+        splash.renderOrder = 1;
+        group.add(splash);
+      }
       const mesh = new THREE.Mesh(geo, material(stain.kind, texture(c)));
       mesh.position.copy(hit.point).addScaledVector(hit.normal, 0.004);
       mesh.lookAt(hit.point.clone().add(hit.normal));

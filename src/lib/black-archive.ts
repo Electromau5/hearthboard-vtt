@@ -28,6 +28,7 @@ import { INNSMOUTH_SCENES } from './innsmouth-scenes';
 import { fetchBoard, fileNote, NOTE_SIZE, type BoardItem, type BoardState } from './case-board';
 import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, LightSwitch, MapPin, PickupTable, PinNote, RadioSet, Typewriter, UvStain, WalkthroughLevel } from './walkthrough';
 import { HELD_MODELS } from './held-items';
+import { RLYEH_MODEL } from './rlyeh-model';
 
 const EXAMINABLES: Record<string, Examinable> = {
   // The nave
@@ -370,7 +371,7 @@ function DRAFTING_EXAMINABLES(): Record<string, Examinable> {
   return {
     rlyeh_model: {
       title: 'Model of R’lyeh',
-      text: 'A table-sized model in green-black basalt, standing in a shallow tray of painted sea: monoliths leaning against nothing, a Great Door tilted out of true and set in a frame that isn’t parallel to it, and a stair that turns more than it climbs. A man, to scale, stands by the stair. He is very small.',
+      text: 'A table-sized model in green-black basalt, half built: a shelf of broken stone in a shallow tray of painted sea, faint outlines pencilled on it where the city should stand, and its pieces laid out along the table’s edge: monoliths that lean against nothing, a Great Door that sits out of true, a stair that turns more than it climbs. Some outlines have no piece to fill them. A man, to scale, stands by the foot of the stair. He is very small.',
       checks: [
         {
           skill: 'Architecture & Engineering', action: 'Assess the structure',
@@ -787,6 +788,7 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
   collections: COLLECTIONS,
   radios: RADIOS,
   typewriters: TYPEWRITERS,
+  builders: { rlyeh_model: RLYEH_MODEL },
   pinboard: { size: [5.1, 1.95], load: boardPins, refreshSec: 8 },
   // The wall chart is 5 m wide at the image's 1024 × 559 aspect (build_archive_cli.gd).
   mapPins: { size: [5.0, 5.0 * 559 / 1024], pins: MAP_PINS },

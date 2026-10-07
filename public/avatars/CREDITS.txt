@@ -27,3 +27,5 @@ deep-one.glb
   reduced to 60k triangles, painted with vertex colours in Blender).
   Animation: Mixamo "Mutant Walking" (Adobe Mixamo), retargeted to a fitted Mixamo skeleton and made
   walk-in-place, arms damped to suit the sculpt.
+  Attack: Mixamo "Mutant Punch" (Adobe Mixamo), retargeted to the same skeleton; limbs follow the
+  source by direction only, elbows and wrists capped, feet kept on the floor.

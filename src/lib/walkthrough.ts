@@ -189,6 +189,59 @@ export type Typewriter = {
   pinLabel: string;
 };
 
+/**
+ * One block of a model, built up out of boxes. Coordinates are metres from
+ * the foot of the piece, which stands on the model's base: x east, y up, z
+ * south. `rot` is in degrees, applied X, then Y, then Z.
+ */
+export type ModelBox = {
+  size: Vec3;
+  at: Vec3;
+  rot?: Vec3;
+  mat: 'basalt' | 'verdigris' | 'paper';
+};
+
+export type ModelPiece = {
+  id: string;
+  /** "the Great Door", for "set the Great Door into the model". */
+  title: string;
+  boxes: ModelBox[];
+  /** Where it fits: metres from the centre of the base's top, and its turn about the vertical (a multiple of 15°). */
+  slot: { x: number; z: number; yawDeg: number };
+  /** A piece that looks the same turned this far (180 for a plain slab) fits either way round. */
+  symmetryDeg?: number;
+  /**
+   * Lying loose on the model's table from the start, or somewhere else for
+   * the investigators to find and bring back (`POST { action: 'find' }`).
+   */
+  source: 'table' | 'elsewhere';
+  /** Where a loose piece lies on the table's margin, from the base's centre, before anyone moves it. */
+  loose?: { x: number; z: number; yawDeg: number };
+};
+
+/**
+ * A model to put together on a table (the architect's R'lyeh): E opens a
+ * close-up of the tabletop where the pieces are dragged into their slots.
+ * Progress is the party's, shared through `/api/models/<id>`; the level draws
+ * the placed pieces on the real table.
+ */
+export type ModelBuild = {
+  /** Shared-state key, `/api/models/<id>`. */
+  id: string;
+  /** The centre of the base's top in level coordinates, and the base's width (X) and depth (Z). */
+  base: { at: Vec3; size: [number, number] };
+  /** The tabletop round the base, whose margin holds the loose pieces: width, depth, and how far below the base's top it lies. */
+  table: { size: [number, number]; drop: number };
+  pieces: ModelPiece[];
+  /** Fixed stones that came with the base, drawn but not moved. */
+  rubble: ModelBox[];
+  /** Shown in the builder's header when every piece is in place. */
+  completeText: string;
+};
+
+/** What `/api/models/<id>` keeps: the ids of the pieces in place and of those found elsewhere. */
+export type ModelState = { placed: string[]; found: string[] };
+
 /** A pin in a wall map: examining it (E) reads out that place's summary. */
 export type MapPin = {
   id: string;
@@ -287,6 +340,44 @@ export type InspectClue = {
 };
 
 /**
+ * A piece of furniture from its own .glb, set down in a level that was built
+ * without it: it stands on the floor, blocks like the level's own furniture,
+ * and is examined (card, skill checks and all) through the examinable of the
+ * same id. Inspectables can stand `on` it.
+ */
+export type Prop = {
+  /** The .glb under public/: its origin at the foot of the piece, its front facing +Z. */
+  model: string;
+  /** World X and Z of its foot; it stands on the floor there. */
+  at: [number, number];
+  /** Turn about the vertical: 0 faces +Z, 90 faces +X. */
+  turnDeg?: number;
+  /** Height of the storey it stands on, for an upper floor. Default 0. */
+  floorY?: number;
+};
+
+/**
+ * A safe to crack: while it is locked, E turns its dial (SafeCracker) — marks
+ * round the rim, a pip running round them, E to set each tumbler as the pip
+ * crosses its mark, all of them before the clock runs out. Once it is open it
+ * is open for the whole party (`/api/locks`), and E reads `opened` instead
+ * of the examinable. Keyed like `examinables`.
+ */
+export type SafeLock = {
+  /** Fewest and most marks on the dial, picked afresh each attempt. Default [3, 5]. */
+  points?: [number, number];
+  /** Seconds on the clock. Default 15. */
+  seconds?: number;
+  /** Width of each mark, in degrees of the dial. Default 26. */
+  markDeg?: number;
+  /** What E shows once it is open: what is inside. */
+  opened: Examinable;
+};
+
+/** What `/api/locks` keeps for a level: the locks that are open, by examinable id. */
+export type LocksState = Record<string, { by: string; at: number }>;
+
+/**
  * Something lying on a piece of furniture that can be carried in the hand:
  * E picks it up (shown first-person, see held-items.ts), E on its empty place
  * puts it back, and picking up another sends the first back to its place.
@@ -378,6 +469,8 @@ export type UvStain = Examinable & {
   words?: string[];
   /** For `writing`: someone has tried to wipe it off, so only fragments stay legible. */
   scrubbed?: boolean;
+  /** Wall marks: a second liquid flung across the mark — brine sprayed over writing in blood, say. */
+  splash?: 'blood' | 'brine';
   /** Wall marks: cast from `from` along `toward`; the mark is centred where it meets a wall. */
   wall?: { from: Vec3; toward: Vec3; size: [number, number]; turnDeg?: number };
   /** Floor marks: the trail's path, as [x, z] points in walking order. */
@@ -420,6 +513,36 @@ export type Wanderer = {
   y?: number;
 };
 
+/**
+ * A creature that roams the level on its own, finds its way between floors,
+ * and hunts the investigator once it sees them (src/app/components/hunter.ts).
+ * It sees you `sightLit` metres off when you stand in lamplight in front of it,
+ * from any distance when your torch beam falls on it, and nothing otherwise
+ * — always with a clear line between you. Its blows leave
+ * marks on the screen; they do no harm yet.
+ */
+export type Hunter = {
+  /** A .glb under public/ whose figure faces +Z, with a walk-in-place clip and an attack clip. */
+  model: string;
+  walkClip: string;
+  attackClip: string;
+  /** Where it starts, in level metres; it learns the floors from here. */
+  start: Vec3;
+  /** Metres per second at the walk clip's natural pace, and when it closes in. */
+  walkSpeed: number;
+  chaseSpeed: number;
+  sightLit: number;
+  /** Its own noise, looped and heard from where it stands. */
+  sound?: string;
+  /** Played over everything while it chases you; it fades away after it gives up. */
+  chaseMusic?: string;
+  /**
+   * Its map of the walkable floor, baked by the hunter's `bake()` (a JSON file
+   * under public/). Without one it maps the level live, which takes a while.
+   */
+  nav?: string;
+};
+
 export type WalkthroughLevel = {
   /** Stable name for the level's live-presence room — investigators in the same level see each other. */
   id: string;
@@ -449,6 +572,8 @@ export type WalkthroughLevel = {
   collections?: Record<string, Collection>;
   pinboard?: Pinboard;
   typewriters?: Record<string, Typewriter>;
+  /** Models to put together, keyed by the examinable whose E opens the builder. */
+  builders?: Record<string, ModelBuild>;
   /** Pins stuck into the map at the "MapFace" node; `size` is the map's width and height in metres. */
   mapPins?: { size: [number, number]; pins: MapPin[] };
   photoFrames?: PhotoFrames;
@@ -456,8 +581,14 @@ export type WalkthroughLevel = {
   npcs?: NpcSpot[];
   /** Figures that walk loops and ignore the investigators. */
   wanderers?: Wanderer[];
+  /** Something that hunts the investigators. */
+  hunter?: Hunter;
   /** Stains for the Wood's lamp to find. A level without them has no lamp to draw. */
   uvStains?: UvStain[];
+  /** Safes to crack, keyed by examinable id. */
+  locks?: Record<string, SafeLock>;
+  /** Furniture from outside the level's model, keyed by examinable id. */
+  props?: Record<string, Prop>;
   /** Objects to pick up and turn over, keyed by examinable id. */
   inspectables?: Record<string, Inspectable>;
   /**
