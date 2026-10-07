@@ -128,6 +128,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [openLocks, setOpenLocks] = useState<LocksState>({});
   const openLocksRef = useRef(openLocks);
   useEffect(() => { openLocksRef.current = openLocks; }, [openLocks]);
+  // Safes gamelord has opened himself: open for him only, and only until he leaves the level.
+  const gmOpenRef = useRef<LocksState>({});
   const [shared, setShared] = useState<Set<string>>(() => new Set());
   const [sharedDocs, setSharedDocs] = useState<Set<string>>(() => new Set());
   // The reading card's skill panel, and every skill tried this visit, by "<object>/<skill>".
@@ -303,7 +305,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     if (!level.locks) return Promise.resolve(openLocksRef.current);
     return fetch(`/api/locks?level=${level.id}`)
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((s: LocksState) => { openLocksRef.current = s; setOpenLocks(s); return s; })
+      .then((shared: LocksState) => { const s = { ...shared, ...gmOpenRef.current }; openLocksRef.current = s; setOpenLocks(s); return s; })
       .catch(err => { console.warn('Could not load the locks:', err); return openLocksRef.current; });
   }, [level]);
   useEffect(() => { void fetchLocks(); }, [fetchLocks]);
@@ -320,6 +322,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       const next = { ...openLocksRef.current, [id]: { by: author, at: Date.now() } };
       openLocksRef.current = next;
       setOpenLocks(next);
+      // gamelord's opening is never shared or kept: the safe is shut again next time he comes in.
+      if (isGamelord) { gmOpenRef.current = { ...gmOpenRef.current, [id]: next[id] }; return; }
+    } else if (gmOpenRef.current[id]) {
+      const rest = { ...gmOpenRef.current };
+      delete rest[id];
+      gmOpenRef.current = rest;
     }
     fetch('/api/locks', {
       method: 'POST',
@@ -327,9 +335,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       body: JSON.stringify({ level: level.id, id, relock }),
     })
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((s: LocksState) => { openLocksRef.current = s; setOpenLocks(s); })
+      .then((shared: LocksState) => { const s = { ...shared, ...gmOpenRef.current }; openLocksRef.current = s; setOpenLocks(s); })
       .catch(err => console.error('Could not set the lock:', err));
-  }, [level, author]);
+  }, [level, author, isGamelord]);
 
   // A collection (filing cabinet, gun rack…) opens its contents, fetched afresh
   // each time; a typewriter opens a sheet to type on; anything else opens the

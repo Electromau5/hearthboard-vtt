@@ -5,7 +5,8 @@ import type { LocksState } from "@/lib/walkthrough";
 
 /**
  * The safes cracked in a walkthrough level. Shared by everyone: once one
- * investigator opens a safe, it stands open for the whole party.
+ * investigator opens a safe, it stands open for the whole party. gamelord's
+ * own openings are not kept (the walkthrough holds them for his visit only).
  */
 
 const statePath = (level: string) => `locks/${level}.json`;
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
   if (relock && session.user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const state = await readJSON<LocksState>(statePath(level), {});
+  if (!relock && session.user.id === "gamelord") return NextResponse.json(state);
   if (relock) delete state[id];
   else state[id] ??= { by: session.user.id, at: Date.now() };
   await writeJSON(statePath(level), state);
