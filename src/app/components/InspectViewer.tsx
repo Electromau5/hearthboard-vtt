@@ -138,17 +138,18 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
         for (const [id, clue] of Object.entries(inspectable.clues)) {
           const node = model.getObjectByName(`Clue_${id}`);
           if (!node) { console.warn('Inspectable has no marker for clue', id); continue; }
-          // Nothing to draw: the clue is in the model itself.
+          // Nothing to draw: the clue is in the model itself — unless it is a
+          // UV clue, which still needs something for the lamp to light.
           const mark = clue.mark;
-          if (!mark) { marks.push({ id, clue, node, seen: 0 }); continue; }
-          const tex = drawMark({ ...clue, mark });
+          if (!mark && !clue.uv) { marks.push({ id, clue, node, seen: 0 }); continue; }
+          const tex = mark ? drawMark({ ...clue, mark }) : drawGlow(clue.size);
           const geo = new THREE.PlaneGeometry(clue.size[0], clue.size[1]);
           const mat = clue.uv
             ? new THREE.MeshBasicMaterial({ map: tex, color: 0xb8ffe6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })
             : new THREE.MeshStandardMaterial({
               map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4,
               // Pressed into brass; bitten into wood or written on paper.
-              ...(mark.kind === 'stamp' ? { metalness: 0.7, roughness: 0.55 } : { metalness: 0, roughness: 0.9 }),
+              ...(mark?.kind === 'stamp' ? { metalness: 0.7, roughness: 0.55 } : { metalness: 0, roughness: 0.9 }),
               ...(clue.raking ? { opacity: 0 } : {}),
             });
           const decal = new THREE.Mesh(geo, mat);
@@ -287,12 +288,13 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
         const facing = normal.dot(toCam.subVectors(camera.position, pos).normalize());
         // Lit by how squarely the clue faces the lamp.
         const lit = m.clue.uv ? uvPower * THREE.MathUtils.clamp(normal.dot(toLamp.subVectors(lampPos, pos).normalize()) * 1.5, 0, 1) : 1;
-        if (m.clue.uv && m.mat) m.mat.opacity = Math.min(1, lit * 1.4) * THREE.MathUtils.clamp(facing * 2, 0, 1);
         // Pressed writing shows only as the surface turns away, the light skimming across it.
         const raked = m.clue.raking
           ? THREE.MathUtils.smoothstep(facing, RAKE_FROM, RAKE_FROM + 0.12) * (1 - THREE.MathUtils.smoothstep(facing, RAKE_TO - 0.15, RAKE_TO))
           : 0;
-        if (m.clue.raking && m.mat) m.mat.opacity = raked;
+        if (m.mat && (m.clue.uv || m.clue.raking)) {
+          m.mat.opacity = (m.clue.uv ? Math.min(1, lit * 1.4) * THREE.MathUtils.clamp(facing * 2, 0, 1) : 1) * (m.clue.raking ? raked : 1);
+        }
         const onScreen = pos.clone().project(camera);
         const plain = (m.clue.raking ? raked > 0.6 : facing > 0.75) && Math.abs(onScreen.x) < 0.85 && Math.abs(onScreen.y) < 0.85
           && m.clue.size[0] * pxPerMetre / renderer.getPixelRatio() > NOTICE_PX
@@ -483,7 +485,7 @@ function drawMark(clue: InspectClue & { mark: NonNullable<InspectClue['mark']> }
       });
     }
   } else if (clue.mark.kind === 'writing') {
-    drawWriting(ctx, W, H, clue.mark.lines ?? [], clue.raking ? 'pressed' : clue.uv ? 'glow' : clue.mark.style ?? 'ink');
+    drawWriting(ctx, W, H, clue.mark.lines ?? [], clue.uv ? 'glow' : clue.raking ? 'pressed' : clue.mark.style ?? 'ink');
   } else if (clue.mark.kind === 'gouge' && clue.mark.lines?.length) {
     // Letters cut in with a knife, then dug out again: the cuts still show at the edges.
     drawWriting(ctx, W, H, clue.mark.lines, 'carved');
@@ -558,6 +560,39 @@ function drawMark(clue: InspectClue & { mark: NonNullable<InspectClue['mark']> }
       ctx.fillText(line, W / 2, H * (0.9 + i * 0.08));
     });
   }
+  // Under the lamp any mark fluoresces: keep its shape, drop its colour, so
+  // the material's tint shows it on the dark.
+  if (clue.uv) {
+    const img = ctx.getImageData(0, 0, W, H);
+    for (let i = 0; i < img.data.length; i += 4) img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+    ctx.putImageData(img, 0, 0);
+  }
+  return canvasTexture(c);
+}
+
+/**
+ * For a UV clue with no mark of its own (it is in the model's texture): a
+ * soft fluorescent bloom over the spot, so it shows only under the lamp.
+ */
+function drawGlow(size: [number, number]): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = Math.max(8, Math.round(256 * size[1] / size[0]));
+  const ctx = c.getContext('2d')!;
+  const W = c.width, H = c.height;
+  ctx.save();
+  ctx.scale(1, H / W);
+  const g = ctx.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2);
+  g.addColorStop(0, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.6, 'rgba(255,255,255,0.25)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, W);
+  ctx.restore();
+  return canvasTexture(c);
+}
+
+function canvasTexture(c: HTMLCanvasElement): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
