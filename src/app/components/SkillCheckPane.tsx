@@ -57,6 +57,8 @@ const LEVEL_COLOR: Record<CheckLevel, string> = {
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
+type ListMode = 'all' | 'suggested';
+
 /** What the investigator rolls under for `skill` — a characteristic, Luck, or a skill. */
 function targetFor(inv: Investigator, skill: string): number {
   if (skill === 'Luck') return inv.luck ?? 0;
@@ -85,16 +87,19 @@ function outcome(check: ObjectCheck | undefined, skill: string, level: CheckLeve
 }
 
 /**
- * "Use a skill" on an examined object: every characteristic, Luck and skill,
- * listed the same way whether or not the object answers to it — the checks
- * written for it are never singled out or described, so the players have to
- * work out for themselves what is worth trying. A roll lands in
+ * "Use a skill" on an examined object. By default every characteristic, Luck
+ * and skill is listed the same way whether or not the object answers to it, so
+ * the players work out for themselves what is worth trying; each player can
+ * switch to "Suggested", which lists only the checks written for the object
+ * (their wording and difficulty stay hidden either way). A roll lands in
  * the party chat like any other check; what it turns up shows here, for the
  * investigator to share or keep. Each skill gets one roll per object — a
  * failure can be pushed once, as in Call of Cthulhu, at the risk of worse.
  */
 export function SkillCheckPane({ objectTitle, checks, investigator, attempts, roll, onAttempt, onShare, shared, onSave, saved }: Props) {
   const [query, setQuery] = useState('');
+  // Every object opens on all skills; Suggested lasts only while this card is open.
+  const [mode, setMode] = useState<ListMode>('all');
   const [shown, setShown] = useState<string | null>(null);
   // The skill whose result is being pinned right now, and the last one that failed to pin.
   const [saving, setSaving] = useState<string | null>(null);
@@ -129,15 +134,41 @@ export function SkillCheckPane({ objectTitle, checks, investigator, attempts, ro
     // Trained skills first, then the rest of the catalogue; nothing marks the ones the object answers to.
     const skills = [...investigator.skills.filter(s => s.trained), ...investigator.skills.filter(s => !s.trained)]
       .map(s => ({ name: s.name, value: s.value }));
-    return [...chars, ...skills].filter(s => !q || norm(s.name).includes(q));
-  }, [query, investigator]);
+    const all = [...chars, ...skills];
+    // Suggested: only what the object answers to, under the investigator's own name for it where they have one.
+    const list = mode === 'all' ? all : checks
+      .map(c => all.find(s => norm(s.name) === norm(c.skill)) ?? { name: c.skill, value: targetFor(investigator, c.skill) })
+      .filter((s, i, arr) => arr.findIndex(o => norm(o.name) === norm(s.name)) === i);
+    return list.filter(s => !q || norm(s.name).includes(q));
+  }, [query, investigator, mode, checks]);
 
   const result = shown ? attempts[shown] : undefined;
 
   return (
     <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(201,148,79,0.18)' }}>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)', marginBottom: 8 }}>
-        {investigator.name} · use a skill
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink-text-2)' }}>
+          {investigator.name} · use a skill
+        </div>
+        <div role="group" aria-label="Which skills to list" style={{ display: 'flex', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', overflow: 'hidden' }}>
+          {(['suggested', 'all'] as const).map(m => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={mode === m}
+              onClick={() => setMode(m)}
+              title={m === 'suggested' ? 'List only the skills that matter for this object' : 'List every skill'}
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                padding: '3px 8px', cursor: 'pointer', border: 'none',
+                background: mode === m ? 'rgba(201,148,79,0.18)' : 'transparent',
+                color: mode === m ? 'var(--brass)' : 'var(--ink-text-2)',
+              }}
+            >
+              {m === 'suggested' ? 'Suggested' : 'All skills'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {result && (
@@ -204,7 +235,9 @@ export function SkillCheckPane({ objectTitle, checks, investigator, attempts, ro
       />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: '32vh', overflowY: 'auto', paddingRight: 2 }}>
         {options.length === 0 && (
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-text-2)' }}>No skill matches “{query}”.</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-text-2)' }}>
+            {mode === 'suggested' && !query ? 'Nothing here calls for a particular skill. Try All skills.' : `No skill matches “${query}”.`}
+          </span>
         )}
         {options.map(s => {
           const done = attempts[s.name];

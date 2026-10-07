@@ -48,15 +48,15 @@ export type Examinable = {
 
 /**
  * What a skill roll turns up at an examinable. The investigator can try any
- * skill on any object, and the skill panel lists them all alike; these are the
- * ones written for it (never pointed out to the players), and the roll's
+ * skill on any object, and the skill panel lists them all alike unless the
+ * player switches it to "Suggested", which lists just these; the roll's
  * degree of success picks which text appears. A skill with no entry here
  * gets a generic "nothing more to find".
  */
 export type ObjectCheck = {
   /** As the CoC catalogue names it ('Spot Hidden', 'Science (Biology)'), a characteristic ('STR'), or 'Luck'. */
   skill: string;
-  /** What the attempt is ("Search the blotter") — a note for the GM; players never see it, so they have to find out what a skill does. */
+  /** What the attempt is ("Search the blotter") — a note for the GM; players never see it, even with suggested skills on. */
   action: string;
   /** Degree of success needed to pass. Default 'Regular'. */
   difficulty?: 'Regular' | 'Hard' | 'Extreme';
