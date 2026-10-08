@@ -22,12 +22,15 @@ import type { HunterSnapshot } from './hunter';
  * while they are reading, typing or asleep (the hunter leaves them be). `pitch` is where they look.
  */
 export type Pose = { p: [number, number, number]; yaw: number; pitch?: number; gait: Gait; lamp?: number; crouch?: true; torch?: true; busy?: true };
-/** `hunter`: where the level's hunter is, when this peer leads it; `ready`: its hunter has loaded and could lead. */
-export type Peer = { id: number; userId: string; name: string; slug: string | null; pose: Pose | null; hunter: HunterSnapshot | null; ready: boolean };
+/**
+ * `hunter`: where the level's hunter is, when this peer leads it; `ready`: its hunter has loaded and could lead.
+ * `prey`: where gamelord is — never drawn, he walks unseen, but the hunter still comes for him.
+ */
+export type Peer = { id: number; userId: string; name: string; slug: string | null; pose: Pose | null; prey: Pose | null; hunter: HunterSnapshot | null; ready: boolean };
 /** A blow from the hunter, sent by whoever leads it to the one it landed on. */
 export type HunterHit = { type: 'hunter-hit'; to: number };
 
-type Presence = { pose: Pose | null; hunter?: HunterSnapshot | null; hr?: boolean };
+type Presence = { pose: Pose | null; prey?: Pose | null; hunter?: HunterSnapshot | null; hr?: boolean };
 type UserMeta = { id: string; info: { name: string; slug: string | null } };
 
 let client: Client<UserMeta> | null = null;
@@ -39,6 +42,8 @@ function getClient() {
 export type LevelPresence = {
   /** Call every frame; it only sends when the pose has changed, and Liveblocks batches to the throttle. */
   setPose: (pose: Pose) => void;
+  /** The same, for one who walks unseen: shared only with the hunter, never shown as a figure. */
+  setPrey: (pose: Pose) => void;
   /** Where the hunter is, while this client leads it (null once it doesn't); also every frame. */
   setHunter: (snap: HunterSnapshot | null) => void;
   /** This client's hunter has loaded, so it can lead. */
@@ -78,6 +83,7 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
   let live: { room: Room; leave: () => void; unsub: () => void } | null = null;
   let left = false;
   let last = '';
+  let lastPrey = '';
   let lastHunter = '';
   let ready = false;
   void presenceEnabled().then(ok => {
@@ -92,18 +98,19 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
   return {
     setPose(pose) {
       if (!live) return;
-      // Round so a player standing still sends nothing.
-      const r = (n: number) => Math.round(n * 100) / 100;
-      const next: Pose = { p: [r(pose.p[0]), r(pose.p[1]), r(pose.p[2])], yaw: r(pose.yaw), gait: pose.gait };
-      if (pose.lamp !== undefined) next.lamp = r(pose.lamp);
-      if (pose.pitch !== undefined) next.pitch = Math.round(pose.pitch * 20) / 20;
-      if (pose.crouch) next.crouch = true;
-      if (pose.torch) next.torch = true;
-      if (pose.busy) next.busy = true;
+      const next = rounded(pose);
       const key = JSON.stringify(next);
       if (key === last) return;
       last = key;
       live.room.updatePresence({ pose: next });
+    },
+    setPrey(pose) {
+      if (!live) return;
+      const next = rounded(pose);
+      const key = JSON.stringify(next);
+      if (key === lastPrey) return;
+      lastPrey = key;
+      live.room.updatePresence({ prey: next });
     },
     setHunter(snap) {
       if (!live) return;
@@ -134,6 +141,18 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
   };
 }
 
+/** Rounded, so a player standing still sends nothing. */
+function rounded(pose: Pose): Pose {
+  const r = (n: number) => Math.round(n * 100) / 100;
+  const next: Pose = { p: [r(pose.p[0]), r(pose.p[1]), r(pose.p[2])], yaw: r(pose.yaw), gait: pose.gait };
+  if (pose.lamp !== undefined) next.lamp = r(pose.lamp);
+  if (pose.pitch !== undefined) next.pitch = Math.round(pose.pitch * 20) / 20;
+  if (pose.crouch) next.crouch = true;
+  if (pose.torch) next.torch = true;
+  if (pose.busy) next.busy = true;
+  return next;
+}
+
 const enterLevelRoom = (levelId: string, ready: boolean) =>
   getClient().enterRoom<Presence, never, HunterHit>(`hearthboard:walk:${levelId}`, {
     initialPresence: { pose: null, hunter: null, hr: ready },
@@ -148,6 +167,7 @@ function subscribeOthers(room: Room, onPeers: (peers: Peer[]) => void) {
       name: o.info?.name ?? o.id,
       slug: o.info?.slug ?? null,
       pose: (o.presence as Presence).pose,
+      prey: (o.presence as Presence).prey ?? null,
       hunter: (o.presence as Presence).hunter ?? null,
       ready: !!(o.presence as Presence).hr,
     })));

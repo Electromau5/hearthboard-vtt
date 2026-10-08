@@ -2222,14 +2222,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         const gait: Gait = speed > (WALK + RUN) / 2 ? 'run' : speed > 0.3 ? 'walk' : 'idle';
         if (gait !== 'idle') { shownGait = gait; gaitHold = 0.15; }
         else if ((gaitHold -= dt) <= 0) shownGait = 'idle';
-        if (!unseenRef.current) {
-          presence.setPose({
-            p: [feet.x, feet.y, feet.z], yaw, pitch, gait: shownGait, lamp: uvOwn.power > 0.3 ? pitch : undefined,
-            crouch: eye < (EYE + CROUCH_EYE) / 2 || undefined,
-            torch: (torchRef.current && !woods?.visible) || undefined,
-            busy: !hunterAwake() || undefined,
-          });
-        }
+        // gamelord walks unseen: nobody draws him, but the hunter is told where he is.
+        const pose = {
+          p: [feet.x, feet.y, feet.z] as [number, number, number], yaw, pitch, gait: shownGait, lamp: uvOwn.power > 0.3 ? pitch : undefined,
+          crouch: eye < (EYE + CROUCH_EYE) / 2 || undefined,
+          torch: (torchRef.current && !woods?.visible) || undefined,
+          busy: !hunterAwake() || undefined,
+        } as const;
+        if (unseenRef.current) presence.setPrey(pose); else presence.setPose(pose);
       }
       for (const { avatar, peer } of avatars.values()) {
         if (!avatar) continue;
@@ -2252,7 +2252,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         // The others, as their presence tells it.
         const others: HunterSense[] = [];
         for (const peer of peersNow) {
-          const pose = peer.pose;
+          const pose = peer.pose ?? peer.prey;
           if (!pose) continue;
           const pp = pose.pitch ?? 0;
           const at = new THREE.Vector3().fromArray(pose.p);
@@ -2272,7 +2272,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         const crouched = eye < (EYE + CROUCH_EYE) / 2;
         hunter.update(dt, {
           local: {
-            id: selfId ?? -1, active: hunterAwake(), hidden: unseenRef.current,
+            id: selfId ?? -1, active: hunterAwake(),
             feet, eye: camera.position, look: hunterLook,
             torchOn: torchRef.current && !woods?.visible,
             noise: crouched || shownGait === 'idle' ? 0 : shownGait === 'run' ? 2 : 1,

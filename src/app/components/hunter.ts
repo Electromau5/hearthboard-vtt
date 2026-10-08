@@ -36,8 +36,6 @@ export type HunterSense = {
   id: number;
   /** False while the level is loading or they are reading, asleep or in a pane: it leaves them be. */
   active: boolean;
-  /** Awake, but nothing it can find: gamelord, walking unseen. */
-  hidden?: boolean;
   feet: THREE.Vector3;
   eye: THREE.Vector3;
   /** Where the camera looks (unit). */
@@ -580,10 +578,9 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
   let listenIn = 0;
 
   const hunt = (dt: number, frame: HunterFrame) => {
-    // While everyone is busy (reading, asleep…) it holds still; it hunts only those it could find.
-    const awake = [frame.local, ...frame.others].filter(s => s.active);
-    senses = awake.filter(s => !s.hidden);
-    if (!awake.length || !mixer || !walk || nodes.length < 50) { hold(); return; }
+    // While everyone is busy (reading, asleep…) it holds still.
+    senses = [frame.local, ...frame.others].filter(s => s.active);
+    if (!senses.length || !mixer || !walk || nodes.length < 50) { hold(); return; }
     root.visible = true;
     if (at < 0) {
       at = nearestNode(pos);
