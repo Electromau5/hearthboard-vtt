@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, NpcSpot, Pickup, Prop, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, NpcSpot, Pickup, Prop, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
 import { createHunter } from './hunter';
@@ -19,6 +19,8 @@ import { InspectViewer } from './InspectViewer';
 import { ModelBuilder } from './ModelBuilder';
 import { SafeCracker } from './SafeCracker';
 import { createModelInLevel } from './model-pieces';
+import { createSewer } from './sewer';
+import { createDoor, type DoorModel } from './level-door';
 import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
 import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
@@ -185,6 +187,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [powerError, setPowerError] = useState(false);
   // When gamelord last threw the mains here: a poll sent before then answers with the old state.
   const powerSetAt = useRef(0);
+  // Doors gamelord opens and shuts for everyone (see /api/doors), by id: true while one stands open.
+  const [doorsOpen, setDoorsOpen] = useState<Record<string, boolean>>({});
+  const doorsOpenRef = useRef<Record<string, boolean>>({});
+  useEffect(() => { doorsOpenRef.current = doorsOpen; }, [doorsOpen]);
+  const doorSetAt = useRef(0);
+  const [doorError, setDoorError] = useState(false);
   // A pickup carried from where it lay (a gun off the armory bench), by id. Not inventory: it stays in the level.
   const [carried, setCarried] = useState<string | null>(null);
   const carriedRef = useRef<string | null>(null);
@@ -534,6 +542,54 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       powerRef.current = !next;
       setPower(!next);
       setPowerError(true);
+    }
+  }, [level]);
+
+  // ── Doors ─────────────────────────────────────────────────────────
+  // Polled every 5 s: a door is the way on, so the party should not wait long for it.
+  useEffect(() => {
+    if (!level.doors) return;
+    let cancelled = false;
+    const poll = () => {
+      if (document.hidden) return;
+      const sent = performance.now();
+      fetch(`/api/doors?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null))
+        .then((s: DoorsState | null) => {
+          if (cancelled || !s || sent < doorSetAt.current) return;
+          const open = Object.fromEntries(Object.entries(s).map(([id, d]) => [id, d.open]));
+          doorsOpenRef.current = open;
+          setDoorsOpen(open);
+        })
+        .catch(() => {});
+    };
+    poll();
+    const timer = window.setInterval(poll, 5_000);
+    document.addEventListener('visibilitychange', poll);
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
+  }, [level]);
+
+  // gamelord opens or shuts a door: it moves here at once, and goes back if it could not be saved.
+  const toggleDoor = useCallback(async (id: string) => {
+    const next = !doorsOpenRef.current[id];
+    const apply = (open: boolean) => {
+      doorsOpenRef.current = { ...doorsOpenRef.current, [id]: open };
+      setDoorsOpen(doorsOpenRef.current);
+    };
+    doorSetAt.current = performance.now();
+    apply(next);
+    setDoorError(false);
+    try {
+      const r = await fetch('/api/doors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: level.id, id, open: next }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+    } catch (err) {
+      console.error('Could not set the door:', err);
+      apply(!next);
+      setDoorError(true);
     }
   }, [level]);
 
@@ -944,6 +1000,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // state of its current look.
     let peeper: { head: ReturnType<typeof createDeepOneHead>; rest: THREE.Vector3; side: THREE.Vector3; hole: THREE.Vector3 } | null = null;
     const peek = { phase: 'away' as 'away' | 'in' | 'hold' | 'out', t: 0, next: 0, hold: 0, from: 1 };
+    // gamelord's doors, cut out of the architecture: how far each stands open
+    // (0 shut … 1 open), and whether its leaf is among the walls just now.
+    const doors: { id: string; hidesPeeper: boolean; model: DoorModel; k: number; blocking: boolean }[] = [];
+    let sewer: ReturnType<typeof createSewer> | null = null;
     // Every lamp in the level, but only the nearest LAMP_POOL are lit by real
     // lights: each light costs every pixel, and 18 of them made the Archive
     // crawl. `w` fades a lamp in and out of the pool so none ever pops.
@@ -1031,6 +1091,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
         const arch = model.getObjectByName('Architecture');
         arch?.traverse((o) => { if ((o as THREE.Mesh).isMesh) walls.push(o); });
+        // Doors gamelord works: cut out of the walls, standing as the party last left them.
+        for (const [id, door] of Object.entries(level.doors ?? {})) {
+          const dm = createDoor(model, scene, door);
+          if (!dm) continue;
+          const k = doorsOpenRef.current[id] ? 1 : 0;
+          dm.set(k);
+          if (!k) walls.push(...dm.blocking);
+          doors.push({ id, hidesPeeper: !!door.hidesPeeper, model: dm, k, blocking: !k });
+          owned.push(dm);
+        }
+        // The sewer behind the house's back door, solid underfoot like the rest.
+        if (level.sewer) {
+          sewer = createSewer(new THREE.Vector3(...level.sewer.at));
+          scene.add(sewer.group);
+          walls.push(...sewer.solids);
+          owned.push(sewer);
+        }
         // Where the rain cannot reach: over the architecture, cast down from above.
         if (rainFall && arch) {
           const span = new THREE.Box3().setFromObject(arch).expandByScalar(1);
@@ -2058,8 +2135,28 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       const ammo = inHand.ammo;
       const ammoText = ammo ? `${ammo.rounds} / ${ammo.max}${inHand.reloading ? ' · reloading' : ''}` : '';
       if (ammoRef.current && ammoRef.current.textContent !== ammoText) ammoRef.current.textContent = ammoText;
-      // The Deep One: slide in behind the hole from one side, stare, withdraw.
-      if (peeper && level.peeper) {
+      // Doors swing over a second and a half. A shut door blocks once it is home;
+      // an opening one stops blocking at once.
+      for (const d of doors) {
+        const want = doorsOpenRef.current[d.id] ? 1 : 0;
+        if (d.k !== want) {
+          d.k = want > d.k ? Math.min(1, d.k + dt / 1.5) : Math.max(0, d.k - dt / 1.5);
+          d.model.set(d.k);
+        }
+        const block = want === 0 && d.k === 0;
+        if (block !== d.blocking) {
+          d.blocking = block;
+          if (block) walls.push(...d.model.blocking);
+          else for (const b of d.model.blocking) walls.splice(walls.indexOf(b), 1);
+        }
+      }
+      sewer?.update(dt);
+      // The Deep One: slide in behind the hole from one side, stare, withdraw —
+      // unless the door it watches through stands open, and there is nothing there.
+      if (peeper && doors.some(d => d.hidesPeeper && d.k > 0)) {
+        peeper.head.group.visible = false;
+        Object.assign(peek, { phase: 'away', t: 0, next: 2 + Math.random() * 2 });
+      } else if (peeper && level.peeper) {
         const cfg = level.peeper;
         const shy = camera.position.distanceTo(peeper.hole) < cfg.shyWithin;
         const rand = ([lo, hi]: [number, number]) => lo + Math.random() * (hi - lo);
@@ -2404,6 +2501,31 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               >
                 Lights {power ? 'on' : 'off'} [L]
               </button>
+            </div>
+          )}
+          {/* gamelord opens and shuts the level's doors here, for everyone in it. */}
+          {level.doors && isGamelord && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: (level.weather && isGM) || level.lamps ? 0 : 'auto', marginRight: 12 }}>
+              {doorError && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--blood)' }}>Not saved</span>
+              )}
+              {Object.entries(level.doors).map(([id, door]) => (
+                <button
+                  key={id}
+                  onClick={() => void toggleDoor(id)}
+                  aria-pressed={!!doorsOpen[id]}
+                  title={`Open or shut the ${door.label.toLowerCase()}, for everyone`}
+                  style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                    padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                    background: doorsOpen[id] ? 'rgba(201,148,79,0.18)' : 'transparent',
+                    border: `1px solid ${doorsOpen[id] ? 'var(--brass)' : 'var(--line)'}`,
+                    color: doorsOpen[id] ? 'var(--brass)' : 'var(--ink-text-2)',
+                  }}
+                >
+                  {door.label} {doorsOpen[id] ? 'open' : 'shut'}
+                </button>
+              ))}
             </div>
           )}
           <button

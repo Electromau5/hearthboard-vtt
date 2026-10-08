@@ -378,6 +378,34 @@ export type SafeLock = {
 export type LocksState = Record<string, { by: string; at: number }>;
 
 /**
+ * A door gamelord opens and shuts for everyone in the level (`/api/doors`).
+ * Its parts are cut out of the level's merged architecture when it loads
+ * (src/app/components/level-door.ts): every triangle of `mesh` lying wholly
+ * inside the box, in level coordinates.
+ */
+export type DoorCut = { mesh: string; min: Vec3; max: Vec3 };
+
+export type LevelDoor = {
+  /** What gamelord's button calls it: "Back door open" / "Back door shut". */
+  label: string;
+  /** The leaf, and anything fixed to it: swings open on `hinge`. */
+  leaf: DoorCut[];
+  /** A point on the upright line the leaf turns about. */
+  hinge: Vec3;
+  /** How far it opens, degrees; positive turns anticlockwise seen from above. */
+  openDeg: number;
+  /** Boards nailed across it: gone while it stands open… */
+  boards?: DoorCut[];
+  /** …and lying on the floor instead, [x, z, turnDeg] each, `size` metres (the thin side up). */
+  fallen?: { size: Vec3; at: [number, number, number][] };
+  /** The level's peeper looks through this door: while it stands open, there is nothing there. */
+  hidesPeeper?: boolean;
+};
+
+/** What `/api/doors` keeps for a level: the doors standing open, by id. Unset means shut. */
+export type DoorsState = Record<string, { open: boolean; setAt: number; setBy: string }>;
+
+/**
  * Something lying on a piece of furniture that can be carried in the hand:
  * E picks it up (shown first-person, see held-items.ts), E on its empty place
  * puts it back, and picking up another sends the first back to its place.
@@ -587,6 +615,14 @@ export type WalkthroughLevel = {
   uvStains?: UvStain[];
   /** Safes to crack, keyed by examinable id. */
   locks?: Record<string, SafeLock>;
+  /** Doors gamelord opens and shuts for everyone, by id. */
+  doors?: Record<string, LevelDoor>;
+  /**
+   * The sewer under the derelict house (src/app/components/sewer.ts), built
+   * out from `at`: the doorway that leads down to it, at its outer face and
+   * floor level, with the house behind it along +Z.
+   */
+  sewer?: { at: Vec3 };
   /** Furniture from outside the level's model, keyed by examinable id. */
   props?: Record<string, Prop>;
   /** Objects to pick up and turn over, keyed by examinable id. */

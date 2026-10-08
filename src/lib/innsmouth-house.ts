@@ -873,6 +873,25 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
       },
     },
   },
+  // The boarded back door at the end of the hall, which gamelord can open onto the sewer. Its
+  // parts, measured from Summer's build_house.gd: the leaf (with its knocked-through hole and
+  // splinters) in the wall's middle at z = -5, the three planks nailed across the hall side.
+  doors: {
+    back_door: {
+      label: 'Back door',
+      leaf: [
+        { mesh: 'Mesh_wood', min: [-0.49, -0.01, -5.03], max: [0.49, 2.19, -4.97] },
+        { mesh: 'Mesh_trim', min: [-0.06, 1.38, -5.03], max: [0.26, 1.66, -4.97] },
+      ],
+      // Hinged on the left as you face it, swinging out onto the stairs.
+      hinge: [-0.48, 0, -5.0],
+      openDeg: 90,
+      boards: [{ mesh: 'Mesh_planks', min: [-0.8, 0.25, -4.96], max: [0.8, 2.2, -4.8] }],
+      fallen: { size: [1.3, 0.03, 0.17], at: [[-0.45, -4.45, 14], [0.4, -4.15, -22], [-0.1, -3.75, 38]] },
+      hidesPeeper: true,
+    },
+  },
+  sewer: { at: [0, 0, -5.075] },
   // The bedroom window has no furniture node of its own (the windows are part of the walls).
   spots: { bedroom_window: { min: [5.72, 0.85, -3.95], max: [5.93, 2.35, -2.85] } },
   atmosphere: {

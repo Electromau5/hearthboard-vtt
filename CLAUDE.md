@@ -56,6 +56,8 @@ src/
       woods-lamp.ts               # First-person Wood's lamp (Q) — the 1930s UV lamp held in view, drawn over the level
       uv-stains.ts                # Blood/brine decals only the Wood's lamp reveals (level.uvStains)
       SafeCracker.tsx             # Safe-dial mini game (level.locks) — hit the marks as the pip passes, 15 s; open safes shared via /api/locks
+      sewer.ts                    # The sewer under the derelict house (level.sewer) — procedural stairwell, vaulted main, cistern; no lights
+      level-door.ts               # Doors gamelord opens (level.doors) — cut out of the merged architecture at load, swing on a hinge
     characters/
       page.tsx                    # Investigator dossier grid — all 7 characters
       [slug]/page.tsx             # Individual character sheet page
@@ -90,6 +92,7 @@ src/
       dev-assets/[...path]/route.ts      # GET — serves files out of data/ in local dev
       npc/[id]/route.ts           # POST — talk to an NPC; per-investigator memory in redis-storage (npc/<id>/<slug>)
       locks/route.ts              # GET/POST — which walkthrough safes stand open (locks/<level>); admins can relock
+      doors/route.ts              # GET/POST — which walkthrough doors stand open (doors/<level>); gamelord only
   auth.ts                         # Full NextAuth config (Node.js runtime only)
   auth.config.ts                  # Edge-safe config (no fs/bcrypt) — used by proxy
   proxy.ts                        # Next.js 16 edge middleware (replaces middleware.ts)
