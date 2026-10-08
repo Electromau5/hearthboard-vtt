@@ -29,3 +29,21 @@ Bellevue's nurses' station:
   https://sketchfab.com/3d-models/antique-iron-safe-196cf0d3d5094b50874dbf51064a7d3e
   Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
   Changes: re-centred on its base, textures resized to 1024 px WebP.
+
+props/dagon-statue.glb — Dagon on his plinth in the shrine under the derelict house's sewer:
+  "Dagon - Lovecraft lore" by CMBC — https://sketchfab.com/CMBC
+  https://sketchfab.com/3d-models/dagon-lovecraft-lore-2d96cd1308de4e2e8f0b1413e26a5448
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: decimated from 1.1 M to 70 k triangles, re-centred on its base, texture
+  converted to WebP, meshopt-compressed; tinted to stone in the walkthrough.
+  The same statue comes alive in the Black Archive bunks' dream (godot/dream.pck):
+  decimated to 24 k triangles, rigged to a Mixamo skeleton with a tail added, and
+  animated with Mixamo's "Swimming" and "Treading Water" clips.
+
+props/bones.glb — the bones covering the shrine's floor:
+  "Skeleton" by Huargenn — https://sketchfab.com/Huargenn
+  https://sketchfab.com/3d-models/skeleton-c5c20626d35e4689b2f2d23c5b262171
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: separated into sixteen loose bones (skull, jaw, long bones, ribs, hip,
+  sacrum, scapula, clavicle, sternum), scaled to life size, decimated, textures and
+  UVs removed; scattered by the hundred in the walkthrough.

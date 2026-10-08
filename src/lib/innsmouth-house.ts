@@ -427,6 +427,22 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Sash Lock',
     text: 'Through the gap between two boards you can reach the meeting rails of the sash. The brass lock is thrown, the cam turned hard into its keeper, and the sill below is white with something that crunches under your glove.',
   },
+  shrine_padlock: {
+    title: 'Padlocked Door',
+    text: 'An iron-bound plank door in a wall of sewer brick, put up long after the rock it closes off. A hasp on its edge folds over a staple in the brickwork, and through the staple hangs a combination padlock, iron with a brass dial. Everything else down here is scabbed with rust, but the lock is new, and it is on this side of the door.',
+    checks: [
+      {
+        skill: 'Locksmith', action: 'Size up the lock',
+        success: 'A dial padlock of the sort sold for gun cabinets and payroll boxes, no more than a year or two old. The dial turns smoothly: someone oils it. Feel for the tumblers and it can be opened without the combination.',
+        failure: 'A good lock, and newer than you would like. You learn nothing more from looking at it.',
+      },
+      {
+        skill: 'Spot Hidden', action: 'Look at the door',
+        success: 'The planks are swollen black with brine to the height of the flood and dry above it. The door has been shoved outward against its hasp so often that the staple has worked loose in the mortar: something on the other side wants out.',
+        failure: 'Old wood and new iron.',
+      },
+    ],
+  },
   iron_safe: {
     title: 'Iron Safe',
     text: 'A squat iron safe on cast feet, wedged into the corner by the front door. The maker\'s gilt lettering has worn to a ghost, the paint is scabbed with rust, and the door is shut fast. The dust on its top is undisturbed; the floorboards in front of it are scuffed bare.',
@@ -631,6 +647,94 @@ const UV_STAINS: UvStain[] = [
         skill: 'Spot Hidden', action: 'Look at the brine',
         success: 'The brine has run from the bottom of every letter and dried in long salt tears, the same green as the footprints that lead to the back door.',
         failure: 'Salt spray and old blood. Which door, it does not say.',
+      },
+    ],
+  },
+
+  // ── The sewer, behind the back door (src/app/components/sewer.ts) ──────────
+  // World positions: sewer (x, y, d) is world (x, y, -5.075 - d). The trail goes on
+  // from the back door: down the stairs, east along the near walkway, over the plank
+  // bridge, up the side passage and round the cistern to the shrine's shaft.
+  {
+    id: 'uv_sewer_prints', kind: 'brine', mark: 'prints', feet: [1, 1],
+    floor: [[0, -5.275], [0, -6.025], [0, -10.025], [0.1, -10.675], [3.45, -10.675], [3.45, -12.875], [6.0, -12.875], [6.0, -18.675], [4.9, -20.075], [4.3, -20.825]],
+    floorY: [0, 0, -3.04, -3.04, -3.04, -3.04, -3.04, -3.04, -3.04, -3.04],
+    title: 'Webbed Tracks in the Sewer',
+    text: 'The trail from the house goes on down here, glowing green under the lamp: three-toed, webbed, clawed, the stride far too long for a man. Down the stairs, along the walkway, over the planks, and up the side passage to the cistern, where it ends at the lip of the square shaft in the floor. None come back.',
+    checks: [
+      {
+        skill: 'Track', action: 'Follow the trail',
+        success: 'The same walker as in the house, still unhurried. It kept to the walkways and crossed by the planks where a man would: it knew the way, or was shown it. At the shaft the last prints are side by side, toes to the edge. It stood there, and then it went down.',
+        hard: 'The same walker, and it knew the way. Beside its prints, washed almost to nothing, are older ones going the same way: boots, several pairs, years old. This is a path, not a flight.',
+        failure: 'Brine on wet stone. The prints come and go with the damp and you lose them on the walkway.',
+      },
+      {
+        skill: 'Spot Hidden', action: 'Look along the walkway',
+        success: 'There is no mark in the channel and no print stepping off the walkway, though the water would have been easier going for webbed feet. It walked like a man, on the walkways, out of habit.',
+        failure: 'Wet stone and slime.',
+      },
+    ],
+  },
+  {
+    id: 'uv_sewer_hand_stairs', kind: 'brine', mark: 'handprint', webbed: true,
+    // The stairwell's west wall, halfway down.
+    wall: { from: [0, -0.45, -7.975], toward: [-1, 0, 0], size: [0.3, 0.6] },
+    title: 'A Hand on the Stairwell Wall',
+    text: 'Halfway down the stairs, a hand pressed to the brick in glowing brine, at the height a man would steady himself on a steep stair. The fingers are too long and joined by web almost to their tips, and each ends in a claw that scored the brick.',
+    checks: [
+      {
+        skill: 'Science (Biology)', action: 'Study the hand',
+        success: 'Four fingers, no thumb print at all — it has gone, or moved too far round to touch the wall. The web reaches almost to the claws. The change was complete before it came down these stairs.',
+        failure: 'A hand, and a strange one. More than that you cannot say.',
+      },
+    ],
+  },
+  {
+    id: 'uv_sewer_hand_passage', kind: 'brine', mark: 'handprint', webbed: true,
+    // The side passage's west wall, just in from the main.
+    wall: { from: [5.8, -1.99, -14.275], toward: [-1, 0, 0], size: [0.3, 0.6] },
+    title: 'A Hand at the Side Passage',
+    text: 'Just inside the side passage, the same webbed hand, flat on the brick at shoulder height where the walker turned in off the main. The brine has run from the claws in thin green lines.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Look closer',
+        success: 'Under the webbed hand, very faint, are older handprints in the same place: human hands, many of them, laid over one another. People have touched this wall here for years as they turned in.',
+        failure: 'One hand, glowing. Nothing else.',
+      },
+    ],
+  },
+  {
+    id: 'uv_sewer_hand_cistern', kind: 'brine', mark: 'handprint', webbed: true,
+    // The cistern's wall just west of the shaft.
+    wall: { from: [4.0, -1.95, -21.575], toward: [-1, 0, 0], size: [0.3, 0.6] },
+    title: 'A Hand by the Shaft',
+    text: 'On the cistern wall beside the shaft, a webbed hand pressed hard into the brick, the claws dragged downward: a grip taken before stepping onto the ladder.',
+  },
+  {
+    id: 'uv_shrine_hand_door', kind: 'brine', mark: 'handprint', webbed: true,
+    // The brick wall across the shrine, beside its door, on the ladder's side.
+    wall: { from: [4.2, -5.54, -22.575], toward: [-1, 0, 0], size: [0.3, 0.6] },
+    title: 'A Hand Beside the Door',
+    text: 'At the foot of the ladder, flat on the brickwork beside the iron-bound door, a webbed hand in brine, as if it waited here, leaning on the wall, for the door to be opened.',
+    checks: [
+      {
+        skill: 'Track', action: 'Read the marks round the door',
+        success: 'The hand was laid on the wall, and laid there again, many times over, in the same place. It waited, or it came back to wait.',
+        failure: 'The brine here is everywhere. One mark cannot be told from another.',
+      },
+    ],
+  },
+  {
+    id: 'uv_shrine_glyph', kind: 'brine', mark: 'glyph',
+    // Over the shrine's door.
+    wall: { from: [4.2, -4.34, -23.575], toward: [-1, 0, 0], size: [0.6, 0.6] },
+    title: 'A Sign Over the Door',
+    text: 'Over the iron-bound door, drawn in brine with a finger: a circle, a three-tined staff and a wave beneath it, the same sign as the one over the bed in the house.',
+    checks: [
+      {
+        skill: 'Occult', action: 'Read the sign',
+        success: 'The sign of Dagon, as the Esoteric Order of Dagon marks its temples. Over a door it means the god is within.',
+        failure: 'A trident in a ring. A fisherman\'s mark, perhaps.',
       },
     ],
   },
@@ -853,7 +957,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   errorText: 'The house could not be loaded.',
   enterText: 'Click to step inside',
   leaveLabel: 'Leave the house',
-  credit: '"Antique Iron Safe" by pixelgrapher — CC BY 4.0',
+  credit: '"Antique Iron Safe" by pixelgrapher · "Dagon - Lovecraft lore" by CMBC · "Skeleton" by Huargenn — CC BY 4.0',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
@@ -865,6 +969,16 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   props: { iron_safe: { model: '/props/iron-safe.glb', at: [1.56, 4.35], turnDeg: -90 } },
   // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.
   locks: {
+    // The door into the shrine of Dagon, under the cistern. Cracked, it swings open for the party.
+    shrine_padlock: {
+      points: [4, 5],
+      seconds: 15,
+      prompt: { locked: 'Work the padlock\'s dial', open: 'Look through the door' },
+      opened: {
+        title: 'The Shrine Door — Open',
+        text: 'The last tumbler drops and the shackle jumps free. The door swings inward on its own weight into the dark, and the brine on the far side moves with it. Beyond the wall the hewn chamber runs on, knee-deep and thick with floating bone, between two squat pillars to an altar, and behind the altar, on its plinth, the thing the prints came all this way to stand before.',
+      },
+    },
     iron_safe: {
       opened: {
         title: 'Iron Safe — Open',
@@ -891,7 +1005,19 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
       hidesPeeper: true,
     },
   },
-  sewer: { at: [0, 0, -5.075] },
+  sewer: { at: [0, 0, -5.075], shrineLock: 'shrine_padlock' },
+  // A Deep One loose in the sewer, out of its lair at the end of the west spur (sewer.ts LX0..LX1,
+  // LD0..LD1, in world terms). It roams the tunnels, comes to footsteps, sees four metres in the
+  // dark — any distance down a torch beam — and goes no further than the foot of the stairs to the
+  // house. The crawl pipe is too low for it. Everyone in the level sees the same one.
+  hunter: {
+    model: '/avatars/deep-one.glb', walkClip: 'Walk', attackClip: 'Attack',
+    start: [-15.75, -3.04, -3.075], walkSpeed: 1.0, chaseSpeed: 2.7,
+    sightLit: 3.05, sightDark: 4, hear: { walk: 5, run: 12 }, scent: 0.3, ceiling: -1.6,
+    sound: '/deep-one.mp3', chaseMusic: '/chase-music.mp3',
+    // Baked with the hunter's bake() — rebake if the sewer's tunnels change (sewer.ts).
+    nav: '/sewer-nav.json',
+  },
   // The bedroom window has no furniture node of its own (the windows are part of the walls).
   spots: { bedroom_window: { min: [5.72, 0.85, -3.95], max: [5.93, 2.35, -2.85] } },
   atmosphere: {

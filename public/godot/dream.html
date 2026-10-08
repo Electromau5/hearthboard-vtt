@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<title>my-summer-game</title>
+		<style>
+html, body, #canvas { margin: 0; padding: 0; border: 0; }
+body { color: white; background-color: #020202; overflow: hidden; touch-action: none; }
+#canvas { display: block; width: 100vw; height: 100vh; }
+#canvas:focus { outline: none; }
+		</style>
+		
+	</head>
+	<!--
+		Shell for the Hearthboard VTT's walkthrough iframe. The page around it
+		draws the loading text and errors, so this shell shows nothing itself and
+		reports progress and failures to the parent instead.
+	-->
+	<body>
+		<canvas id="canvas"></canvas>
+		<script src="walkthrough.js"></script>
+		<script>
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"walkthrough","mainPack":"dream.pck","experimentalVK":false,"fileSizes":{"dream.pck":1422824,"walkthrough.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_THREADS_ENABLED = false;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	const tell = (msg) => window.parent.postMessage(JSON.stringify({ hearthboard: msg }), window.location.origin);
+	const fail = (err) => {
+		console.error(err);
+		tell({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+	};
+	const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
+	if (missing.length !== 0) {
+		fail('Missing browser features: ' + missing.join(', '));
+		return;
+	}
+	engine.startGame({
+		onProgress: (current, total) => {
+			if (current > 0 && total > 0) tell({ type: 'progress', p: current / total });
+		},
+	}).catch(fail);
+}());
+		</script>
+	</body>
+</html>
+

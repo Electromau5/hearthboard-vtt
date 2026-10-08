@@ -8,7 +8,7 @@ import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
 import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, NpcSpot, Pickup, Prop, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { createDeepOneHead } from './deep-one';
-import { createHunter } from './hunter';
+import { createHunter, type HunterSense } from './hunter';
 import { createPinboard } from './pinboard';
 import { createInteractMarkers } from './interact-markers';
 import { ArchiveBrowser } from './ArchiveBrowser';
@@ -24,7 +24,7 @@ import { createDoor, type DoorModel } from './level-door';
 import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
 import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
-import { joinLevel, type Peer } from './presence';
+import { joinLevel, leadsHunter, type Peer } from './presence';
 import { createWoodsLamp } from './woods-lamp';
 import { createHeldViewmodel, prepareHeldModel } from './held-viewmodel';
 import { heldModelFor, type HeldModel } from '@/lib/held-items';
@@ -64,6 +64,12 @@ const RUN = 3.0;
 const REACH = 2.3;         // how far away something can be examined from
 const LOOK = 0.0022;       // radians per pixel of mouse movement
 const UV_SEEN = 0.12;      // how brightly the lamp must light a stain before it can be examined
+const WADE = 0.45;         // pace in knee-deep water, as a share of dry
+const CLIMB = 1.1;          // m/s up or down a ladder
+const CROUCH_EYE = 1.0;    // camera height while crouched (C)
+const CROUCH_PACE = 0.5;   // crouched pace, as a share of walking; no running
+const JUMP = 3.2;          // m/s straight up off the ground (Space) — about half a metre
+const GRAVITY = 9.8;
 const LAMP_POOL = 6;       // ceiling lamps lit at once, nearest first (each costs every pixel)
 
 /**
@@ -167,6 +173,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   useEffect(() => { asleepRef.current = asleep; }, [asleep]);
   const sleepCmdRef = useRef<{ wake: true } | { bed: Target } | null>(null);
   const sleepShadeRef = useRef<HTMLDivElement | null>(null);
+  // The dream, once asleep (level.dream): its iframe, and whether it has the pointer.
+  const dreamRef = useRef<HTMLIFrameElement | null>(null);
+  const [dreamLocked, setDreamLocked] = useState(false);
+  const [dreamFailed, setDreamFailed] = useState(false);
+  const dreaming = asleep === 'asleep' && !!level.dream && !dreamFailed;
   // The board hands a fresh onShare on every render (it polls chat every few
   // seconds); read it through a ref so callbacks the 3D scene depends on stay
   // the same and the level is not rebuilt.
@@ -821,6 +832,52 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     return () => window.removeEventListener('message', onMessage);
   }, [godot, level, postGodot, godotTarget, openTarget]);
 
+  // ── The dream ────────────────────────────────────────────────────
+  // Asleep in a bed with a dream, the investigator is somewhere else: the
+  // dream's iframe takes the pointer and keys, forwards E (wake) and Escape,
+  // and says when it is over.
+  useEffect(() => {
+    if (!dreaming) return;
+    document.exitPointerLock?.();
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin || e.source !== dreamRef.current?.contentWindow) return;
+      let msg: GodotMessage;
+      try {
+        msg = (JSON.parse(String(e.data)) as { hearthboard?: GodotMessage }).hearthboard as GodotMessage;
+      } catch {
+        return;
+      }
+      if (!msg) return;
+      switch (msg.type) {
+        case 'ready':
+          dreamRef.current?.focus();
+          break;
+        case 'error':
+          console.error('The dream failed:', msg.message);
+          setDreamFailed(true);
+          break;
+        case 'lock':
+          if (!msg.locked) unlockedAtRef.current = performance.now();
+          setDreamLocked(!!msg.locked);
+          break;
+        case 'key': {
+          const code = String(msg.code);
+          keyRef.current?.({ code, key: code === 'Escape' ? 'Escape' : '', repeat: false, preventDefault: () => {} });
+          break;
+        }
+        case 'wake':
+          // The dream ended itself, and badly.
+          if (asleepRef.current === 'asleep') {
+            sleepCmdRef.current = { wake: true };
+            onShareRef.current('woke with a start, gasping for air');
+          }
+          break;
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [dreaming]);
+
   // Hold the level still under a card; let it go when the last one closes.
   const covered = !!(reading || browsing || typing || invOpen || inspecting);
   useEffect(() => {
@@ -984,6 +1041,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const feet = new THREE.Vector3(-0.3, 0, 4.2);
     let yaw = 0;
     let pitch = 0;
+    // Jumping and crouching: rising speed while off the ground, the camera's
+    // height over the feet (EYE standing, CROUCH_EYE down), and a jump asked for.
+    let vy = 0;
+    let airborne = false;
+    let eye = EYE;
+    let jumpAsked = false;
     const keys = new Set<string>();
     const walls: THREE.Object3D[] = [];
     const blockers: THREE.Box3[] = [];
@@ -1021,8 +1084,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     let peeper: { head: ReturnType<typeof createDeepOneHead>; rest: THREE.Vector3; side: THREE.Vector3; hole: THREE.Vector3 } | null = null;
     const peek = { phase: 'away' as 'away' | 'in' | 'hold' | 'out', t: 0, next: 0, hold: 0, from: 1 };
     // gamelord's doors, cut out of the architecture: how far each stands open
-    // (0 shut … 1 open), and whether its leaf is among the walls just now.
-    const doors: { id: string; hidesPeeper: boolean; model: DoorModel; k: number; blocking: boolean }[] = [];
+    // (0 shut … 1 open), and whether its leaf is among the walls just now. A
+    // door with a `lockId` is padlocked instead: it opens once that lock is cracked.
+    const doors: { id: string; lockId?: string; hidesPeeper: boolean; model: DoorModel; k: number; blocking: boolean }[] = [];
     let sewer: ReturnType<typeof createSewer> | null = null;
     // Every lamp in the level, but only the nearest LAMP_POOL are lit by real
     // lights: each light costs every pixel, and 18 of them made the Archive
@@ -1045,6 +1109,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const ray = new THREE.Raycaster();
     const tmpV = new THREE.Vector3();
     const down = new THREE.Vector3(0, -1, 0);
+    const up = new THREE.Vector3(0, 1, 0);
 
     /** Distance to the nearest wall along `dir` from `origin`, or Infinity. */
     const wallDist = (origin: THREE.Vector3, dir: THREE.Vector3, far: number) => {
@@ -1062,9 +1127,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       return hit ? hit.point.y : -Infinity;
     };
 
-    const hitsFurniture = (x: number, z: number, y: number) => {
+    /** `tall` is how high the body reaches over `y`: less when crouched, so tables can be crept under. */
+    const hitsFurniture = (x: number, z: number, y: number, tall = EYE + 0.1) => {
       for (const b of blockers) {
-        if (b.max.y < y + 0.3 || b.min.y > y + 1.7) continue;
+        if (b.max.y < y + 0.3 || b.min.y > y + tall) continue;
         if (x > b.min.x - RADIUS && x < b.max.x + RADIUS && z > b.min.z - RADIUS && z < b.max.z + RADIUS) return true;
       }
       return false;
@@ -1075,8 +1141,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       const len = Math.hypot(dx, dz);
       if (len === 0) return false;
       const dir = tmpV.set(dx / len, 0, dz / len).clone();
-      // Two rays: one clears stair risers (which sit below it), one catches walls and beams.
-      for (const h of [0.45, 1.3]) {
+      // Two rays: one clears stair risers (which sit below it), one catches walls and beams
+      // (lower while crouched, so a crouch gets under a low beam).
+      for (const h of [0.45, Math.min(1.3, eye - 0.2)]) {
         const origin = new THREE.Vector3(feet.x, feet.y + h, feet.z);
         if (wallDist(origin, dir, RADIUS + len + 0.01) < RADIUS + len) return false;
       }
@@ -1084,7 +1151,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       const nz = feet.z + dz;
       const g = groundAt(nx, nz, feet.y);
       if (g === -Infinity || g > feet.y + STEP) return false;
-      if (hitsFurniture(nx, nz, Math.max(g, feet.y))) return false;
+      // In the air, furniture is judged from the floor: landing on a table's box would trap you in it.
+      if (hitsFurniture(nx, nz, airborne ? g : Math.max(g, feet.y), eye + 0.1)) return false;
       feet.x = nx;
       feet.z = nz;
       return true;
@@ -1127,6 +1195,17 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           scene.add(sewer.group);
           walls.push(...sewer.solids);
           owned.push(sewer);
+          // The shrine's door, padlocked: shut (and in the way) until the lock is cracked.
+          const lockId = level.sewer.shrineLock;
+          const lockEntry = lockId ? level.examinables[lockId] : undefined;
+          if (lockId && lockEntry && level.locks?.[lockId]) {
+            const dm = sewer.door;
+            const k = openLocksRef.current[lockId] ? 1 : 0;
+            dm.set(k);
+            if (!k) walls.push(...dm.blocking);
+            doors.push({ id: lockId, lockId, hidesPeeper: false, model: dm, k, blocking: !k });
+            targets.push({ id: lockId, entry: lockEntry, box: dm.lock });
+          }
         }
         // Where the rain cannot reach: over the architecture, cast down from above.
         if (rainFall && arch) {
@@ -1494,10 +1573,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               return { point: hit.point.clone(), normal };
             },
             // From just above the boards, so rugs count as floor and tabletops don't.
+            // The sewer's floors are its own, outside the level's model.
             (x, z, nearY) => {
               ray.set(tmpV.set(x, nearY + 0.3, z), down);
               ray.far = 1;
-              const hit = ray.intersectObject(loadedModel, true)[0];
+              const hit = ray.intersectObjects(sewer ? [loadedModel, ...sewer.solids] : [loadedModel], true)[0];
               return hit ? hit.point.y : null;
             },
           );
@@ -1738,9 +1818,15 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         keys.add(e.code);
         if (e.code.startsWith('Arrow')) e.preventDefault();
       }
+      // Space jumps and C crouches (held) — never while typing to someone.
+      const field = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
+      if (!field && !typingRef.current && (e.code === 'Space' || e.code === 'KeyC')) {
+        if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jumpAsked = true; }
+        else keys.add(e.code);
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => { keys.delete(e.code); };
-    const onBlur = () => keys.clear();
+    const onBlur = () => { keys.clear(); jumpAsked = false; };
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return;
       // Finer down the sights, in step with the zoom.
@@ -1777,6 +1863,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
+    // Hidden, the frame loop stops: give up leading the hunter at once, not on the next frame.
+    const onVisibility = () => { if (document.visibilityState !== 'visible') presence.setHunterReady(false); };
+    document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('pointerlockchange', onLockChange);
     canvas.addEventListener('click', onCanvasClick);
@@ -1829,8 +1918,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }),
     }) : null;
     const hunterLook = new THREE.Vector3();
+    /** Up and about in the level: not loading, reading, asleep or in a pane. */
+    const hunterAwake = () => !!model && !sleep && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current;
+    // Everyone in the room, gamelord too: whoever leads the hunter shares it in their presence.
+    let peersNow: Peer[] = [];
     const onPeers = (all: Peer[]) => {
       if (disposed) return;
+      peersNow = all;
       // gamelord is never shown, even if an old tab of his still shares where he is.
       const peers = all.filter(p => p.userId !== 'gamelord');
       const live = new Set(peers.map(p => p.id));
@@ -1851,7 +1945,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       setCompanions(peers.filter(p => p.pose).map(p => p.name));
     };
-    const presence = joinLevel(level.id, onPeers);
+    const presence = joinLevel(level.id, onPeers, () => hunter?.hit());
     const lastFeet = new THREE.Vector3().copy(feet);
     const tmpFeet = new THREE.Vector3();
     let gaitHold = 0;
@@ -1985,8 +2079,22 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
         if (keys.has('KeyD')) s += 1;
         if (keys.has('KeyA')) s -= 1;
+        // On a ladder: W climbs, S climbs down, and no falling. Only at its
+        // head or foot can you step off (or on).
+        const ladderAt = () => sewer?.ladders.find(l =>
+          feet.x > l.min[0] && feet.x < l.max[0] && feet.z > l.min[1] && feet.z < l.max[1]
+          && feet.y > l.bottom - 0.1 && feet.y < l.top + 0.1);
+        const ladder = ladderAt();
+        if (ladder) {
+          feet.y = THREE.MathUtils.clamp(feet.y + f * CLIMB * dt, ladder.bottom, ladder.top);
+          if (feet.y > ladder.bottom + 0.05 && feet.y < ladder.top - 0.05) f = s = 0;
+        }
         if (f || s) {
-          const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK) * dt;
+          // Wading: water over the feet halves the pace, running or walking.
+          const wading = sewer?.pools.some(w =>
+            feet.x > w.min[0] && feet.x < w.max[0] && feet.z > w.min[1] && feet.z < w.max[1] && feet.y < w.surface - 0.05);
+          const crouched = eye < EYE - 0.05;
+          const speed = (crouched ? WALK * CROUCH_PACE : keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK) * (wading ? WADE : 1) * dt;
           const n = Math.hypot(f, s);
           const sin = Math.sin(yaw), cos = Math.cos(yaw);
           const dx = (-sin * f + cos * s) / n * speed;
@@ -1995,11 +2103,33 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           if (!tryMove(dx, dz)) { tryMove(dx, 0); tryMove(0, dz); }
         }
         // Settle onto whatever is underfoot (stairs up, or a drop).
-        const g = groundAt(feet.x, feet.z, feet.y);
-        if (g !== -Infinity) feet.y = g > feet.y ? g : Math.max(g, feet.y - 4 * dt);
+        // (Stepping onto its head this frame counts: the shaft is no drop.)
+        const onLadder = !!(ladder || ladderAt());
+        const g = onLadder ? -Infinity : groundAt(feet.x, feet.z, feet.y);
+        // Jump: only from solid ground, never off a ladder, and not with a ceiling just overhead.
+        if (jumpAsked && !airborne && !onLadder && g !== -Infinity && feet.y - g < 0.05) {
+          vy = JUMP;
+          airborne = true;
+        }
+        jumpAsked = false;
+        if (airborne) {
+          vy -= GRAVITY * dt;
+          // A head hitting the ceiling stops the rise.
+          if (vy > 0 && wallDist(tmpV.set(feet.x, feet.y + eye, feet.z), up, 0.25 + vy * dt) < Infinity) vy = 0;
+          feet.y += vy * dt;
+          if (onLadder) { airborne = false; vy = 0; }
+          else if (g !== -Infinity && feet.y <= g) { feet.y = g; airborne = false; vy = 0; }
+        } else if (g !== -Infinity) feet.y = g > feet.y ? g : Math.max(g, feet.y - 4 * dt);
+        // Crouch while C is held; stand again only where there's headroom.
+        const wantDown = keys.has('KeyC');
+        const roomToStand = () =>
+          wallDist(tmpV.set(feet.x, feet.y + eye, feet.z), up, EYE - eye + 0.12) === Infinity
+          && !hitsFurniture(feet.x, feet.z, feet.y, EYE + 0.1);
+        const goal = wantDown || (eye < EYE - 0.01 && !roomToStand()) ? CROUCH_EYE : EYE;
+        eye += (goal - eye) * (1 - Math.exp(-dt * 12));
       }
 
-      camera.position.set(feet.x, feet.y + EYE + Math.sin(t * 1.3) * 0.004, feet.z);
+      camera.position.set(feet.x, feet.y + eye + Math.sin(t * 1.3) * 0.004, feet.z);
       camera.rotation.set(pitch, yaw, 0);
       // Lying down, sleeping, getting up: ease between standing and lying, and fade.
       if (sleep) {
@@ -2024,7 +2154,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         }
         const e = sleep.k * sleep.k * (3 - 2 * sleep.k);
         standQ.setFromEuler(camEuler.set(pitch, yaw, 0, 'YXZ'));
-        camera.position.set(feet.x, feet.y + EYE, feet.z).lerp(sleep.lie, e);
+        camera.position.set(feet.x, feet.y + eye, feet.z).lerp(sleep.lie, e);
         camera.quaternion.slerpQuaternions(standQ, sleep.lieQ, e);
         if (sleepShadeRef.current) sleepShadeRef.current.style.opacity = String(sleep.dark * 0.95);
         if (sleep.phase === 'waking' && sleep.k <= 0 && sleep.dark <= 0) {
@@ -2092,12 +2222,19 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         const gait: Gait = speed > (WALK + RUN) / 2 ? 'run' : speed > 0.3 ? 'walk' : 'idle';
         if (gait !== 'idle') { shownGait = gait; gaitHold = 0.15; }
         else if ((gaitHold -= dt) <= 0) shownGait = 'idle';
-        if (!unseenRef.current) presence.setPose({ p: [feet.x, feet.y, feet.z], yaw, gait: shownGait, lamp: uvOwn.power > 0.3 ? pitch : undefined });
+        if (!unseenRef.current) {
+          presence.setPose({
+            p: [feet.x, feet.y, feet.z], yaw, pitch, gait: shownGait, lamp: uvOwn.power > 0.3 ? pitch : undefined,
+            crouch: eye < (EYE + CROUCH_EYE) / 2 || undefined,
+            torch: (torchRef.current && !woods?.visible) || undefined,
+            busy: !hunterAwake() || undefined,
+          });
+        }
       }
       for (const { avatar, peer } of avatars.values()) {
         if (!avatar) continue;
         avatar.group.visible = !!peer.pose;
-        if (peer.pose) avatar.setTarget(tmpFeet.fromArray(peer.pose.p), peer.pose.yaw, peer.pose.gait);
+        if (peer.pose) avatar.setTarget(tmpFeet.fromArray(peer.pose.p), peer.pose.yaw, peer.pose.gait, !!peer.pose.crouch);
         avatar.update(dt);
       }
       // Wanderers walk on round their loops, facing the way they go.
@@ -2111,11 +2248,40 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       if (hunter) {
         camera.getWorldDirection(hunterLook);
+        const selfId = presence.selfId();
+        // The others, as their presence tells it.
+        const others: HunterSense[] = [];
+        for (const peer of peersNow) {
+          const pose = peer.pose;
+          if (!pose) continue;
+          const pp = pose.pitch ?? 0;
+          const at = new THREE.Vector3().fromArray(pose.p);
+          others.push({
+            id: peer.id, active: !pose.busy, feet: at,
+            eye: at.clone().setY(at.y + (pose.crouch ? CROUCH_EYE : EYE)),
+            look: new THREE.Vector3(-Math.sin(pose.yaw) * Math.cos(pp), Math.sin(pp), -Math.cos(pose.yaw) * Math.cos(pp)),
+            torchOn: !!pose.torch,
+            noise: pose.crouch || pose.gait === 'idle' ? 0 : pose.gait === 'run' ? 2 : 1,
+          });
+        }
+        // Its leader: the lowest connection id with it loaded. Anyone else shows it where that one says.
+        const leader = peersNow.filter(p => p.hunter).sort((a, b) => a.id - b.id)[0];
+        // A tab in the background stops drawing, and would stop the hunter for everyone: it hands it on.
+        const canLead = hunter.ready && document.visibilityState === 'visible';
+        const lead = leadsHunter(selfId, canLead, peersNow);
+        const crouched = eye < (EYE + CROUCH_EYE) / 2;
         hunter.update(dt, {
-          active: !!model && !sleep && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current,
-          feet, eye: camera.position, look: hunterLook,
-          torchOn: torchRef.current && !woods?.visible,
+          local: {
+            id: selfId ?? -1, active: hunterAwake(), hidden: unseenRef.current,
+            feet, eye: camera.position, look: hunterLook,
+            torchOn: torchRef.current && !woods?.visible,
+            noise: crouched || shownGait === 'idle' ? 0 : shownGait === 'run' ? 2 : 1,
+          },
+          others, lead, follow: leader?.hunter ?? null,
+          onBlow: (id) => presence.sendHit(id),
         });
+        presence.setHunter(lead && selfId !== null ? hunter.snapshot() : null);
+        presence.setHunterReady(canLead);
         camera.position.add(hunter.jolt);
       }
 
@@ -2125,7 +2291,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (!avatar) continue;
         const dx = camera.position.x - home.x;
         const dz = camera.position.z - home.z;
-        const near = Math.hypot(dx, dz) < 5 && Math.abs(camera.position.y - EYE - home.y) < 1;
+        const near = Math.hypot(dx, dz) < 5 && Math.abs(camera.position.y - eye - home.y) < 1;
         avatar.setTarget(home, near ? Math.atan2(-dx, -dz) : homeYaw, 'idle');
         avatar.label.visible = near;
         avatar.update(dt);
@@ -2182,7 +2348,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       // Doors swing over a second and a half. A shut door blocks once it is home;
       // an opening one stops blocking at once.
       for (const d of doors) {
-        const want = doorsOpenRef.current[d.id] ? 1 : 0;
+        const want = (d.lockId ? openLocksRef.current[d.lockId] : doorsOpenRef.current[d.id]) ? 1 : 0;
         if (d.k !== want) {
           d.k = want > d.k ? Math.min(1, d.k + dt / 1.5) : Math.max(0, d.k - dt / 1.5);
           d.model.set(d.k);
@@ -2363,6 +2529,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibility);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('pointerlockchange', onLockChange);
       canvas.removeEventListener('click', onCanvasClick);
@@ -2432,7 +2599,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? `WASD move · Shift run · Mouse look · ${fires ? 'E examine · click fire · right-click aim · R reload · V inspect' : `E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}`}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
+      ? `WASD move · Shift run · Space jump · C crouch · Mouse look · ${fires ? 'E examine · click fire · right-click aim · R reload · V inspect' : `E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}`}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
@@ -2633,8 +2800,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Type at the {focus.entry.title}</>
               ) : level.locks?.[focus.id] ? (
                 openLocks[focus.id]
-                  ? <><span style={{ color: 'var(--brass)' }}>[E]</span> Look inside the {focus.entry.title.toLowerCase()}</>
-                  : <><span style={{ color: 'var(--brass)' }}>[E]</span> Crack the {focus.entry.title.toLowerCase()}</>
+                  ? <><span style={{ color: 'var(--brass)' }}>[E]</span> {level.locks[focus.id].prompt?.open ?? `Look inside the ${focus.entry.title.toLowerCase()}`}</>
+                  : <><span style={{ color: 'var(--brass)' }}>[E]</span> {level.locks[focus.id].prompt?.locked ?? `Crack the ${focus.entry.title.toLowerCase()}`}</>
               ) : level.builders?.[focus.id] ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Work on the {focus.entry.title.charAt(0).toLowerCase()}{focus.entry.title.slice(1)}</>
               ) : level.radios?.[focus.id] ? (
@@ -2688,6 +2855,29 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 </>
               )}
             </div>
+          )}
+
+          {/* The dream, over the dark. */}
+          {dreaming && (
+            <>
+              <iframe
+                ref={dreamRef}
+                src={level.dream}
+                title="Asleep"
+                onLoad={() => setDreamLocked(false)}
+                allow="autoplay; fullscreen"
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, display: 'block', background: '#000' }}
+              />
+              {!dreamLocked && (
+                <div style={{
+                  position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)', pointerEvents: 'none',
+                  fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1px', textTransform: 'uppercase',
+                  color: 'rgba(232,220,200,0.55)', textShadow: '0 1px 4px #000', whiteSpace: 'nowrap',
+                }}>
+                  Click to look · WASD swim · Space rise · <span style={{ color: 'var(--brass)' }}>[E]</span> wake
+                </div>
+              )}
+            </>
           )}
 
           {inspecting?.inspect && (
@@ -2744,7 +2934,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             </div>
           )}
 
-          {webgl && loaded && !locked && !reading && !browsing && !typing && !invOpen && !inspecting && (
+          {webgl && loaded && !locked && !dreaming && !reading && !browsing && !typing && !invOpen && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
               pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.5px',

@@ -805,6 +805,8 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
   lightSwitches: LIGHT_SWITCHES,
   pickups: [WORKBENCH],
   beds: BEDS,
+  // Every bunk sinks the sleeper into the same deep water.
+  dream: '/godot/dream.html?level=dream',
   uvStains: [...LAB_STAINS, ...DRAFTING_STAINS],
   gazeHazards: GAZE_HAZARDS,
   atmosphere: {

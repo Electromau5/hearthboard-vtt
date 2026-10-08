@@ -149,6 +149,47 @@ function run(ctx: Ctx, rnd: () => number, x: number, y: number, len: number, wid
   ctx.fill();
 }
 
+/**
+ * A webbed hand leant on the wall: a narrow palm, four long fingers joined by
+ * web almost to their tips, a claw at each, and the runs where the brine ran
+ * off it. It slid down only a little, steadying, not falling.
+ */
+function paintWebbedHand(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => number) {
+  const cx = w / 2;
+  const palmY = 0.24 * ppm;
+  [-0.025, 0, 0.025].forEach((o) => run(ctx, rnd, cx + o * ppm, palmY + 0.03 * ppm, (h - palmY) * (0.3 + rnd() * 0.4), 0.014 * ppm, 0.7));
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.ellipse(cx, palmY, 0.036 * ppm, 0.05 * ppm, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const base = palmY - 0.04 * ppm;
+  const tips = [-0.32, -0.1, 0.1, 0.3].map((ang, i) => {
+    const len = (i === 1 || i === 2 ? 0.14 : 0.12) * ppm;
+    return [cx + (i - 1.5) * 0.012 * ppm + Math.sin(ang) * len, base - Math.cos(ang) * len, ang] as const;
+  });
+  // The web, a little short of the tips.
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.moveTo(cx - 0.03 * ppm, base + 0.01 * ppm);
+  tips.forEach(([x, y]) => ctx.lineTo(cx + (x - cx) * 0.8, base + (y - base) * 0.8));
+  ctx.lineTo(cx + 0.03 * ppm, base + 0.01 * ppm);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 0.9;
+  tips.forEach(([x, y, ang], i) => {
+    ctx.lineWidth = 0.013 * ppm;
+    ctx.beginPath();
+    ctx.moveTo(cx + (i - 1.5) * 0.012 * ppm, base);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.lineWidth = 0.004 * ppm;        // claw
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.sin(ang) * 0.025 * ppm, y - Math.cos(ang) * 0.025 * ppm);
+    ctx.stroke();
+  });
+}
+
 /** A hand pressed flat high on the wall, then dragged down it. */
 function paintHandprint(ctx: Ctx, w: number, h: number, ppm: number, rnd: () => number) {
   const cx = w / 2;
@@ -552,7 +593,7 @@ export function createUvStains(
       if (!hit) { console.warn(`UV stain "${stain.id}" found no wall`); continue; }
       const ppm = Math.min(700, 900 / Math.max(w, h));
       const [c, ctx] = canvasFor(w, h, ppm);
-      if (stain.mark === 'handprint') paintHandprint(ctx, c.width, c.height, ppm, rnd);
+      if (stain.mark === 'handprint') (stain.webbed ? paintWebbedHand : paintHandprint)(ctx, c.width, c.height, ppm, rnd);
       else if (stain.mark === 'spatter') paintSpatter(ctx, c.width, c.height, ppm, rnd);
       else if (stain.mark === 'glyph') paintGlyph(ctx, c.width, c.height, ppm, rnd);
       // Solid letters glowing at full strength burn out to white; brine writes thinner.
@@ -585,7 +626,14 @@ export function createUvStains(
       pieces.push({ stain, box: new THREE.Box3().setFromObject(mesh).expandByScalar(0.03), point: mesh.position.clone(), normal: hit.normal.clone() });
     }
     const up = new THREE.Vector3(0, 1, 0);
-    const floorY = stain.floorY ?? 0;
+    // The floor's height at a point `along` the path (point index plus a fraction).
+    const heights = stain.floorY;
+    const floorY = (i: number, f: number) => {
+      if (!Array.isArray(heights)) return heights ?? 0;
+      const a = heights[Math.min(i, heights.length - 1)] ?? 0;
+      const b = heights[Math.min(i + 1, heights.length - 1)] ?? a;
+      return a + (b - a) * f;
+    };
     if (stain.mark === 'drag' && stain.floor && stain.floor.length > 1) {
       // One smear per straight run of the path, each painted to its own length.
       for (let i = 0; i < stain.floor.length - 1; i++) {
@@ -593,7 +641,7 @@ export function createUvStains(
         const [bx, bz] = stain.floor[i + 1];
         const len = Math.hypot(bx - ax, bz - az);
         const cx = (ax + bx) / 2, cz = (az + bz) / 2;
-        const y = floorAt(cx, cz, floorY);
+        const y = floorAt(cx, cz, floorY(i, 0.5));
         if (y === null || len < 0.05) continue;
         const ppm = Math.min(300, 2048 / len);
         const [c, ctx] = canvasFor(len, DRAG_WIDTH, ppm);
@@ -615,6 +663,7 @@ export function createUvStains(
       const geo = new THREE.PlaneGeometry(...PRINT_SIZE).rotateX(-Math.PI / 2);
       owned.push(geo);
       // Strides lengthen as the feet do.
+      const [feet0, feet1] = stain.feet ?? [0, 1];
       let along = 0.15, side = 1, seg = 0, segStart = 0;
       while (along < total) {
         while (seg < path.length - 2 && along > segStart + path[seg + 1].distanceTo(path[seg])) {
@@ -626,10 +675,12 @@ export function createUvStains(
         const at = a.clone().addScaledVector(dir, along - segStart);
         const x = at.x + -dir.y * side * 0.1;
         const z = at.y + dir.x * side * 0.1;
-        const y = floorAt(x, z, floorY);
+        const segLen = b.distanceTo(a);
+        const y = floorAt(x, z, floorY(seg, segLen > 0 ? (along - segStart) / segLen : 0));
         const t = along / total;
+        const change = feet0 + (feet1 - feet0) * t;
         if (y !== null) {
-          const stage = Math.min(4, Math.round(t * 4));
+          const stage = Math.min(4, Math.round(change * 4));
           const mesh = new THREE.Mesh(geo, footprint(stain.kind, stage));
           mesh.position.set(x, y + 0.004, z);
           mesh.rotation.y = Math.atan2(-dir.x, -dir.y) + (rnd() - 0.5) * 0.2;
@@ -640,7 +691,7 @@ export function createUvStains(
           pieces.push({ stain, box: new THREE.Box3().setFromObject(mesh).expandByScalar(0.04), point: mesh.position.clone(), normal: up });
         }
         side = -side;
-        along += 0.55 + t * 0.25;
+        along += 0.55 + change * 0.25;
       }
     }
   }

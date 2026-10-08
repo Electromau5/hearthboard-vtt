@@ -372,6 +372,8 @@ export type SafeLock = {
   markDeg?: number;
   /** What E shows once it is open: what is inside. */
   opened: Examinable;
+  /** What the prompt offers, locked and open, in place of "Crack the …" and "Look inside the …". */
+  prompt?: { locked: string; open: string };
 };
 
 /** What `/api/locks` keeps for a level: the locks that are open, by examinable id. */
@@ -503,8 +505,15 @@ export type UvStain = Examinable & {
   wall?: { from: Vec3; toward: Vec3; size: [number, number]; turnDeg?: number };
   /** Floor marks: the trail's path, as [x, z] points in walking order. */
   floor?: [number, number][];
-  /** Height of the floor a floor mark lies on, for an upper storey. Default 0. */
-  floorY?: number;
+  /**
+   * Height of the floor a floor mark lies on, for an upper storey. Default 0.
+   * Or one height per point of `floor`, for a trail that goes down stairs.
+   */
+  floorY?: number | number[];
+  /** For `prints`: how far the feet have changed at the trail's start and end, 0 a man's … 1 webbed and clawed. Default [0, 1]. */
+  feet?: [number, number];
+  /** For `handprint`: a webbed, clawed hand instead of a man's. */
+  webbed?: boolean;
 };
 
 /**
@@ -545,9 +554,10 @@ export type Wanderer = {
  * A creature that roams the level on its own, finds its way between floors,
  * and hunts the investigator once it sees them (src/app/components/hunter.ts).
  * It sees you `sightLit` metres off when you stand in lamplight in front of it,
- * from any distance when your torch beam falls on it, and nothing otherwise
- * — always with a clear line between you. Its blows leave
- * marks on the screen; they do no harm yet.
+ * from any distance when your torch beam falls on it, `sightDark` metres off
+ * in the dark — always with a clear line between you — and it may hear you
+ * (`hear`). Its blows leave marks on the screen; they do no harm yet.
+ * Everyone in the level sees the same one: one client leads it.
  */
 export type Hunter = {
   /** A .glb under public/ whose figure faces +Z, with a walk-in-place clip and an attack clip. */
@@ -569,6 +579,14 @@ export type Hunter = {
    * under public/). Without one it maps the level live, which takes a while.
    */
   nav?: string;
+  /** It never climbs above this height: keeps it below ground, say. */
+  ceiling?: number;
+  /** Metres off it sees you in the dark, if you are in front of it — eyes made for the deep. */
+  sightDark?: number;
+  /** Metres off it hears you walk and run (crouched, or standing still, you make no sound); it comes to look. */
+  hear?: { walk: number; run: number };
+  /** Now and then it roams toward wherever someone is in its reach, as if it smelt them. 0..1, how often. */
+  scent?: number;
 };
 
 export type WalkthroughLevel = {
@@ -622,7 +640,14 @@ export type WalkthroughLevel = {
    * out from `at`: the doorway that leads down to it, at its outer face and
    * floor level, with the house behind it along +Z.
    */
-  sewer?: { at: Vec3 };
+  sewer?: {
+    at: Vec3;
+    /**
+     * The id (in `examinables` and `locks`) of the padlock on the door walling
+     * off the shrine of Dagon. The door opens once the padlock is cracked.
+     */
+    shrineLock?: string;
+  };
   /** Furniture from outside the level's model, keyed by examinable id. */
   props?: Record<string, Prop>;
   /** Objects to pick up and turn over, keyed by examinable id. */
@@ -639,6 +664,12 @@ export type WalkthroughLevel = {
   birds?: Birds;
   /** Beds to sleep in, keyed by examinable id. */
   beds?: Record<string, Bed>;
+  /**
+   * A dream to have in those beds: a Godot web build (my-summer-game,
+   * `web/dream_ocean.gd`) shown over the level once the investigator is
+   * asleep. It ends by itself and wakes them; E wakes them sooner.
+   */
+  dream?: string;
   /**
    * A light at every "Lamp_<n>" node — bare bulbs and hanging shades. `only`
    * gives particular lamps, keyed by node name, their own colour, strength or

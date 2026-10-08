@@ -10,7 +10,11 @@ import type { Hunter } from '@/lib/walkthrough';
  * height), so it learns both floors through the stairwell. The flood runs a
  * few milliseconds a frame; it starts roaming over what it already knows.
  *
- * Each player's browser runs its own: it hunts the local investigator only.
+ * Everyone in the level sees the same one. One client leads it (the lowest
+ * connection id, see `leadsHunter` in presence.ts): it hunts every
+ * investigator in the level, by what their presence says of them, and shares
+ * where it is; the others only show it there, and are told when its blows land
+ * on them. Alone, or offline, a client leads its own.
  */
 
 /** What the level offers: the same collision the investigator walks by. */
@@ -26,15 +30,46 @@ export type HunterWorld = {
   step: number;
 };
 
-/** The investigator, as the creature perceives them this frame. */
+/** An investigator, as the creature perceives them this frame. */
 export type HunterSense = {
-  /** False while the level is loading or the player is reading, asleep or in a pane: it holds still. */
+  /** Who: a connection id (the local one is -1 while offline). */
+  id: number;
+  /** False while the level is loading or they are reading, asleep or in a pane: it leaves them be. */
   active: boolean;
+  /** Awake, but nothing it can find: gamelord, walking unseen. */
+  hidden?: boolean;
   feet: THREE.Vector3;
   eye: THREE.Vector3;
   /** Where the camera looks (unit). */
   look: THREE.Vector3;
   torchOn: boolean;
+  /** The noise they make: 0 standing still or crouched, 1 walking, 2 running. */
+  noise: 0 | 1 | 2;
+};
+
+/** Where the hunter is and what it is doing, as its leader shares it. */
+export type HunterSnapshot = {
+  p: [number, number, number];
+  yaw: number;
+  anim: 'walk' | 'attack';
+  /** Metres per second it is going; the walk clip plays to match. */
+  pace: number;
+  /** Whom it is after (a sense id), while `chasing`. */
+  target: number;
+  chasing: boolean;
+};
+
+/** What the hunter is given each frame. */
+export type HunterFrame = {
+  /** The investigator at this screen. */
+  local: HunterSense;
+  /** Everyone else in the level; only the leader hunts them. */
+  others: HunterSense[];
+  /** Whether this client leads it; otherwise it shows `follow`, if there is one. */
+  lead: boolean;
+  follow: HunterSnapshot | null;
+  /** Its blow landed on someone else (by sense id): tell them. */
+  onBlow: (id: number) => void;
 };
 
 const CELL = 0.4;
@@ -108,6 +143,7 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
     }
     const g = world.groundAt(nx, nz, a.y);
     if (g === -Infinity || Math.abs(g - a.y) > world.step) return null;
+    if (spec.ceiling !== undefined && g > spec.ceiling) return null;
     if (world.hitsFurniture(nx, nz, Math.max(g, a.y))) return null;
     return g;
   };
@@ -346,6 +382,10 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
   let lostFor = 0;
   let seesYou = false;
   let lastAttackTime = 0;
+  let target = -1;             // whom it is after (a sense id)
+  let senses: HunterSense[] = [];
+  let pace = 0;
+  let leading = true;
   const lastSeen = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   const tmp2 = new THREE.Vector3();
@@ -364,6 +404,17 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
   };
 
   const wanderSomewhere = () => {
+    // Now and then toward someone in its reach, as if it smelt them.
+    if (spec.scent && Math.random() < spec.scent) {
+      const near = senses.filter(s => nearestNode(s.feet) >= 0);
+      const s = near[Math.floor(Math.random() * near.length)];
+      if (s) {
+        tmp.set(s.feet.x + (Math.random() - 0.5) * 8, s.feet.y, s.feet.z + (Math.random() - 0.5) * 8);
+        const goal = nearestNode(tmp);
+        const p = goal >= 0 ? findPath(at, goal) : null;
+        if (p && p.length > 2) { path = p; state = 'wander'; return; }
+      }
+    }
     for (let tries = 0; tries < 6; tries++) {
       const target = Math.floor(Math.random() * nodes.length);
       const p = findPath(at, target);
@@ -386,8 +437,10 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
       if (dist > TRACK && !inBeam) return false;
     } else {
       if (!inBeam) {
-        // Otherwise only lamplight shows you, close to, and only in front of it.
-        if (!world.litAt(s.feet) || dist > spec.sightLit) return false;
+        // Otherwise only lamplight shows you, close to — or the dark, closer still — and only in front of it.
+        const lit = dist <= spec.sightLit && world.litAt(s.feet);
+        const dark = spec.sightDark !== undefined && dist <= spec.sightDark;
+        if (!lit && !dark) return false;
         tmp2.set(Math.sin(yaw), 0, Math.cos(yaw));
         tmp.set(d.x, 0, d.z);
         if (tmp.lengthSq() > 1e-4 && tmp2.angleTo(tmp) > FOV) return false;
@@ -486,75 +539,140 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
   };
 
   // ── Each frame ────────────────────────────────────────────────────
-  const update = (dt: number, s: HunterSense) => {
-    if (disposed) return;
-    buildSome();
-    updateFeel(dt, s);
-    updateSound(dt, state === 'chase' || state === 'attack');
-    if (!s.active || !mixer || !walk || nodes.length < 50) {
-      root.visible = !!mixer && nodes.length > 0;
-      if (walk) walk.timeScale = 0;
-      root.position.copy(pos);
-      return;
+  /** Stands where it is, not moving: loading, or nobody to hunt. */
+  const hold = () => {
+    root.visible = !!mixer && nodes.length > 0;
+    if (walk) walk.timeScale = 0;
+    root.position.copy(pos);
+    pace = 0;
+  };
+
+  /** Someone else leads it: ease to where they say it is, doing what they say. */
+  const followSnapshot = (dt: number, snap: HunterSnapshot) => {
+    if (!mixer || !walk) { hold(); return; }
+    root.visible = true;
+    tmp.fromArray(snap.p);
+    if (pos.distanceTo(tmp) > 4) pos.copy(tmp);
+    else pos.lerp(tmp, 1 - Math.exp(-dt * 10));
+    let dy = snap.yaw - yaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    yaw += dy * (1 - Math.exp(-dt * 10));
+    playAttack(snap.anim === 'attack');
+    pace = snap.pace;
+    walk.timeScale = snap.anim === 'attack' ? 1 : pace / spec.walkSpeed;
+    mixer.update(dt);
+    root.position.copy(pos);
+    root.rotation.y = yaw;
+  };
+
+  /** Listens for footsteps: the nearest walker or runner it can hear, if any. */
+  const hearSomeone = () => {
+    if (!spec.hear) return null;
+    let best: HunterSense | null = null, bestD = Infinity;
+    for (const s of senses) {
+      const range = s.noise === 2 ? spec.hear.run : s.noise === 1 ? spec.hear.walk : 0;
+      if (!range || Math.abs(s.feet.y - pos.y) > 1.6) continue;
+      const dist = Math.hypot(s.feet.x - pos.x, s.feet.z - pos.z);
+      if (dist <= range && dist < bestD) { bestD = dist; best = s; }
     }
+    return best;
+  };
+  let listenIn = 0;
+
+  const hunt = (dt: number, frame: HunterFrame) => {
+    // While everyone is busy (reading, asleep…) it holds still; it hunts only those it could find.
+    const awake = [frame.local, ...frame.others].filter(s => s.active);
+    senses = awake.filter(s => !s.hidden);
+    if (!awake.length || !mixer || !walk || nodes.length < 50) { hold(); return; }
     root.visible = true;
     if (at < 0) {
       at = nearestNode(pos);
       if (at >= 0) pos.set(nodes[at].x, nodes[at].y, nodes[at].z);
     }
 
-    // Look for the investigator a few times a second.
+    // Look for anyone a few times a second; keep after the one it has, while it can see them.
     if ((senseIn -= dt) <= 0) {
       senseIn = 0.1;
       const hunting = state === 'chase' || state === 'attack';
-      seesYou = canSee(s, hunting);
-      if (seesYou) {
-        lastSeen.copy(s.feet);
+      const current = senses.find(s => s.id === target);
+      let seen: HunterSense | null = hunting && current && canSee(current, true) ? current : null;
+      if (!seen) {
+        let best = Infinity;
+        for (const s of senses) {
+          if (!canSee(s, hunting)) continue;
+          const dd = s.feet.distanceToSquared(pos);
+          if (dd < best) { best = dd; seen = s; }
+        }
+      }
+      seesYou = !!seen;
+      if (seen) {
+        if (seen.id !== target && state === 'attack') { playAttack(false); state = 'chase'; }
+        target = seen.id;
+        lastSeen.copy(seen.feet);
         lostFor = 0;
         if (!hunting) { state = 'chase'; repathIn = 0; }
+      } else if (!hunting && (listenIn -= 0.1) <= 0) {
+        // Footsteps: it goes to see.
+        const heard = hearSomeone();
+        if (heard) {
+          listenIn = 1;
+          lastSeen.copy(heard.feet);
+          const p = findPath(at, nearestNode(heard.feet));
+          if (p) { path = p; state = 'search'; }
+        }
       }
     }
     if (!seesYou) lostFor += dt;
 
     let speed = 0;
     let face: number | null = null;
-    const toYou = Math.hypot(s.feet.x - pos.x, s.feet.z - pos.z);
-    const sameFloor = Math.abs(s.feet.y - pos.y) < 1;
+    const s = senses.find(x => x.id === target);
+    const toYou = s ? Math.hypot(s.feet.x - pos.x, s.feet.z - pos.z) : Infinity;
+    const sameFloor = !!s && Math.abs(s.feet.y - pos.y) < 1;
 
     if (state === 'attack') {
-      face = Math.atan2(s.feet.x - pos.x, s.feet.z - pos.z);
+      if (s) face = Math.atan2(s.feet.x - pos.x, s.feet.z - pos.z);
       if (!sameFloor || toYou > LEAVE) { playAttack(false); state = 'chase'; repathIn = 0; }
       else if (attack) {
         // The blow lands once per swing.
         const tNow = attack.time;
         if (tNow < lastAttackTime) lastAttackTime = 0;   // the swing looped
-        if (lastAttackTime < HIT_AT && tNow >= HIT_AT) onHit();
+        if (lastAttackTime < HIT_AT && tNow >= HIT_AT) {
+          if (target === frame.local.id) onHit(); else frame.onBlow(target);
+        }
         lastAttackTime = tNow;
       }
     } else if (state === 'chase' || state === 'search') {
       if (state === 'chase' && lostFor > GIVE_UP) { state = 'search'; path = findPath(at, nearestNode(lastSeen)) ?? []; }
-      if (state === 'chase' && sameFloor && toYou < REACH && seesYou) {
+      if (state === 'chase' && s && sameFloor && toYou < REACH && seesYou) {
         state = 'attack';
         playAttack(true);
       } else {
         if (state === 'chase' && (repathIn -= dt) <= 0) {
           repathIn = 0.4;
-          const goal = nearestNode(seesYou ? s.feet : lastSeen);
+          const goal = nearestNode(seesYou && s ? s.feet : lastSeen);
           const p = findPath(at, goal);
           if (p) path = p;
         }
-        speed = spec.chaseSpeed;
-        // In the last stretch, close straight in.
-        if (state === 'chase' && seesYou && sameFloor && toYou < 2.5) {
+        // Chasing, flat out; going to look, warily.
+        speed = state === 'chase' ? spec.chaseSpeed : (spec.walkSpeed + spec.chaseSpeed) / 2;
+        // In the last stretch, close straight in — unless a wall or a low roof is in the way.
+        if (state === 'chase' && seesYou && s && sameFloor && toYou < 2.5) {
           path = [];
           face = Math.atan2(s.feet.x - pos.x, s.feet.z - pos.z);
           const stepLen = Math.min(speed * dt, Math.max(0, toYou - REACH * 0.8));
-          pos.x += Math.sin(face) * stepLen;
-          pos.z += Math.cos(face) * stepLen;
-          const g = world.groundAt(pos.x, pos.z, pos.y);
-          if (g !== -Infinity && Math.abs(g - pos.y) < world.step) pos.y = g;
-          const near = nearestNode(pos);
-          if (near >= 0) at = near;
+          d.set(Math.sin(face), 0, Math.cos(face));
+          const clear = [0.45, 1.3].every(h => world.wallDist(o.set(pos.x, pos.y + h, pos.z), d, world.radius + stepLen + 0.01) >= world.radius + stepLen);
+          if (clear) {
+            pos.x += d.x * stepLen;
+            pos.z += d.z * stepLen;
+            const g = world.groundAt(pos.x, pos.z, pos.y);
+            if (g !== -Infinity && Math.abs(g - pos.y) < world.step) pos.y = g;
+            const near = nearestNode(pos);
+            if (near >= 0) at = near;
+          } else {
+            speed = 0;
+          }
         } else if (path.length === 0 && state === 'search') {
           state = 'pause';
           pauseFor = 2 + Math.random() * 2;
@@ -595,14 +713,44 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
       dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       yaw += Math.sign(dy) * Math.min(Math.abs(dy), 7 * dt);
     }
+    pace = state === 'attack' ? 0 : speed;
     walk.timeScale = state === 'attack' ? 1 : speed / spec.walkSpeed;
     mixer.update(dt);
     root.position.copy(pos);
     root.rotation.y = yaw;
   };
 
+  const update = (dt: number, frame: HunterFrame) => {
+    if (disposed) return;
+    buildSome();
+    updateFeel(dt, frame.local);
+    if (frame.lead) {
+      // Taking over from another leader: carry on from where it was shown.
+      if (!leading) { at = -1; path = []; state = 'pause'; pauseFor = 0.5; target = -1; playAttack(false); }
+      leading = true;
+      hunt(dt, frame);
+      updateSound(dt, (state === 'chase' || state === 'attack') && target === frame.local.id);
+    } else {
+      leading = false;
+      if (frame.follow) followSnapshot(dt, frame.follow);
+      else hold();
+      updateSound(dt, !!frame.follow?.chasing && frame.follow.target === frame.local.id);
+    }
+  };
+
   return {
     update,
+    /** Where it is and what it is doing, for the others, while this client leads it. */
+    snapshot(): HunterSnapshot {
+      return {
+        p: [pos.x, pos.y, pos.z], yaw, anim: state === 'attack' ? 'attack' : 'walk', pace,
+        target, chasing: state === 'chase' || state === 'attack',
+      };
+    },
+    /** Loaded and mapped: ready to lead. */
+    get ready() { return !!mixer && nodes.length >= 50; },
+    /** Its blow landed on the investigator at this screen (told by whoever leads it). */
+    hit: onHit,
     /**
      * Floods the whole level now and returns the map as JSON, for spec.nav.
      * Rebake whenever the level's model changes: with the level open, call it

@@ -56,8 +56,10 @@ src/
       woods-lamp.ts               # First-person Wood's lamp (Q) — the 1930s UV lamp held in view, drawn over the level
       uv-stains.ts                # Blood/brine decals only the Wood's lamp reveals (level.uvStains)
       SafeCracker.tsx             # Safe-dial mini game (level.locks) — hit the marks as the pip passes, 15 s; open safes shared via /api/locks
-      sewer.ts                    # The sewer under the derelict house (level.sewer) — procedural stairwell, vaulted main, cistern; no lights
+      sewer.ts                    # The sewer under the derelict house (level.sewer) — procedural stairwell, vaulted main, cistern; a shaft and climbable ladder (`ladders`) down to Dagon's bone-strewn shrine; no lights; the shrine is walled off by a door whose padlock (`sewer.shrineLock`, a `locks` dial) opens it; Wood's-lamp prints lead there; under the house, a tunnel loop (branches, cross tunnel, pillared junction), a crouch-only crawl pipe and a Deep One's lair
+      hunter.ts                   # level.hunter — a Deep One that roams on a baked grid (public/*-nav.json), sees/hears and attacks; one client leads it for everyone (presence.ts leadsHunter), blows sent as Liveblocks events
       level-door.ts               # Doors gamelord opens (level.doors) — cut out of the merged architecture at load, swing on a hinge
+      (dream)                     # level.dream — Godot dream shown over a bed once asleep; the Archive bunks' ocean is public/godot/dream.html (my-summer-game web/dream_ocean.gd, tools/export_dream.sh)
     characters/
       page.tsx                    # Investigator dossier grid — all 7 characters
       [slug]/page.tsx             # Individual character sheet page

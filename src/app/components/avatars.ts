@@ -125,7 +125,7 @@ export type RemoteAvatar = {
   /** The name over their head — a level can hide it when they are far off. */
   label: THREE.Sprite;
   /** Where the network last said they were; the figure eases toward it. */
-  setTarget: (feet: THREE.Vector3, yaw: number, gait: Gait) => void;
+  setTarget: (feet: THREE.Vector3, yaw: number, gait: Gait, crouch?: boolean) => void;
   update: (dt: number) => void;
   dispose: () => void;
 };
@@ -212,13 +212,20 @@ export async function createAvatar(slug: string | null, name: string): Promise<R
   const target = new THREE.Vector3();
   let targetYaw = 0;
   let placed = false;
+  // Crouched (0 standing … 1 down): the figure squats, its name coming down with it.
+  let crouchGoal = 0;
+  let crouchK = 0;
+  const labelY = label.position.y;
+  const baseScaleY = figure.scale.y;
+  const baseY = figure.position.y;
 
   return {
     group,
     label,
-    setTarget(feet, yaw, next) {
+    setTarget(feet, yaw, next, crouch = false) {
       target.copy(feet);
       targetYaw = yaw;
+      crouchGoal = crouch ? 1 : 0;
       // First sighting: appear in place rather than gliding in from the origin.
       if (!placed) { group.position.copy(feet); group.rotation.y = yaw + Math.PI; placed = true; }
       if (next !== gait) {
@@ -237,6 +244,11 @@ export async function createAvatar(slug: string | null, name: string): Promise<R
       let d = want - group.rotation.y;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       group.rotation.y += d * k;
+      crouchK += (crouchGoal - crouchK) * k;
+      const squat = 1 - 0.35 * crouchK;
+      figure.scale.y = baseScaleY * squat;
+      figure.position.y = baseY * squat;
+      label.position.y = labelY - (labelY - 0.3) * 0.35 * crouchK;
     },
     dispose() {
       mixer.stopAllAction();
