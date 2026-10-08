@@ -237,6 +237,16 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // Set by the scene once the level loads; switches a radio on or off.
   const toggleRadioRef = useRef<((id: string) => void) | null>(null);
   const toggleSwitchRef = useRef<((id: string) => void) | null>(null);
+  // gamelord walks the levels unseen: he never shares where he is.
+  const unseenRef = useRef(!!isGamelord);
+  useEffect(() => { unseenRef.current = !!isGamelord; }, [isGamelord]);
+  // The room switches as the party last left them (see /api/lights), kept so a
+  // level still loading can set its switches once they exist…
+  const sharedSwitchesRef = useRef<Record<string, boolean>>({});
+  // …and the scene's own hook for setting one that someone else flipped.
+  const applySwitchRef = useRef<((id: string, on: boolean) => void) | null>(null);
+  // When this player last flipped each switch: a poll sent before then answers with the old state.
+  const switchSetAt = useRef<Record<string, number>>({});
   // Set by the scene: reloads the gun in hand, if it can be.
   const reloadRef = useRef<(() => void) | null>(null);
   const inspectRef = useRef<(() => void) | null>(null);
@@ -505,7 +515,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, [onShare]);
 
   // ── Lights ────────────────────────────────────────────────────────
-  // Polled like the weather, every 10 s while the tab is showing.
+  // Polled every 10 s while the tab is showing — every 5 s in a level with
+  // room switches, which anyone in the party may be flipping.
   useEffect(() => {
     if (!level.lamps) return;
     let cancelled = false;
@@ -514,11 +525,20 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       const sent = performance.now();
       fetch(`/api/lights?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
         .then(r => (r.ok ? r.json() : null))
-        .then((l: { on?: unknown } | null) => { if (!cancelled && sent > powerSetAt.current) setPower(l?.on !== false); })
+        .then((l: { on?: unknown; switches?: Record<string, { on: boolean }> } | null) => {
+          if (cancelled) return;
+          if (sent > powerSetAt.current) setPower(l?.on !== false);
+          for (const sw of level.lightSwitches ?? []) {
+            if (sent < (switchSetAt.current[sw.id] ?? 0)) continue;
+            const on = !!l?.switches?.[sw.id]?.on;
+            sharedSwitchesRef.current[sw.id] = on;
+            applySwitchRef.current?.(sw.id, on);
+          }
+        })
         .catch(() => {});
     };
     poll();
-    const timer = window.setInterval(poll, 10_000);
+    const timer = window.setInterval(poll, level.lightSwitches?.length ? 5_000 : 10_000);
     document.addEventListener('visibilitychange', poll);
     return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
   }, [level]);
@@ -1307,6 +1327,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             geo.setIndex(order);
             mesh.material = [lit, dark];
           }
+          // Each room as the party left it.
+          for (const [id, on] of Object.entries(sharedSwitchesRef.current)) setSwitch(id, on);
         }
 
         // The bulbs' glow, so the mains can put it out: any glowing material
@@ -1632,24 +1654,44 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       (err) => { console.error('Walkthrough GLB load error:', level.model, err); if (!disposed) setLoadError(true); },
     );
 
-    // Audio is wired up on the first switch-on: browsers only let an
-    // AudioContext start from a user gesture, and that key press is one.
-    toggleSwitchRef.current = (id) => {
+    // A switch thrown, here or by someone else in the level: its button, its
+    // room's lamps and its bulbs' glow.
+    const setSwitch = (id: string, on: boolean) => {
       const s = switches.get(id);
-      if (!s) return;
-      s.on = !s.on;
-      s.set(s.on);
-      for (const l of lamps) if (s.sw.lamps.includes(l.name)) l.on = s.on;
-      for (const { group } of s.glows) group.materialIndex = s.on ? 0 : 1;
-      const ear = ensureListener();
-      gunSounds ??= createGunSounds(ear.context, ear.getInput());
-      gunSounds.fire('click');
+      if (!s || s.on === on) return false;
+      s.on = on;
+      s.set(on);
+      for (const l of lamps) if (s.sw.lamps.includes(l.name)) l.on = on;
+      for (const { group } of s.glows) group.materialIndex = on ? 0 : 1;
       setSwitchesOn(prev => {
         const next = new Set(prev);
-        if (s.on) next.add(id);
+        if (on) next.add(id);
         else next.delete(id);
         return next;
       });
+      return true;
+    };
+    applySwitchRef.current = setSwitch;
+    // Flipped here: it changes at once for this player, then for everyone once it is saved.
+    // Audio is wired up on the first flip: browsers only let an AudioContext
+    // start from a user gesture, and that key press is one.
+    toggleSwitchRef.current = (id) => {
+      const s = switches.get(id);
+      if (!s) return;
+      const on = !s.on;
+      setSwitch(id, on);
+      sharedSwitchesRef.current[id] = on;
+      switchSetAt.current[id] = performance.now();
+      const ear = ensureListener();
+      gunSounds ??= createGunSounds(ear.context, ear.getInput());
+      gunSounds.fire('click');
+      fetch('/api/lights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: level.id, switch: id, on }),
+      })
+        .then(r => { if (!r.ok) throw new Error(String(r.status)); })
+        .catch(err => console.error('Could not save the light switch:', err));
     };
     toggleRadioRef.current = (id) => {
       const r = radios.get(id);
@@ -1787,8 +1829,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }),
     }) : null;
     const hunterLook = new THREE.Vector3();
-    const onPeers = (peers: Peer[]) => {
+    const onPeers = (all: Peer[]) => {
       if (disposed) return;
+      // gamelord is never shown, even if an old tab of his still shares where he is.
+      const peers = all.filter(p => p.userId !== 'gamelord');
       const live = new Set(peers.map(p => p.id));
       for (const [id, a] of avatars) {
         if (!live.has(id)) { a.avatar?.dispose(); avatars.delete(id); }
@@ -2048,7 +2092,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         const gait: Gait = speed > (WALK + RUN) / 2 ? 'run' : speed > 0.3 ? 'walk' : 'idle';
         if (gait !== 'idle') { shownGait = gait; gaitHold = 0.15; }
         else if ((gaitHold -= dt) <= 0) shownGait = 'idle';
-        presence.setPose({ p: [feet.x, feet.y, feet.z], yaw, gait: shownGait, lamp: uvOwn.power > 0.3 ? pitch : undefined });
+        if (!unseenRef.current) presence.setPose({ p: [feet.x, feet.y, feet.z], yaw, gait: shownGait, lamp: uvOwn.power > 0.3 ? pitch : undefined });
       }
       for (const { avatar, peer } of avatars.values()) {
         if (!avatar) continue;
@@ -2326,6 +2370,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       window.removeEventListener('resize', onResize);
       toggleRadioRef.current = null;
       toggleSwitchRef.current = null;
+      applySwitchRef.current = null;
       reloadRef.current = null;
       refreshPinsRef.current = null;
       window.clearInterval(pinTimer);
