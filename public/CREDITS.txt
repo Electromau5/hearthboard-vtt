@@ -23,12 +23,15 @@ black-archive.glb
   life size (my-summer-game tools/pose_deep_one.py); the opened chest, clamps and
   sheet added; textures resized to 1024 px WebP, meshes meshopt-compressed.
 
-props/iron-safe.glb — in the derelict house's hall, the Esther Gilman's hold and
-Bellevue's nurses' station:
+props/library/iron-safe.glb — in the derelict house's hall, the Esther Gilman's hold,
+Bellevue's nurses' station and the Abattoir:
   "Antique Iron Safe" by pixelgrapher — https://sketchfab.com/pixelgrapher
   https://sketchfab.com/3d-models/antique-iron-safe-196cf0d3d5094b50874dbf51064a7d3e
   Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
-  Changes: re-centred on its base, textures resized to 1024 px WebP.
+  Changes: re-centred on its base, textures resized to 1024 px WebP, meshopt-compressed.
+
+props/library/ — the static prop library (crates, barrels, furniture…); each
+model's author and licence is listed in props/library/CREDITS.txt.
 
 props/dagon-statue.glb — Dagon on his plinth in the shrine under the derelict house's sewer:
   "Dagon - Lovecraft lore" by CMBC — https://sketchfab.com/CMBC

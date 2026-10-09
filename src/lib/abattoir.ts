@@ -299,7 +299,7 @@ export const ABATTOIR_LEVEL: WalkthroughLevel = {
   radios: RADIOS,
   uvStains: UV_STAINS,
   // In the corner of Banks's office, where he can watch it from his desk.
-  props: { iron_safe: { model: '/props/iron-safe.glb', at: [11.55, -3.2], turnDeg: -90 } },
+  placements: [{ asset: 'iron-safe', id: 'iron_safe', at: [11.55, -3.2], turnDeg: -90 }],
   // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.
   locks: {
     iron_safe: {

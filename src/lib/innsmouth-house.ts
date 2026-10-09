@@ -966,7 +966,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   uvStains: UV_STAINS,
   inspectables: INSPECTABLES,
   // In the hall, in the corner between the study door and the front door, facing the stairs.
-  props: { iron_safe: { model: '/props/iron-safe.glb', at: [1.56, 4.35], turnDeg: -90 } },
+  placements: [{ asset: 'iron-safe', id: 'iron_safe', at: [1.56, 4.35], turnDeg: -90 }],
   // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.
   locks: {
     // The door into the shrine of Dagon, under the cistern. Cracked, it swings open for the party.

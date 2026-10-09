@@ -56,6 +56,8 @@ src/
       DialoguePane.tsx            # Talking to a walkthrough NPC (E) — preset topics asked straight or pushed with charm/intimidate/persuade/deceive, via /api/dialogue/[npc]
       woods-lamp.ts               # First-person Wood's lamp (Q) — the 1930s UV lamp held in view, drawn over the level
       uv-stains.ts                # Blood/brine decals only the Wood's lamp reveals (level.uvStains)
+      SetDressing.tsx             # gamelord's set-dressing mode (P): the prop library's tray, dragged into a walkthrough level; select/move/turn/duplicate/remove, undo, copy as code; saved via /api/dressing
+      set-dressing.ts             # Set dressing, three.js side: dressed props, the ghost, drop raycasts (floors and tops only), picking, outline; solid ones join the blockers
       SafeCracker.tsx             # Safe-dial mini game (level.locks) — hit the marks as the pip passes, 15 s; open safes shared via /api/locks
       sewer.ts                    # The sewer under the derelict house (level.sewer) — procedural stairwell, vaulted main, cistern; a shaft and climbable ladder (`ladders`) down to Dagon's bone-strewn shrine; no lights; the shrine is walled off by a door whose padlock (`sewer.shrineLock`, a `locks` dial) opens it; Wood's-lamp prints lead there; under the house, a tunnel loop (branches, cross tunnel, pillared junction), a crouch-only crawl pipe and a Deep One's lair; the outfall grate is gamelord's (`sewer.grate`)
       sanctums.ts                 # Inner sanctums off Dagon's shrine (beyond its padlocked door): Shub-Niggurath's (north) and Bokrug's (south) — painted sigils, ritual circles, black candles, skull rings; Bokrug's head (split off at the neck) turns to watch whoever is in his room
@@ -100,6 +102,7 @@ src/
       dialogue/route.ts           # GET/POST — GM: the whole dialogue save, and next day / tide / add fact / set / reset
       locks/route.ts              # GET/POST — which walkthrough safes stand open (locks/<level>); admins can relock
       doors/route.ts              # GET/POST — which walkthrough doors stand open (doors/<level>); gamelord only
+      dressing/route.ts           # GET/POST — props gamelord set down in a walkthrough level (dressing/<level>); read on open + on a Liveblocks 'dressing' event, never polled; POST gamelord only
   auth.ts                         # Full NextAuth config (Node.js runtime only)
   auth.config.ts                  # Edge-safe config (no fs/bcrypt) — used by proxy
   proxy.ts                        # Next.js 16 edge middleware (replaces middleware.ts)
@@ -112,6 +115,7 @@ src/
     blob-storage.ts               # Vercel Blob binary uploads — unprovisioned, see gotchas
     campaign-defaults.ts          # Default location data
     walkthrough.ts                # WalkthroughLevel type + model contract for WalkthroughModal
+    prop-library.ts               # GENERATED — static props from the Blender prop library (my-summer-game assets/prop_library/props.blend, tools/export_prop_library.sh); levels set them down with `placements: [{ asset, at, turnDeg?, id? }]`, the same asset any number of times
     innsmouth-house.ts            # HOUSE_LEVEL — the derelict house's clue text and atmosphere
     fishing-vessel.ts             # VESSEL_LEVEL — the wrecked trawler "Esther Gilman"
     black-archive.ts              # ARCHIVE_LEVEL — the Black Archive warehouse; rooms open live board notes and All Resources; Dr. Finch's Pathology Lab off Records; the architect's Drafting Room off Cartography

@@ -1,0 +1,42 @@
+Static props in this folder come from the Blender prop library
+(my-summer-game assets/prop_library/props.blend), exported by
+tools/export_prop_library.sh: textures resized to 1024 px WebP, meshes meshopt-compressed.
+
+barrel.glb
+  "Wooden Barrel" by James Ray Cock — https://polyhaven.com/a/wine_barrel_01 (CC0)
+
+candlestick.glb
+  "Wooden Candlestick" by Josh Dean — https://polyhaven.com/a/wooden_candlestick (CC0)
+
+iron-safe.glb
+  "Antique Iron Safe" by pixelgrapher — https://sketchfab.com/3d-models/antique-iron-safe-196cf0d3d5094b50874dbf51064a7d3e (CC BY 4.0)
+
+long-bench.glb
+  "Long Wooden Bench" by Ethan Place — https://polyhaven.com/a/WoodenTable_01 (CC0)
+
+painted-cabinet.glb
+  "Painted Wooden Cabinet" by Kirill Sannikov — https://polyhaven.com/a/painted_wooden_cabinet (CC0)
+
+rocking-chair.glb
+  "Rocking Chair" by Jorge Camacho — https://polyhaven.com/a/Rockingchair_01 (CC0)
+
+sea-chest.glb
+  "Sea Chest" by Rico Cilliers — https://polyhaven.com/a/treasure_chest (CC0)
+
+wooden-bucket.glb
+  "Wooden Bucket" by James Ray Cock — https://polyhaven.com/a/wooden_bucket_01 (CC0)
+
+wooden-crate.glb
+  "Wooden Crate" by James Ray Cock — https://polyhaven.com/a/wooden_crate_01 (CC0)
+
+wooden-crate-large.glb
+  "Large Wooden Crate" by James Ray Cock, Jurita Burger — https://polyhaven.com/a/wooden_crate_02 (CC0)
+
+wooden-lantern.glb
+  "Wooden Lantern" by James Ray Cock — https://polyhaven.com/a/wooden_lantern_01 (CC0)
+
+wooden-stool.glb
+  "Wooden Stool" by Kuutti Siitonen — https://polyhaven.com/a/wooden_stool_02 (CC0)
+
+worn-bookshelf.glb
+  "Worn Bookshelf" by Ulan Cabanilla — https://polyhaven.com/a/wooden_bookshelf_worn (CC0)

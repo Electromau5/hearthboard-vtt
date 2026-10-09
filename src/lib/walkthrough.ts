@@ -22,6 +22,7 @@
 
 import type { HeldModel } from './held-items';
 import type { TimeOfDay } from './weather';
+import type { PropAssetId } from './prop-library';
 
 export type Examinable = {
   title: string;
@@ -340,21 +341,51 @@ export type InspectClue = {
 };
 
 /**
- * A piece of furniture from its own .glb, set down in a level that was built
- * without it: it stands on the floor, blocks like the level's own furniture,
- * and is examined (card, skill checks and all) through the examinable of the
- * same id. Inspectables can stand `on` it.
+ * A static prop from the Blender prop library (src/lib/prop-library.ts), set
+ * down in a level that was built without it. It stands on the floor, leans
+ * with a sloped deck, and blocks like the level's own furniture unless the
+ * library marks it as clutter. One asset can be placed any number of times,
+ * in any level; it is downloaded once per level and plain copies are drawn
+ * instanced. With an `id`, that placement is examined (card, skill checks,
+ * a safe's lock) through the examinable of that id, and inspectables can
+ * stand `on` it.
  */
-export type Prop = {
-  /** The .glb under public/: its origin at the foot of the piece, its front facing +Z. */
-  model: string;
+export type Placement = {
+  asset: PropAssetId;
   /** World X and Z of its foot; it stands on the floor there. */
   at: [number, number];
   /** Turn about the vertical: 0 faces +Z, 90 faces +X. */
   turnDeg?: number;
   /** Height of the storey it stands on, for an upper floor. Default 0. */
   floorY?: number;
+  /** Stand it at exactly this height instead of on the floor: a crate on a crate. */
+  y?: number;
+  /** Uniform scale. Default 1. */
+  scale?: number;
+  /** The examinable this one is, if it can be examined. */
+  id?: string;
+  /** Overrides the library's `solid`. */
+  solid?: boolean;
 };
+
+/**
+ * A prop gamelord set down in a level from the set-dressing tray, stored in
+ * /api/dressing rather than in the level's source. `p` is where its foot
+ * landed; `up` is the surface's normal there when the surface slopes (a
+ * listing deck), so it leans with it.
+ */
+export type DressedProp = {
+  /** Stable id for this one copy, so it can be picked out to move or remove. */
+  key: string;
+  asset: PropAssetId;
+  p: [number, number, number];
+  /** Turn about the vertical: 0 faces +Z, 90 faces +X. */
+  turnDeg: number;
+  up?: [number, number, number];
+};
+
+/** /api/dressing: everything gamelord has set down in one level. */
+export type DressingState = { items: DressedProp[]; setAt: number; setBy: string };
 
 /**
  * A safe to crack: while it is locked, E turns its dial (SafeCracker) — marks
@@ -661,8 +692,8 @@ export type WalkthroughLevel = {
     /** The id (in `/api/doors`) of the outfall grate: gamelord raises and lowers it like the level's doors. */
     grate?: string;
   };
-  /** Furniture from outside the level's model, keyed by examinable id. */
-  props?: Record<string, Prop>;
+  /** Props from the Blender prop library, set down in the level. */
+  placements?: Placement[];
   /** Objects to pick up and turn over, keyed by examinable id. */
   inspectables?: Record<string, Inspectable>;
   /**

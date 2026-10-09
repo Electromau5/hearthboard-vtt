@@ -118,7 +118,7 @@ export const VESSEL_LEVEL: WalkthroughLevel = {
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
   // In the fish hold, against the starboard side aft of the crates, facing across the hold.
-  props: { iron_safe: { model: '/props/iron-safe.glb', at: [0.85, 1.0], turnDeg: -90, floorY: -2.3 } },
+  placements: [{ asset: 'iron-safe', id: 'iron_safe', at: [0.85, 1.0], turnDeg: -90, floorY: -2.3 }],
   // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.
   locks: {
     iron_safe: {

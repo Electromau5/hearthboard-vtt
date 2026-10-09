@@ -246,7 +246,7 @@ export const BELLEVUE_LEVEL: WalkthroughLevel = {
   radios: RADIOS,
   uvStains: UV_STAINS,
   // Upstairs in the nurses' station, its back to the south wall beside the window.
-  props: { iron_safe: { model: '/props/iron-safe.glb', at: [-1.5, 7.5], turnDeg: 180, floorY: FH } },
+  placements: [{ asset: 'iron-safe', id: 'iron_safe', at: [-1.5, 7.5], turnDeg: 180, floorY: FH }],
   // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.
   locks: {
     iron_safe: {

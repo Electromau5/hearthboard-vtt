@@ -5,8 +5,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, NpcSpot, Pickup, Prop, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, DressedProp, DressingState, NpcSpot, Pickup, Placement, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
+import { PROP_LIBRARY, type PropAssetId } from '@/lib/prop-library';
 import { createDeepOneHead } from './deep-one';
 import { createHunter, type HunterSense } from './hunter';
 import { createPinboard } from './pinboard';
@@ -19,6 +20,8 @@ import { InventoryPane } from './InventoryPane';
 import { InspectViewer } from './InspectViewer';
 import { ModelBuilder } from './ModelBuilder';
 import { SafeCracker } from './SafeCracker';
+import { SetDressing } from './SetDressing';
+import { createDressing, type Dressing } from './set-dressing';
 import { createModelInLevel } from './model-pieces';
 import { createSewer } from './sewer';
 import { createDoor, type DoorModel } from './level-door';
@@ -205,6 +208,22 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   useEffect(() => { doorsOpenRef.current = doorsOpen; }, [doorsOpen]);
   const doorSetAt = useRef(0);
   const [doorError, setDoorError] = useState(false);
+  // Set dressing (/api/dressing): props gamelord has set down here from the library's
+  // tray. Everyone sees them; only gamelord has the mode that places them.
+  const [dressing, setDressing] = useState(false);
+  const dressingRef = useRef(false);
+  useEffect(() => { dressingRef.current = dressing; }, [dressing]);
+  const [dressItems, setDressItems] = useState<DressedProp[]>([]);
+  const dressItemsRef = useRef<DressedProp[]>([]);
+  const [dressError, setDressError] = useState(false);
+  const dressUndo = useRef<{ items: DressedProp[]; at: number }[]>([]);
+  const [canUndoDress, setCanUndoDress] = useState(false);
+  const dressSaveTimer = useRef(0);
+  // The scene's side of it, and its hooks into the view and the room (set by the scene effect).
+  const dressRef = useRef<Dressing | null>(null);
+  const lookRef = useRef<((dx: number, dy: number) => void) | null>(null);
+  const sendDressingRef = useRef<(() => void) | null>(null);
+  const refetchDressingRef = useRef<(() => void) | null>(null);
   // A pickup carried from where it lay (a gun off the armory bench), by id. Not inventory: it stays in the level.
   const [carried, setCarried] = useState<string | null>(null);
   const carriedRef = useRef<string | null>(null);
@@ -629,11 +648,91 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     }
   }, [level]);
 
+  // ── Set dressing ──────────────────────────────────────────────────
+  // Read when the level opens, and again whenever gamelord says (over the
+  // room) that it changed — never polled.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchDressing = () => {
+      fetch(`/api/dressing?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null))
+        .then((s: DressingState | null) => {
+          // gamelord's own copy is the newer one while a change of his waits to be saved.
+          if (cancelled || !s || dressSaveTimer.current) return;
+          dressItemsRef.current = s.items;
+          setDressItems(s.items);
+        })
+        .catch(() => {});
+    };
+    fetchDressing();
+    refetchDressingRef.current = fetchDressing;
+    return () => { cancelled = true; refetchDressingRef.current = null; };
+  }, [level]);
+  useEffect(() => { dressRef.current?.show(dressItems); }, [dressItems]);
+
+  const saveDressing = useCallback(async () => {
+    window.clearTimeout(dressSaveTimer.current);
+    dressSaveTimer.current = 0;
+    try {
+      const r = await fetch('/api/dressing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: level.id, items: dressItemsRef.current }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      setDressError(false);
+      sendDressingRef.current?.();
+    } catch (err) {
+      console.error('Could not save the set dressing:', err);
+      setDressError(true);
+    }
+  }, [level]);
+
+  // A change shows at once and is saved a moment later, so a turn held down is one write.
+  const changeDressing = useCallback((next: DressedProp[]) => {
+    const now = performance.now();
+    const undo = dressUndo.current;
+    // A run of quick changes (turning step by step) undoes as one.
+    if (!undo.length || now - undo[undo.length - 1].at > 800) undo.push({ items: dressItemsRef.current, at: now });
+    else undo[undo.length - 1].at = now;
+    if (undo.length > 50) undo.shift();
+    setCanUndoDress(true);
+    dressItemsRef.current = next;
+    setDressItems(next);
+    window.clearTimeout(dressSaveTimer.current);
+    dressSaveTimer.current = window.setTimeout(() => void saveDressing(), 400);
+  }, [saveDressing]);
+
+  const undoDressing = useCallback(() => {
+    const last = dressUndo.current.pop();
+    setCanUndoDress(dressUndo.current.length > 0);
+    if (!last) return;
+    dressItemsRef.current = last.items;
+    setDressItems(last.items);
+    window.clearTimeout(dressSaveTimer.current);
+    dressSaveTimer.current = window.setTimeout(() => void saveDressing(), 400);
+  }, [saveDressing]);
+
+  // Into set dressing: the mouse is let go, for the tray. Out of it: anything unsaved goes now.
+  const toggleDressing = useCallback(() => {
+    if (!isGamelord) return;
+    if (dressingRef.current) {
+      setDressing(false);
+      if (dressSaveTimer.current) void saveDressing();
+      return;
+    }
+    if (document.pointerLockElement) document.exitPointerLock();
+    setDressing(true);
+  }, [isGamelord, saveDressing]);
+  useEffect(() => () => window.clearTimeout(dressSaveTimer.current), []);
+
   // Escape closes the reading card first, then the level. Pressing Escape to
   // leave pointer lock must not also close the modal, so a key arriving just
   // after the lock was released is ignored.
   useEffect(() => {
     const onKey = (e: Pick<KeyboardEvent, 'code' | 'key' | 'repeat' | 'preventDefault'>) => {
+      // Set dressing has its own keys (SetDressing.tsx); only walking reaches the level.
+      if (dressingRef.current) return;
       // At the typewriter every key is typing (the textarea keeps its own keys
       // from reaching here); only Escape, from a focused button, backs out.
       if (typingRef.current) {
@@ -710,6 +809,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (lampOutRef.current) setLampOn(v => !v);
         else setTorchOn(v => !v);
       }
+      // P opens set dressing — gamelord only, with nothing open over the level.
+      if (e.code === 'KeyP' && !e.repeat && isGamelord && !godot && !readingRef.current && !browsingRef.current && !invOpenRef.current) {
+        toggleDressing();
+        return;
+      }
       // L throws the level's mains — gamelord only.
       if (e.code === 'KeyL' && !e.repeat && isGamelord && level.lamps) void togglePower();
       // Tab shows or hides the markers over interactive objects (and must not move browser focus).
@@ -721,7 +825,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     keyRef.current = onKey;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect, onShare, isGamelord, togglePower]);
+  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect, onShare, isGamelord, togglePower, godot, toggleDressing]);
 
   // ── Weather ───────────────────────────────────────────────────────
   // Every 10 s while the level is open and the tab is showing — gentle on the
@@ -1162,6 +1266,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       feet.z = nz;
       return true;
     };
+
+    // Props from the library: each model loaded once, however many copies of it stand
+    // in the level (placements and set dressing alike); each use clones it.
+    const propModels = new Map<PropAssetId, Promise<THREE.Object3D>>();
+    const loadProp = (asset: PropAssetId) => {
+      let p = propModels.get(asset);
+      if (!p) {
+        p = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(PROP_LIBRARY[asset].model).then((gltf) => {
+          gltf.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          return gltf.scene;
+        });
+        propModels.set(asset, p);
+      }
+      return p;
+    };
+    const propRoots: THREE.Object3D[] = [];
+    let dressing: Dressing | null = null;
 
     // ── Load the level ──────────────────────────────────────────────
     const loader = new GLTFLoader();
@@ -1624,35 +1745,88 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           if (entry) targets.push({ id, entry, box: new THREE.Box3(new THREE.Vector3(...spot.min), new THREE.Vector3(...spot.max)) });
         }
 
-        // Furniture from its own model, stood on the floor: it blocks and is
-        // examined like the level's own, and things can be set on it.
-        const placeProp = async (id: string, prop: Prop) => {
-          const entry = level.examinables[id];
-          if (!entry) { console.warn('Prop has no examinable:', id); return; }
-          const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(prop.model);
-          if (disposed) return;
-          const obj = gltf.scene;
-          const [x, z] = prop.at;
-          const base = prop.floorY ?? 0;
-          ray.set(tmpV.set(x, base + STEP + 0.05, z), down);
-          ray.far = 6;
-          const floor = ray.intersectObjects(walls, false)[0];
-          obj.position.set(x, floor ? floor.point.y : base, z);
-          const upY = new THREE.Vector3(0, 1, 0);
-          obj.quaternion.setFromAxisAngle(upY, THREE.MathUtils.degToRad(prop.turnDeg ?? 0));
-          // On a listing deck it leans with the floor, all four feet down.
-          const slope = floor?.face?.normal.clone().transformDirection(floor.object.matrixWorld);
-          if (slope && slope.y > 0.9) obj.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(upY, slope));
-          obj.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-          scene.add(obj);
-          obj.updateMatrixWorld(true);
-          const box = new THREE.Box3().setFromObject(obj);
-          blockers.push(box);
-          targets.push({ id, entry, box, collection: level.collections?.[id] });
-          pieceById.set(id, obj);
+        // Props from the Blender library (src/lib/prop-library.ts), stood on the
+        // floor. Each asset is fetched once however often it is placed. A
+        // placement with an examinable id is a piece of its own — examined like
+        // the level's furniture, and things can be set on it; the rest of the
+        // copies are drawn instanced.
+        const upY = new THREE.Vector3(0, 1, 0);
+        const placementMatrix = (pl: Placement) => {
+          const [x, z] = pl.at;
+          const q = new THREE.Quaternion().setFromAxisAngle(upY, THREE.MathUtils.degToRad(pl.turnDeg ?? 0));
+          let y = pl.y;
+          if (y === undefined) {
+            const base = pl.floorY ?? 0;
+            ray.set(tmpV.set(x, base + STEP + 0.05, z), down);
+            ray.far = 6;
+            const floor = ray.intersectObjects(walls, false)[0];
+            y = floor ? floor.point.y : base;
+            // On a listing deck it leans with the floor, all four feet down.
+            const slope = floor?.face?.normal.clone().transformDirection(floor.object.matrixWorld);
+            if (slope && slope.y > 0.9) q.premultiply(new THREE.Quaternion().setFromUnitVectors(upY, slope));
+          }
+          return new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3().setScalar(pl.scale ?? 1));
         };
-        const propLoads = Promise.all(Object.entries(level.props ?? {}).map(([id, prop]) =>
-          placeProp(id, prop).catch(err => console.error('Prop failed to load:', id, err)),
+        /** Every mesh of the prop as one InstancedMesh, a copy at each matrix. */
+        const instanced = (template: THREE.Object3D, at: THREE.Matrix4[]) => {
+          const group = new THREE.Group();
+          const m = new THREE.Matrix4();
+          template.updateMatrixWorld(true);
+          template.traverse((o) => {
+            const mesh = o as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            const copies = new THREE.InstancedMesh(mesh.geometry, mesh.material, at.length);
+            at.forEach((place, i) => copies.setMatrixAt(i, m.multiplyMatrices(place, mesh.matrixWorld)));
+            copies.castShadow = true;
+            copies.receiveShadow = true;
+            copies.computeBoundingSphere();
+            group.add(copies);
+          });
+          return group;
+        };
+        const placeAsset = async (asset: PropAssetId, list: Placement[]) => {
+          const lib = PROP_LIBRARY[asset];
+          const template = await loadProp(asset);
+          if (disposed) return;
+          const shape = new THREE.Box3().setFromObject(template);
+          const plain: THREE.Matrix4[] = [];
+          for (const pl of list) {
+            const at = placementMatrix(pl);
+            const solid = pl.solid ?? lib.solid;
+            if (!pl.id) {
+              plain.push(at);
+              if (solid) blockers.push(shape.clone().applyMatrix4(at));
+              continue;
+            }
+            const obj = template.clone();
+            at.decompose(obj.position, obj.quaternion, obj.scale);
+            scene.add(obj);
+            propRoots.push(obj);
+            obj.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(obj);
+            if (solid) blockers.push(box);
+            const entry = level.examinables[pl.id];
+            if (entry) targets.push({ id: pl.id, entry, box, collection: level.collections?.[pl.id] });
+            else console.warn('Placement has no examinable:', pl.id);
+            pieceById.set(pl.id, obj);
+          }
+          if (plain.length) {
+            const copies = instanced(template, plain);
+            scene.add(copies);
+            propRoots.push(copies);
+          }
+        };
+        // Set dressing: gamelord's props, dropped on the level, its furniture and its props.
+        dressing = createDressing({
+          scene, camera, load: loadProp, blockers,
+          surfaces: () => (model ? [model, ...propRoots] : propRoots),
+        });
+        dressRef.current = dressing;
+        dressing.show(dressItemsRef.current);
+        const byAsset = new Map<PropAssetId, Placement[]>();
+        for (const pl of level.placements ?? []) byAsset.set(pl.asset, [...(byAsset.get(pl.asset) ?? []), pl]);
+        const propLoads = Promise.all([...byAsset].map(([asset, list]) =>
+          placeAsset(asset, list).catch(err => console.error('Prop failed to load:', asset, err)),
         ));
 
         // Small things to pick up, each stood on its piece of furniture. The level
@@ -1846,6 +2020,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       yaw -= e.movementX * look;
       pitch = Math.max(-1.35, Math.min(1.35, pitch - e.movementY * look));
     };
+    // Set dressing frees the mouse for the tray, so the view turns with a drag instead.
+    lookRef.current = (dx, dy) => {
+      yaw -= dx * LOOK * 1.6;
+      pitch = Math.max(-1.35, Math.min(1.35, pitch - dy * LOOK * 1.6));
+    };
     // A gun with arms in hand: left button fires, right aims, and a click examines nothing.
     const armed = () => { const gun = gunOf(level, carriedRef.current, heldItemRef.current, lampOutRef.current); return !!(gun?.arms || gun?.revolver); };
     const onCanvasClick = () => {
@@ -1959,7 +2138,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       setCompanions(peers.filter(p => p.pose).map(p => p.name));
     };
     // A shot that struck the hunter: whoever leads it takes the wound.
-    const presence = joinLevel(level.id, onPeers, () => hunter?.hit(), by => { if (hunterLeads) hunter?.wound(by, null); });
+    const presence = joinLevel(level.id, onPeers, () => hunter?.hit(), by => { if (hunterLeads) hunter?.wound(by, null); }, () => refetchDressingRef.current?.());
+    sendDressingRef.current = () => presence.sendDressing();
     const lastFeet = new THREE.Vector3().copy(feet);
     const tmpFeet = new THREE.Vector3();
     let gaitHold = 0;
@@ -2611,6 +2791,22 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       bulletHoles.dispose();
       shells.dispose();
       inspectRef.current = null;
+      dressing?.dispose();
+      dressRef.current = null;
+      lookRef.current = null;
+      sendDressingRef.current = null;
+      // The library's models, shared by every copy of them in the level.
+      for (const p of propModels.values()) {
+        p.then(t => t.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          mesh.geometry.dispose();
+          for (const m of [mesh.material].flat()) {
+            for (const v of Object.values(m)) if (v instanceof THREE.Texture) v.dispose();
+            m.dispose();
+          }
+        })).catch(() => {});
+      }
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('contextmenu', onContextMenu);
@@ -2764,6 +2960,25 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               ))}
             </div>
           )}
+          {/* gamelord dresses the level with props from the library, for everyone. */}
+          {isGamelord && webgl && !godot && (
+            <button
+              onClick={toggleDressing}
+              disabled={!loaded}
+              aria-pressed={dressing}
+              title="Set props from the library down in this level, for everyone [P]"
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: loaded ? 'pointer' : 'default', marginRight: 12,
+                marginLeft: (level.weather && isGM) || level.lamps || level.doors || level.sewer?.grate ? 0 : 'auto',
+                background: dressing ? 'rgba(201,148,79,0.18)' : 'transparent',
+                border: `1px solid ${dressing ? 'var(--brass)' : 'var(--line)'}`,
+                color: dressing ? 'var(--brass)' : 'var(--ink-text-2)', opacity: loaded ? 1 : 0.5,
+              }}
+            >
+              Set dressing [P]
+            </button>
+          )}
           <button
             onClick={onClose}
             aria-label={level.leaveLabel}
@@ -2799,7 +3014,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             }} />
           )}
 
-          {loaded && focus && asleep === 'no' && !reading && !browsing && !typing && !invOpen && !inspecting && (
+          {loaded && focus && !dressing && asleep === 'no' && !reading && !browsing && !typing && !invOpen && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', top: 'calc(50% + 22px)', transform: 'translateX(-50%)',
               pointerEvents: 'none', whiteSpace: 'nowrap',
@@ -2958,7 +3173,21 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             </div>
           )}
 
-          {webgl && loaded && !locked && !dreaming && !reading && !browsing && !typing && !invOpen && !inspecting && (
+          {dressing && loaded && (
+            <SetDressing
+              api={dressRef}
+              items={dressItems}
+              onChange={changeDressing}
+              onUndo={undoDressing}
+              canUndo={canUndoDress}
+              onLook={(dx, dy) => lookRef.current?.(dx, dy)}
+              onExit={toggleDressing}
+              saveError={dressError}
+              onRetry={() => void saveDressing()}
+            />
+          )}
+
+          {webgl && loaded && !locked && !dressing && !dreaming && !reading && !browsing && !typing && !invOpen && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
               pointerEvents: 'none', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1.5px',
