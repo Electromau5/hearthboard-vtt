@@ -52,7 +52,8 @@ src/
       pinboard.ts                 # Pins the case board's live notes onto a walkthrough corkboard
       interact-markers.ts         # Floating markers over a walkthrough's interactive objects — Tab toggles them
       deep-one.ts                 # Procedural Deep One head — peers through the house's back-door peephole
-      NpcConversation.tsx         # Talking to a walkthrough NPC (E) — free text, answered in character via /api/npc/[id]
+      NpcConversation.tsx         # Talking to a walkthrough NPC freely ('Speak freely…') — free text, answered in character via /api/npc/[id]
+      DialoguePane.tsx            # Talking to a walkthrough NPC (E) — preset topics asked straight or pushed with charm/intimidate/persuade/deceive, via /api/dialogue/[npc]
       woods-lamp.ts               # First-person Wood's lamp (Q) — the 1930s UV lamp held in view, drawn over the level
       uv-stains.ts                # Blood/brine decals only the Wood's lamp reveals (level.uvStains)
       SafeCracker.tsx             # Safe-dial mini game (level.locks) — hit the marks as the pip passes, 15 s; open safes shared via /api/locks
@@ -69,6 +70,7 @@ src/
     admin/
       users/page.tsx              # Admin role management panel
       experience/page.tsx         # Screen effects trigger panel
+      dialogue/page.tsx           # NPC dialogue GM view — game day/tide, dispositions, reputation, facts, interaction log
       characters/page.tsx         # Character management
       characters/[slug]/edit/page.tsx   # Admin sheet editor
       locations/page.tsx          # Location management
@@ -94,6 +96,8 @@ src/
       effects/route.ts            # GET — player-facing effects polling
       dev-assets/[...path]/route.ts      # GET — serves files out of data/ in local dev
       npc/[id]/route.ts           # POST — talk to an NPC; per-investigator memory in redis-storage (npc/<id>/<slug>)
+      dialogue/[npc]/route.ts     # GET/POST — topic dialogue: open (greeting + topics), ask a topic straight or with a skill
+      dialogue/route.ts           # GET/POST — GM: the whole dialogue save, and next day / tide / add fact / set / reset
       locks/route.ts              # GET/POST — which walkthrough safes stand open (locks/<level>); admins can relock
       doors/route.ts              # GET/POST — which walkthrough doors stand open (doors/<level>); gamelord only
   auth.ts                         # Full NextAuth config (Node.js runtime only)
@@ -112,6 +116,7 @@ src/
     fishing-vessel.ts             # VESSEL_LEVEL — the wrecked trawler "Esther Gilman"
     black-archive.ts              # ARCHIVE_LEVEL — the Black Archive warehouse; rooms open live board notes and All Resources; Dr. Finch's Pathology Lab off Records; the architect's Drafting Room off Cartography
     npc-personas.ts               # Server-only: who each NPC is, what they know and hide, whom they already know
+    dialogue/                     # NPC Dialogue System (spec v1.0): types.ts schema, engine.ts rules (pure), director.ts state owner (redis-storage dialogue/save.json), registry.ts + npcs/*.json + facts.json — server-only, answers never reach the browser
     bellevue.ts                   # BELLEVUE_LEVEL — the two-storey Bellevue ward: Admissions, the Lower Block (Cells 63–66), the ward upstairs
     abattoir.ts                   # ABATTOIR_LEVEL — the Underworld Abattoir & Speakeasy (Providence): butcher's shop front, icebox false shelf into the speakeasy, Banks's office; slaughterhouse down the back stairs (killing floor, pens, interrogation, rendering, rum tunnel, counting room, cold locker). No NPCs yet — Npc_* markers only
     downtown.ts                   # DOWNTOWN_LEVEL — the default map's Downtown street (Sketchfab asset, wrapped in my-summer-game)

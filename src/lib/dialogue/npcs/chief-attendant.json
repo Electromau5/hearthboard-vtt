@@ -1,0 +1,286 @@
+{
+  "id": "chief-attendant",
+  "name": "The Chief Attendant",
+  "role": "Chief Attendant, Bellevue Psychiatric Isolation Ward",
+  "location_id": "bellevue",
+  "faction_id": "bellevue_staff",
+  "personality": { "charm": 1.1, "intimidate": 1.3, "persuade": 0.9, "deceive": 1.2 },
+  "base_disposition": 0,
+  "isolated": true,
+  "witnessed": true,
+  "known_investigators": {
+    "thomas-callahan": { "disposition": -20 },
+    "arthur-wright": { "disposition": 0 },
+    "dr-alistair-finch": { "disposition": 15 }
+  },
+  "flags": [],
+  "starting_topics": ["the_ward", "visiting_hours", "his_name", "patient_records", "cell_66", "robbie", "zadok_allen"],
+  "greeting_variants": {
+    "first_meeting": {
+      "text": "Hello. I'm the chief attendant at this...... magical place. I was told about your arrival. I would be happy to help, but please keep in mind that our patient records are strictly confidential unless they have been approved to be released by the patient themselves or a family member. I think you will like it here."
+    },
+    "neutral": "*He looks up from the register.* Good evening. What can the ward do for you?",
+    "friendly": "*The broad smile widens.* Ah... you came back. They always do. {gossip:marsh_alias_on_census} Ask, and I'll see what I can remember.",
+    "wary": "*He sets the pen down, very precisely.* You again. {gossip:attendant_threatened} Visiting hours are Sundays, two to four.",
+    "hostile": "*He does not look up.* The ward is closed to you. I would leave by the door you came in by... while it still opens.",
+    "gossip": {
+      "attendant_threatened": "*The smile does not reach his eyes tonight.* The orderlies are still talking about the other night... about how your friend spoke to me. I bruise easily, you know. I remember slower."
+    }
+  },
+  "gossip_lines": {
+    "attendant_threatened": "The night staff tell me your friend raised his voice in my ward.",
+    "marsh_alias_on_census": "I trust you are keeping our little secret about the census."
+  },
+  "clues": {
+    "cell66_release": { "text": "BELLEVUE — The night Cell 66 was emptied, men came with federal papers. The attendant signed a release unread; the cart went out through the laundry to a freight car for Boston.", "color": "#fce7e7" },
+    "marsh_alias": { "text": "BELLEVUE CENSUS — One patient is entered under an alias. The real surname is MARSH. (The attendant knows which. He would not say.)", "color": "#dbeafe" },
+    "lockbox_stores": { "text": "BELLEVUE STORES — The iron lockbox Robbie took was booked in under admission 32-066: the Innsmouth patient's effects. \"Where the drowned sleep.\"", "color": "#fef3c7" }
+  },
+  "topics": [
+    {
+      "id": "the_ward",
+      "prompt": "What is this place, exactly?",
+      "allowed_skills": [],
+      "unlock_condition": null,
+      "difficulty": 0,
+      "repeatable": true,
+      "repeat_text": "*Patiently.* The same as it was a moment ago. A place for people the world has finished with.",
+      "answers": {
+        "straight_success": "The Isolation Ward. Patients who have seen things, or done things, that the other wards would rather not hold. They are quiet here. *He lets the silence stand.* It's very restful, once you stop listening for the walls."
+      }
+    },
+    {
+      "id": "visiting_hours",
+      "prompt": "When can we visit the patients?",
+      "allowed_skills": [],
+      "unlock_condition": null,
+      "difficulty": 0,
+      "repeatable": true,
+      "answers": {
+        "straight_success": "Sundays, two to four. The Lower Block receives no visitors at all. *He smiles.* Rules are a kindness. They tell everyone where they stand."
+      }
+    },
+    {
+      "id": "his_name",
+      "prompt": "What's your name?",
+      "allowed_skills": ["charm", "deceive"],
+      "unlock_condition": null,
+      "difficulty": 30,
+      "repeatable": false,
+      "answers": {
+        "straight_success": "It's on the staff roster. And the roster is confidential.",
+        "charm_success": "*A low, pleased chuckle.* You are persistent. I like that in a visitor. It's still on the staff roster... but you may call me 'Chief'. Everyone does, in the end.",
+        "charm_crit_success": "*He considers you for a long moment, then leans to the bars.* My mother called me Gideon. No one else has, in twenty years. Don't wear it out.",
+        "charm_failure": "*He smiles as if you'd told a joke he'd heard before.* The roster. Confidential.",
+        "deceive_success": "*He blinks, then laughs softly.* The Board sent you to check the roster? Then you'll have it already. How clever of them... and of you.",
+        "deceive_failure": "*Gently.* No one from the Board has come down here since 1927. Try again on a Sunday.",
+        "deceive_crit_failure": { "text": "*He writes something in the register — slowly, so you can watch.* I keep a list of the people who lie to me. You're on it now. It's a short list, and an old one.", "disposition_delta": -12 }
+      }
+    },
+    {
+      "id": "patient_records",
+      "prompt": "May we see the patient records?",
+      "allowed_skills": ["persuade", "deceive", "intimidate"],
+      "unlock_condition": null,
+      "difficulty": 30,
+      "repeatable": false,
+      "noise_level": 0,
+      "unlocks_topics": ["census_numbers"],
+      "reveals_facts": ["census_repeated_numbers"],
+      "lie": { "id": "forged_release", "summary": "Claimed to hold a family release for the records", "exposed_by": ["release_forged"] },
+      "answers": {
+        "straight_success": "Confidential, unless released by the patient or a family member. *He taps the register.* I did mention it. I mention it to everyone.",
+        "persuade_success": "*He weighs it.* An interesting reason. Interesting reasons are rarer than money. Very well — the ward census, not the case notes. You may look; you may not copy. *He turns the ledger round.* You'll notice some of the numbers repeat. A clerical economy.",
+        "persuade_crit_success": "*He slides the census across, and then a second card from beneath it.* You understand what this place is for. So — the census. And you may find that several admission numbers belong to more than one patient. A clerical economy... or a kindness to someone who'd rather not be found.",
+        "persuade_failure": "*Pleasantly.* That's a reason. It isn't a good one.",
+        "deceive_success": "*He reads the paper you hand him twice, and smiles.* A family release. How thorough. The census, then — not the case notes. You'll see some of the numbers repeat. A clerical economy.",
+        "deceive_failure": "*He hands the paper back without reading it.* Family don't come here. That's rather the point of the ward.",
+        "intimidate_success": "*He is quite still. Then he turns the ledger round, very slowly.* There. The census. You'll notice some numbers repeat... I'd write that down, since you've worked so hard for it.",
+        "intimidate_failure": "*He does not flinch.* You'd be surprised how many people have stood where you're standing and said that. Some of them are still here. Upstairs.",
+        "intimidate_crit_failure": { "text": "*He lifts the hand bell and rings it, once. Somewhere above, a door opens.* The orderlies will see you to the street. Do come back — on a Sunday.", "reveals_facts": ["attendant_threatened"] }
+      }
+    },
+    {
+      "id": "census_numbers",
+      "prompt": "Why do the admission numbers repeat?",
+      "allowed_skills": ["persuade", "charm"],
+      "unlock_condition": null,
+      "difficulty": 35,
+      "repeatable": true,
+      "repeat_text": "A clerical economy. I've said so. *A pause.* I may say so again.",
+      "relevant_pins": ["inmate_log"],
+      "answers": {
+        "straight_success": "A clerical economy. Paper is dear, and patients... well. Patients come and go.",
+        "persuade_success": "*He lowers his voice, though no one is near.* Some families pay for a patient to be — mislaid. A number shared is a number no one can look up. It is a charity, of sorts.",
+        "charm_success": "*Amused.* You want to know if someone's hiding in my ledger. Everyone in my ledger is hiding. That's what a ledger is for.",
+        "persuade_failure": "*He smiles.* Paper is dear."
+      }
+    },
+    {
+      "id": "cell_66",
+      "prompt": "Who was the patient in Cell 66?",
+      "allowed_skills": ["charm", "persuade", "intimidate"],
+      "unlock_condition": null,
+      "difficulty": 35,
+      "repeatable": false,
+      "reveals_facts": ["cell66_innsmouth_patient"],
+      "unlocks_topics": ["who_took_him", "the_sea"],
+      "answers": {
+        "straight_success": "Sixty-Six is empty. *As if that were an answer.* You've seen it. You took something from under the flagstone. I'm not upset.",
+        "charm_success": "*He looks almost fond.* A man from up the coast. Innsmouth. They pulled him out of a cellar there, and he came down to us with his skin... not quite fitting. He sang at night. Robbie said he sang beautifully.",
+        "charm_crit_success": { "text": "*He leans on the counter, confiding.* A man from Innsmouth — pulled from a cellar under one of the old Marsh properties, so the police wrote. He never told us his name. He didn't need one. He knew the tide tables by heart, and he'd stand at the wall when the tide turned, as if he could hear it through forty miles of stone.", "reveals_facts": ["cell66_innsmouth_patient", "cell66_marsh_cellar"] },
+        "persuade_success": "*He nods slowly.* A deformed man from Innsmouth. A cellar, the police said. He was gentle, mostly. He didn't like the light, and he didn't like the doctors, and the doctors didn't like his blood.",
+        "intimidate_success": "*His collar is tight in your fist; his voice stays perfectly level.* Innsmouth. A cellar. A face like a fish left out in the sun. Let go of me, please. You're creasing the smock.",
+        "intimidate_failure": "*He looks at your hand on the bars, then back at you.* The last man who held my collar is a guest of ours now. Fourth floor. He has a lovely view.",
+        "charm_failure": "*Mildly.* Sixty-Six is empty. Empty things don't have stories.",
+        "persuade_failure": "Records are confidential. Even the empty ones."
+      }
+    },
+    {
+      "id": "who_took_him",
+      "prompt": "Who took the man from Sixty-Six?",
+      "allowed_skills": ["persuade", "intimidate", "deceive"],
+      "unlock_condition": null,
+      "difficulty": 50,
+      "repeatable": false,
+      "noise_level": 1,
+      "reveals_facts": ["federal_release", "freight_to_boston"],
+      "grants_clue": "cell66_release",
+      "lie": { "id": "posed_as_federal", "summary": "Claimed to be with the federal men who took the patient", "exposed_by": ["investigators_not_federal"] },
+      "answers": {
+        "straight_success": "*The smile doesn't move.* The paperwork says he was removed without authorization. I always believe the paperwork.",
+        "persuade_success": "*A long pause, then very quietly.* Men came. With papers I was told not to read, and I didn't. I signed. They took him out through the laundry, in a linen cart, to a freight car. Boston, the car was bound for. *He straightens.* I was paid for my signature. Is that what you wanted to hear?",
+        "persuade_crit_success": "*He speaks almost to himself.* Federal papers, with a seal I didn't know. Men who didn't take their hats off. They wheeled him out through the laundry in a linen cart, and he didn't struggle — he was humming. A freight car for Boston. The Quarantine Docks, if I had to guess. I was paid well. *He looks at you.* You'll find I'm the only one on staff who remembers that night at all.",
+        "persuade_failure": "*Gently.* You haven't given me a reason to remember. Few people do.",
+        "intimidate_success": "*His breathing changes, just slightly.* Federal men. Papers I didn't read. Out through the laundry to a freight car for Boston. *He smooths his smock.* Now you know, and you'll have to carry it. I find that's punishment enough.",
+        "intimidate_failure": "*Calm as still water.* You're frightening the patients. Not me. The patients.",
+        "intimidate_crit_failure": { "text": "*He rings the hand bell. Twice. Footsteps on the stair.* You've mistaken me for a man with something to lose. I'll have the night staff remember your face, and your friends' faces. They have very good memories, my staff. They've nothing else to do.", "reveals_facts": ["attendant_threatened"], "reputation_delta": { "location:bellevue": -10 } },
+        "deceive_success": "*He studies your face, then relaxes.* You're with them? Then you know already. The papers, the laundry cart, the freight car to Boston. *Softer.* Tell your superiors the ward has been discreet. Tell them I'd like the second payment.",
+        "deceive_failure": "*He chuckles.* The men who took him wore better shoes than yours. And they didn't ask questions. They answered them.",
+        "deceive_crit_failure": { "text": "*He goes very still.* You don't know who they were. And now I know you don't know. *He writes in the register.* That's worth more to some people than you'd think.", "disposition_delta": -15 }
+      }
+    },
+    {
+      "id": "robbie",
+      "prompt": "Tell us about Robbie.",
+      "allowed_skills": ["charm", "persuade"],
+      "unlock_condition": null,
+      "difficulty": 20,
+      "repeatable": true,
+      "repeat_text": "*Fondly.* Robbie. Poor boy. I've told you what there is.",
+      "reveals_facts": ["robbie_heard_singing"],
+      "unlocks_topics": ["lockbox"],
+      "answers": {
+        "straight_success": "Robbie was an orderly. A good one. He took a turn, and we kept him in Sixty-Five for his own good. *He smiles.* He's gone now.",
+        "charm_success": "*His face softens into something almost human.* Robbie. He said the man in Sixty-Six sang to him through the wall. Hymns, he called them. He wrote them down, all over Sixty-Five, in pencil — you'll have seen. And then one night he was gone, and an iron lockbox from the stores went with him.",
+        "persuade_success": "He heard the patient in Sixty-Six singing through the wall, and he started singing back. That's when we moved him into Sixty-Five. Then he left us — and took a lockbox from the stores. I never reported it. *Fondly.* Let the boy keep something.",
+        "charm_failure": "*He shrugs, pleasantly.* Orderlies come and go. Robbie went.",
+        "persuade_failure": "*He shrugs.* Robbie's business is Robbie's."
+      }
+    },
+    {
+      "id": "lockbox",
+      "prompt": "What was in the iron lockbox Robbie took?",
+      "allowed_skills": ["persuade", "deceive"],
+      "unlock_condition": [{ "type": "fact_known", "fact_id": "robbie_heard_singing" }, { "type": "caseboard_pin", "pin_id": "lockbox_stores" }],
+      "difficulty": 35,
+      "repeatable": false,
+      "reveals_facts": ["lockbox_from_cell66_effects"],
+      "grants_clue": "lockbox_stores",
+      "answers": {
+        "straight_success": "A lockbox. Iron. Locked. *Mildly.* The word does most of the work.",
+        "persuade_success": "*He opens the stores book and turns it to you.* Admission 32-066. 'Effects — 1 box, iron, sealed.' The Innsmouth man's things. No one ever opened it. Robbie must have thought it belonged with its owner. *He closes the book.* 'Where the drowned sleep,' he wrote. I expect he meant it.",
+        "deceive_success": "*He nods.* For the inventory? Of course. 32-066, effects, one iron box, sealed. The Innsmouth patient's. Gone with Robbie. Write that down for whoever sent you.",
+        "persuade_failure": "Stores are stores. I don't count spoons.",
+        "deceive_failure": "*Smiling.* There's no inventory. There's never been an inventory. That's how the ward stays so tidy."
+      }
+    },
+    {
+      "id": "zadok_allen",
+      "prompt": "Can we speak to Zadok Allen again?",
+      "allowed_skills": ["charm", "persuade", "intimidate"],
+      "unlock_condition": null,
+      "difficulty": 25,
+      "repeatable": true,
+      "repeat_text": "*He glances upstairs.* He's resting. Or he's at sea. It's hard to tell, with Zadok.",
+      "reveals_facts": ["zadok_fears_innsmouth"],
+      "sets_flags": ["global:zadok_visit_allowed"],
+      "answers": {
+        "straight_success": "Admission 32-105. No visitors. *A pause.* You've spoken to him before, though, haven't you? I hear everything on this ward.",
+        "charm_success": "*He sighs, as if indulging a child.* Five minutes. Don't say the name of his town — he thinks he's still at sea, and the word drags him back to shore. You'll have to watch him go under.",
+        "persuade_success": "Very well. Five minutes, and an orderly at the door. And whatever you do, don't say 'Innsmouth'. He screams until he hasn't the breath.",
+        "intimidate_success": "*He picks up the keys.* Five minutes. Don't say the name of his town. If he screams, I'll know whose fault it was, and so will everyone on the ward.",
+        "charm_failure": "*Regretfully.* He's had a bad week. They all have, lately. The tides.",
+        "persuade_failure": "No visitors, I'm afraid. Doctor's orders. *He doesn't say which doctor.*",
+        "intimidate_failure": "*Smiling.* Zadok is under my protection. You'd be amazed what that's worth, down here."
+      }
+    },
+    {
+      "id": "freight_receipt",
+      "prompt": "Your laundry man gave us a freight receipt. Explain it.",
+      "allowed_skills": ["persuade", "intimidate"],
+      "unlock_condition": [{ "type": "caseboard_pin", "pin_id": "freight_receipt" }, { "type": "fact_known", "fact_id": "freight_to_boston" }],
+      "difficulty": 35,
+      "repeatable": false,
+      "relevant_pins": ["freight_receipt", "cell66_release"],
+      "reveals_facts": ["quarantine_docks_link"],
+      "answers": {
+        "straight_success": "*He doesn't look at it.* The laundry orderly talks too much. I'll speak to him.",
+        "persuade_success": "*He finally looks at the paper.* Manhattan to Boston — the Federal Quarantine Docks. That was the car. Linen goes out on that line every week; that night it was heavier. *He hands it back.* I'd keep that somewhere damp. It'll feel at home.",
+        "intimidate_success": "*Tight-lipped.* The Federal Quarantine Docks. Boston. That's where the car went. That's all the receipt says, and that's all I know.",
+        "persuade_failure": "Laundry goes out. Laundry comes back. Mostly.",
+        "intimidate_failure": "*Calmly.* Receipts are the laundry's concern."
+      }
+    },
+    {
+      "id": "marsh_alias",
+      "prompt": "Is there a Marsh among your patients?",
+      "allowed_skills": ["charm", "persuade", "deceive"],
+      "unlock_condition": [{ "type": "disposition_min", "value": 40 }, { "type": "fact_known", "fact_id": "census_repeated_numbers" }],
+      "difficulty": 60,
+      "repeatable": false,
+      "lie": { "id": "posed_as_marsh_kin", "summary": "Claimed to be kin to the Marsh family", "exposed_by": ["investigators_not_marsh_kin"] },
+      "answers": {
+        "straight_success": "*His smile doesn't change at all, which is how you know.* What an unusual name.",
+        "charm_success": "*He is quiet for a long time.* There is a name on my census that isn't the name the patient was born with. That's all. That's all I'll ever say, so don't ask me twice.",
+        "charm_crit_success": { "text": "*He leans close to the bars, and for a moment he isn't smiling at all.* One of my patients is entered under another name. The real one is Marsh. I know which. *He straightens.* It's the most valuable thing I own, and I've just shown it to you. Remember that I did.", "reveals_facts": ["marsh_alias_on_census"], "grants_clue": "marsh_alias" },
+        "persuade_success": "*Carefully.* Suppose a family paid, years ago, for someone to be mislaid. Suppose the name on the card isn't the name in the blood. I'm not saying. I'm supposing.",
+        "persuade_crit_success": { "text": "*Very softly.* Marsh. Under an alias, on my census. I'll not say which card. That would be giving away the whole estate.", "reveals_facts": ["marsh_alias_on_census"], "grants_clue": "marsh_alias" },
+        "deceive_success": { "text": "*He looks at you differently, then — almost with reverence.* Family. Then you'll know which card already, won't you? I'll not insult you by pointing. *He touches the census, once, near the bottom.*", "reveals_facts": ["marsh_alias_on_census"], "grants_clue": "marsh_alias" },
+        "deceive_failure": "*Amused.* You haven't got the eyes for it. They all have the eyes, the family. You'll see.",
+        "deceive_crit_failure": { "text": "*He laughs — the first time you've heard him laugh aloud.* Oh, no. No, no. You're no Marsh. *He wipes his eye.* Now I know what you're looking for. I wonder who'll pay me to know that.", "disposition_delta": -18 },
+        "charm_failure": "*Pleasantly.* I've never met a Marsh. They don't come this far from the water.",
+        "persuade_failure": "What an unusual name."
+      }
+    },
+    {
+      "id": "the_sea",
+      "prompt": "Why do you keep saying we'll like it here?",
+      "allowed_skills": ["charm", "persuade"],
+      "unlock_condition": null,
+      "difficulty": 30,
+      "sanity_cost": 1,
+      "repeatable": false,
+      "reveals_facts": ["attendant_sea_faith"],
+      "answers": {
+        "straight_success": "*He tilts his head.* Because you will.",
+        "charm_success": "*He looks past you, toward the Lower Block.* Some of them aren't ill, you know. They're being called home. The sea calls, and they answer, and we keep them comfortable until the tide comes in. *He smiles.* People like you hear it too, eventually. I can always tell. You'll have a room with a view of the river.",
+        "persuade_success": "*Quietly, almost kindly.* Because the ones who come asking about Sixty-Six always come back. First as visitors. Then — well. I keep the paperwork ready. The sea is very patient, and so am I.",
+        "charm_failure": "It's a pleasantry. People like pleasantries.",
+        "persuade_failure": "*He only smiles.* Because you will."
+      }
+    },
+    {
+      "id": "you_lied",
+      "prompt": "About what we told you before…",
+      "allowed_skills": [],
+      "unlock_condition": null,
+      "difficulty": 0,
+      "hidden": true,
+      "repeatable": false,
+      "answers": {
+        "straight_success": { "text": "*He doesn't let you finish.* You lied to me. In my own ward, across my own counter. *The smile returns, colder than before.* I've written it in the register, in ink. Things written in this register have a way of coming true.", "sets_flags": ["confronted_lie"] }
+      }
+    }
+  ]
+}

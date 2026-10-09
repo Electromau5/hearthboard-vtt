@@ -83,6 +83,8 @@ export type HunterFrame = {
   onBlow: (id: number) => void;
   /** Whether spec.cage's door is down and in the way. */
   cageShut: boolean;
+  /** A raised voice at this screen (a threat in conversation): 1 carries like walking, 2 like running, 3 twice as far. */
+  voice?: { feet: THREE.Vector3; level: number } | null;
 };
 
 const CELL = 0.4;
@@ -840,6 +842,14 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
   };
   let listenIn = 0;
 
+  /** A voice raised in conversation carries even from someone standing still in a pane. */
+  const hearVoice = (voice: HunterFrame['voice']) => {
+    if (!spec.hear || !voice || voice.level <= 0) return null;
+    const range = voice.level >= 3 ? spec.hear.run * 2 : voice.level === 2 ? spec.hear.run : spec.hear.walk;
+    if (Math.abs(voice.feet.y - pos.y) > 1.6) return null;
+    return Math.hypot(voice.feet.x - pos.x, voice.feet.z - pos.z) <= range ? voice.feet : null;
+  };
+
   const hunt = (dt: number, frame: HunterFrame) => {
     // While everyone is busy (reading, asleep…) it holds still.
     senses = [frame.local, ...frame.others].filter(s => s.active);
@@ -940,12 +950,12 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
         lostFor = 0;
         if (!hunting) { state = 'chase'; repathIn = 0; }
       } else if (!hunting && (listenIn -= 0.1) <= 0) {
-        // Footsteps: it goes to see.
-        const heard = hearSomeone();
+        // Footsteps, or a raised voice: it goes to see.
+        const heard = hearSomeone()?.feet ?? hearVoice(frame.voice);
         if (heard) {
           listenIn = 1;
-          lastSeen.copy(heard.feet);
-          const p = findPath(at, nearestNode(heard.feet));
+          lastSeen.copy(heard);
+          const p = findPath(at, nearestNode(heard));
           if (p) { path = p; state = 'search'; }
         }
       }

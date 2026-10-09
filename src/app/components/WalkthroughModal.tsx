@@ -14,6 +14,7 @@ import { createInteractMarkers } from './interact-markers';
 import { ArchiveBrowser } from './ArchiveBrowser';
 import { TypewriterPane } from './TypewriterPane';
 import { NpcConversation } from './NpcConversation';
+import { DialoguePane } from './DialoguePane';
 import { InventoryPane } from './InventoryPane';
 import { InspectViewer } from './InspectViewer';
 import { ModelBuilder } from './ModelBuilder';
@@ -233,6 +234,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const readingRef = useRef<Target | null>(null);
   const browsingRef = useRef<Browsing | null>(null);
   const typingRef = useRef<Target | null>(null);
+  // Talking to someone: their topics, or (Speak freely) open conversation — only with whom it was chosen.
+  const [freeTalkWith, setFreeTalkWith] = useState<Target | null>(null);
+  // A raised voice in conversation (1–3), and until when it carries: the hunter may hear it.
+  const voiceRef = useRef<{ level: number; until: number } | null>(null);
   const focusRef = useRef<Target | null>(null);
   const torchRef = useRef(true);
   const lampOutRef = useRef(false);
@@ -2288,6 +2293,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             noise: crouched || shownGait === 'idle' ? 0 : shownGait === 'run' ? 2 : 1,
           },
           others, lead, follow: leader?.hunter ?? null,
+          // A raised voice carries from where they stand, even while they talk.
+          voice: voiceRef.current && voiceRef.current.until > performance.now() ? { feet, level: voiceRef.current.level } : null,
           onBlow: (id) => presence.sendHit(id),
           // Its bars: down and in the way.
           cageShut: !!level.hunter?.cage && !!doors.find(d => d.id === level.hunter!.cage!.door)?.blocking,
@@ -2986,7 +2993,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             />
           )}
 
-          {typing?.npc && <NpcConversation npc={typing.npc} onClose={closeTyping} />}
+          {typing?.npc && (freeTalkWith === typing
+            ? <NpcConversation npc={typing.npc} onClose={closeTyping} />
+            : <DialoguePane
+                npc={typing.npc}
+                onClose={closeTyping}
+                onSpeakFreely={() => setFreeTalkWith(typing)}
+                onNoise={level => { voiceRef.current = { level, until: performance.now() + 4000 }; }}
+              />)}
 
           {typing && level.builders?.[typing.id] && (
             <ModelBuilder

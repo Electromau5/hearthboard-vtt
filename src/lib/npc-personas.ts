@@ -64,7 +64,6 @@ const CHIEF_ATTENDANT: NpcPersona = {
       'I would be happy to help, but please keep in mind that our patient records are strictly confidential unless they have been approved to be released by the patient themselves or a family member.',
       'I think you will like it here.',
     ],
-    audio: '/attendant-1.mp3',
   },
   priorMeetings: {
     'thomas-callahan': {

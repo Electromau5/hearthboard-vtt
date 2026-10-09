@@ -1,0 +1,17 @@
+[
+  { "id": "census_repeated_numbers", "summary": "Several Bellevue admission numbers belong to more than one patient — 'a clerical economy'." },
+  { "id": "cell66_innsmouth_patient", "summary": "Cell 66 held a deformed man pulled from a cellar in Innsmouth." },
+  { "id": "cell66_marsh_cellar", "summary": "The Cell 66 patient was found in a cellar under an old Marsh property." },
+  { "id": "federal_release", "summary": "Men with federal papers took the Cell 66 patient; the attendant signed the release unread, for money." },
+  { "id": "freight_to_boston", "summary": "The Cell 66 patient left Bellevue through the laundry in a linen cart, onto a freight car for Boston." },
+  { "id": "quarantine_docks_link", "summary": "The Bellevue freight car went to the Federal Quarantine Docks, Boston." },
+  { "id": "robbie_heard_singing", "summary": "Robbie the orderly heard the Cell 66 patient singing through the wall, and sang back." },
+  { "id": "lockbox_from_cell66_effects", "summary": "Robbie's iron lockbox held the Cell 66 patient's sealed effects (admission 32-066)." },
+  { "id": "zadok_fears_innsmouth", "summary": "Zadok Allen panics at the word 'Innsmouth'." },
+  { "id": "marsh_alias_on_census", "summary": "A Bellevue patient is entered under an alias; the real surname is Marsh." },
+  { "id": "attendant_sea_faith", "summary": "The Chief Attendant believes the sea is calling some patients home — and that the investigators will be admitted in time." },
+  { "id": "attendant_threatened", "summary": "An investigator threatened the Chief Attendant in front of his staff.", "gossip_spread": true },
+  { "id": "release_forged", "summary": "The 'family release' shown at Bellevue was a forgery." },
+  { "id": "investigators_not_federal", "summary": "The investigators are not federal agents." },
+  { "id": "investigators_not_marsh_kin", "summary": "None of the investigators is Marsh kin." }
+]

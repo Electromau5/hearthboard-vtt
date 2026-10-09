@@ -256,18 +256,9 @@ export const BELLEVUE_LEVEL: WalkthroughLevel = {
       },
     },
   },
-  // He keeps the admissions cage at the ward's entrance. What he knows, hides and remembers: src/lib/npc-personas.ts.
+  // He keeps the admissions cage at the ward's entrance. His topics: src/lib/dialogue/npcs/chief-attendant.json;
+  // 'Speak freely' talks to his persona in src/lib/npc-personas.ts.
   npcs: [{ id: 'chief-attendant', node: 'Npc_attendant', name: 'The Chief Attendant', outfit: 'chief-attendant' }],
-  // TEST: a Deep One loose on the ward floor. It roams both storeys and comes for whoever it
-  // sees — ten feet off under the lamps, or from anywhere it can see if a torch beam is on it.
-  hunter: {
-    model: '/avatars/deep-one.glb', walkClip: 'Walk', attackClip: 'Attack',
-    start: [-4, FH, 0], walkSpeed: 1.0, chaseSpeed: 2.7,
-    sightLit: 3.05,
-    sound: '/deep-one.mp3', chaseMusic: '/chase-music.mp3',
-    // Baked with the hunter's bake() — rebake if bellevue-ward.glb changes.
-    nav: '/bellevue-nav.json',
-  },
   // Caged ceiling bulbs: corridors and the rooms the night staff use. Cells, the stairwell,
   // the office and the patient rooms are left dark.
   lamps: { color: 0xffe2b0, intensity: 3.2, distance: 8 },
