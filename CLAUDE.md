@@ -47,7 +47,7 @@ src/
       LoadingOverlay.tsx          # Full-screen GIF loader
       NavigationLoader.tsx        # Shows the overlay for one GIF cycle on route change
       InnsmouthTown3D.tsx         # 3D Innsmouth map (three.js) — the board's 2D/3D toggle on the Innsmouth map
-      WalkthroughModal.tsx        # First-person walkthrough of a Summer-built level (house, fishing vessel, Black Archive, Bellevue)
+      WalkthroughModal.tsx        # First-person walkthrough of a Summer-built level (house, fishing vessel, Black Archive, Bellevue, Abattoir)
       ArchiveBrowser.tsx          # A walkthrough collection's contents (E on a filing cabinet, gun rack…)
       pinboard.ts                 # Pins the case board's live notes onto a walkthrough corkboard
       interact-markers.ts         # Floating markers over a walkthrough's interactive objects — Tab toggles them
@@ -113,6 +113,7 @@ src/
     black-archive.ts              # ARCHIVE_LEVEL — the Black Archive warehouse; rooms open live board notes and All Resources; Dr. Finch's Pathology Lab off Records; the architect's Drafting Room off Cartography
     npc-personas.ts               # Server-only: who each NPC is, what they know and hide, whom they already know
     bellevue.ts                   # BELLEVUE_LEVEL — the two-storey Bellevue ward: Admissions, the Lower Block (Cells 63–66), the ward upstairs
+    abattoir.ts                   # ABATTOIR_LEVEL — the Underworld Abattoir & Speakeasy (Providence): butcher's shop front, icebox false shelf into the speakeasy, Banks's office; slaughterhouse down the back stairs (killing floor, pens, interrogation, rendering, rum tunnel, counting room, cold locker). No NPCs yet — Npc_* markers only
     downtown.ts                   # DOWNTOWN_LEVEL — the default map's Downtown street (Sketchfab asset, wrapped in my-summer-game)
     marsh-refinery.ts             # REFINERY_LEVEL — the Innsmouth map's Marsh Refinery: a furnace hall (CC-BY Sketchfab shell, credit in public/CREDITS.txt)
     session-recaps.ts             # Session cliff notes (from the GM's Drive recaps) — typed cards on the Archive's case board
