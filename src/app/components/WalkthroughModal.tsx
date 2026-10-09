@@ -579,7 +579,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // ── Doors ─────────────────────────────────────────────────────────
   // Polled every 5 s: a door is the way on, so the party should not wait long for it.
   useEffect(() => {
-    if (!level.doors) return;
+    if (!level.doors && !level.sewer?.grate) return;
     let cancelled = false;
     const poll = () => {
       if (document.hidden) return;
@@ -1195,6 +1195,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           scene.add(sewer.group);
           walls.push(...sewer.solids);
           owned.push(sewer);
+          // The outfall grate, which gamelord raises and lowers like a door.
+          if (level.sewer.grate) {
+            const k = doorsOpenRef.current[level.sewer.grate] ? 1 : 0;
+            sewer.grate.set(k);
+            if (!k) walls.push(...sewer.grate.blocking);
+            doors.push({ id: level.sewer.grate, hidesPeeper: false, model: sewer.grate, k, blocking: !k });
+          }
           // The shrine's door, padlocked: shut (and in the way) until the lock is cracked.
           const lockId = level.sewer.shrineLock;
           const lockEntry = lockId ? level.examinables[lockId] : undefined;
@@ -1918,6 +1925,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }),
     }) : null;
     const hunterLook = new THREE.Vector3();
+    let hunterLeads = true;
     /** Up and about in the level: not loading, reading, asleep or in a pane. */
     const hunterAwake = () => !!model && !sleep && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current;
     // Everyone in the room, gamelord too: whoever leads the hunter shares it in their presence.
@@ -1945,7 +1953,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       setCompanions(peers.filter(p => p.pose).map(p => p.name));
     };
-    const presence = joinLevel(level.id, onPeers, () => hunter?.hit());
+    // A shot that struck the hunter: whoever leads it takes the wound.
+    const presence = joinLevel(level.id, onPeers, () => hunter?.hit(), by => { if (hunterLeads) hunter?.wound(by, null); });
     const lastFeet = new THREE.Vector3().copy(feet);
     const tmpFeet = new THREE.Vector3();
     let gaitHold = 0;
@@ -2269,6 +2278,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         // A tab in the background stops drawing, and would stop the hunter for everyone: it hands it on.
         const canLead = hunter.ready && document.visibilityState === 'visible';
         const lead = leadsHunter(selfId, canLead, peersNow);
+        hunterLeads = lead;
         const crouched = eye < (EYE + CROUCH_EYE) / 2;
         hunter.update(dt, {
           local: {
@@ -2279,6 +2289,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           },
           others, lead, follow: leader?.hunter ?? null,
           onBlow: (id) => presence.sendHit(id),
+          // Its bars: down and in the way.
+          cageShut: !!level.hunter?.cage && !!doors.find(d => d.id === level.hunter!.cage!.door)?.blocking,
         });
         presence.setHunter(lead && selfId !== null ? hunter.snapshot() : null);
         presence.setHunterReady(canLead);
@@ -2327,7 +2339,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           const d = at.distanceTo(camera.position);
           if (d < near && d > 0.3) { near = d; piece = at.clone(); }
         }
-        if (piece) bulletHoles.hit(piece, null);
+        // The hunter, if it stands nearer than whatever else the round would hit.
+        const struck = hunter?.struck(ray.ray, near);
+        if (struck) {
+          if (hunterLeads) hunter!.wound(presence.selfId() ?? -1, struck);
+          else { hunter!.showShot(struck); presence.sendShot(); }
+        } else if (piece) bulletHoles.hit(piece, null);
         else if (wall?.face) bulletHoles.hit(wall.point, wall.face.normal.clone().transformDirection(wall.object.matrixWorld));
       }
       if (fired.dry) gunSounds?.fire('dry');
@@ -2360,7 +2377,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           else for (const b of d.model.blocking) walls.splice(walls.indexOf(b), 1);
         }
       }
-      sewer?.update(dt);
+      sewer?.update(dt, camera.position);
       // The Deep One: slide in behind the hole from one side, stare, withdraw —
       // unless the door it watches through stands open, and there is nothing there.
       if (peeper && doors.some(d => d.hidesPeeper && d.k > 0)) {
@@ -2716,12 +2733,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             </div>
           )}
           {/* gamelord opens and shuts the level's doors here, for everyone in it. */}
-          {level.doors && isGamelord && (
+          {(level.doors || level.sewer?.grate) && isGamelord && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: (level.weather && isGM) || level.lamps ? 0 : 'auto', marginRight: 12 }}>
               {doorError && (
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--blood)' }}>Not saved</span>
               )}
-              {Object.entries(level.doors).map(([id, door]) => (
+              {[...Object.entries(level.doors ?? {}), ...(level.sewer?.grate ? [[level.sewer.grate, { label: 'Grate' }] as const] : [])].map(([id, door]) => (
                 <button
                   key={id}
                   onClick={() => void toggleDoor(id)}

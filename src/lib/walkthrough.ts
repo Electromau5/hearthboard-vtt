@@ -557,6 +557,8 @@ export type Wanderer = {
  * from any distance when your torch beam falls on it, `sightDark` metres off
  * in the dark — always with a clear line between you — and it may hear you
  * (`hear`). Its blows leave marks on the screen; they do no harm yet.
+ * Shot, it reels and comes on slower; the third shot puts it on its knees
+ * for two minutes, then it gets up and hunts again.
  * Everyone in the level sees the same one: one client leads it.
  */
 export type Hunter = {
@@ -564,8 +566,17 @@ export type Hunter = {
   model: string;
   walkClip: string;
   attackClip: string;
-  /** Where it starts, in level metres; it learns the floors from here. */
+  /** Where it starts (unless caged), in level metres; it learns the floors from here, and `bake()` floods from here. */
   start: Vec3;
+  /**
+   * Penned behind bars: while the gamelord door `door` (by id, see `doors` and
+   * `sewer.grate`) is shut, it stands at `at` and turns to stare at the
+   * nearest investigator, and can neither reach nor chase anyone, so no chase
+   * music plays. It counts as penned while it stands in the xz box `min`..`max`
+   * (world x, z); the moment the door opens it comes for whoever it was
+   * staring at. Shut again with it outside, it hunts on.
+   */
+  cage?: { door: string; at: Vec3; min: [number, number]; max: [number, number] };
   /** Metres per second at the walk clip's natural pace, and when it closes in. */
   walkSpeed: number;
   chaseSpeed: number;
@@ -647,6 +658,8 @@ export type WalkthroughLevel = {
      * off the shrine of Dagon. The door opens once the padlock is cracked.
      */
     shrineLock?: string;
+    /** The id (in `/api/doors`) of the outfall grate: gamelord raises and lowers it like the level's doors. */
+    grate?: string;
   };
   /** Furniture from outside the level's model, keyed by examinable id. */
   props?: Record<string, Prop>;

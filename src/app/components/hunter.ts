@@ -15,6 +15,9 @@ import type { Hunter } from '@/lib/walkthrough';
  * investigator in the level, by what their presence says of them, and shares
  * where it is; the others only show it there, and are told when its blows land
  * on them. Alone, or offline, a client leads its own.
+ *
+ * It may start penned (spec.cage): behind bars it only turns to stare at the
+ * nearest investigator; when gamelord opens them it comes out hunting.
  */
 
 /** What the level offers: the same collision the investigator walks by. */
@@ -55,6 +58,16 @@ export type HunterSnapshot = {
   /** Whom it is after (a sense id), while `chasing`. */
   target: number;
   chasing: boolean;
+  /** 0 standing … 1 on its knees. */
+  kneel: number;
+  /** Shots it has taken, ever: each new one makes it flinch on every screen. */
+  shot: number;
+  /** Shots since it last got up; the third brings it down. */
+  wounds: number;
+  /** Seconds left on its knees, while it is down. */
+  down?: number;
+  /** Penned behind its bars (spec.cage), staring at `target`. */
+  caged?: boolean;
 };
 
 /** What the hunter is given each frame. */
@@ -68,6 +81,8 @@ export type HunterFrame = {
   follow: HunterSnapshot | null;
   /** Its blow landed on someone else (by sense id): tell them. */
   onBlow: (id: number) => void;
+  /** Whether spec.cage's door is down and in the way. */
+  cageShut: boolean;
 };
 
 const CELL = 0.4;
@@ -83,11 +98,20 @@ const GIVE_UP = 4;                             // seconds out of sight before it
 const HIT_AT = 0.5;                            // seconds into the attack clip the blow lands
 const MUSIC_IN = 1;                            // seconds for the chase music to swell
 const MUSIC_OUT = 3;                           // and to die away once it gives up
+const DOWN_AFTER = 3;                          // shots that bring it to its knees
+const DOWN_FOR = 120;                          // seconds it stays down
+const KNEEL_IN = 0.9;                          // seconds to sink to its knees
+const RISE = 2.5;                              // and to get up again
+const STAGGER = 0.45;                          // seconds a shot stops it dead
+const SLOW_FOR = 4;                            // seconds to shake off a shot's slowing
+const LIMP = 0.12;                             // how much slower each wound leaves it, until it rises
+const STARE_TURN = 1.6;                        // radians a second it turns its body, penned, to keep you in view
+const STARE_RANGE = 25;                        // how far off it watches you through the bars
 
 /** A map baked by `bake()`: [ix, iz, floor height] per cell, and each cell's neighbours. */
 type BakedNav = { cell: number; nodes: [number, number, number][]; links: number[][] };
 type NavNode = { x: number; y: number; z: number; ix: number; iz: number; n: number[] };
-type State = 'wait' | 'wander' | 'pause' | 'chase' | 'search' | 'attack';
+type State = 'wait' | 'wander' | 'pause' | 'chase' | 'search' | 'attack' | 'down' | 'rise';
 
 const band = (y: number) => Math.round(y / 1.2);
 const key = (ix: number, iz: number, b: number) => `${ix},${iz},${b}`;
@@ -146,8 +170,9 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
     return g;
   };
   const buildSome = (budgetMs = BUILD_MS) => {
-    if (nav !== 'live') return;
-    if (!seeded) {
+    if (nav === 'loading') return;
+    // A baked map only floods what has been queued since: the ground behind bars that have opened.
+    if (nav === 'live' && !seeded) {
       const [sx, sy, sz] = spec.start;
       const ix = Math.round(sx / CELL), iz = Math.round(sz / CELL);
       const g = world.groundAt(ix * CELL, iz * CELL, sy + 0.2);
@@ -171,6 +196,31 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
         if (!nodes[bi].n.includes(ai)) nodes[bi].n.push(ai);
       }
     }
+  };
+
+  // ── Its cage ──────────────────────────────────────────────────────
+  // Behind the bars is off the baked map: opened, it is flooded from where the
+  // creature stands, and the cells by the bars are looked at afresh so the
+  // two join; shut, the links through the bars are cut.
+  const cage = spec.cage;
+  const inCage = (p: THREE.Vector3) => !!cage && p.x >= cage.min[0] && p.x <= cage.max[0] && p.z >= cage.min[1] && p.z <= cage.max[1];
+  const byBars = (n: NavNode) => !!cage && n.x >= cage.min[0] - 1.2 && n.x <= cage.max[0] + 1.2 && n.z >= cage.min[1] - 1.2 && n.z <= cage.max[1] + 1.2;
+  const openCage = (p: THREE.Vector3) => {
+    if (nav === 'loading') return;
+    const ix = Math.round(p.x / CELL), iz = Math.round(p.z / CELL);
+    const g = world.groundAt(ix * CELL, iz * CELL, p.y + 0.3);
+    if (g !== -Infinity && findNode(ix, iz, g) < 0) addNode(ix, iz, g);
+    nodes.forEach((n, i) => { if (byBars(n) && !queue.slice(qi).includes(i)) queue.push(i); });
+  };
+  const shutCage = () => {
+    nodes.forEach((a, ai) => {
+      if (!byBars(a)) return;
+      a.n = a.n.filter(bi => {
+        if (passable(a, nodes[bi].x, nodes[bi].z) !== null) return true;
+        nodes[bi].n = nodes[bi].n.filter(x => x !== ai);
+        return false;
+      });
+    });
   };
 
   const nearestNode = (p: THREE.Vector3) => {
@@ -263,6 +313,8 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
   let walk: THREE.AnimationAction | null = null;
   let attack: THREE.AnimationAction | null = null;
   let disposed = false;
+  let body: Body | null = null;
+  let height = 1.9;
   new GLTFLoader().loadAsync(spec.model).then(gltf => {
     if (disposed) return;
     gltf.scene.traverse(o => {
@@ -270,12 +322,93 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
       if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; }   // skinned bounds lag the pose
     });
     root.add(gltf.scene);
+    root.updateMatrixWorld(true);
+    height = new THREE.Box3().setFromObject(gltf.scene, true).getSize(tmp).y || height;
+    body = rigBody(gltf.scene);
     mixer = new THREE.AnimationMixer(gltf.scene);
     const clip = (name: string) => gltf.animations.find(a => a.name === name) ?? gltf.animations[0];
     walk = mixer.clipAction(clip(spec.walkClip));
     attack = mixer.clipAction(clip(spec.attackClip));
     walk.play();
   }).catch(err => console.error('Hunter failed to load:', spec.model, err));
+
+  // ── Wounds ────────────────────────────────────────────────────────
+  // Shot, it reels and comes on slower; the third shot puts it on its knees.
+  let wounds = 0;              // since it last got up
+  let shotCount = 0;           // ever, shared so every screen sees it flinch
+  let downFor = 0;
+  let riseFor = 0;
+  let kneel = 0;
+  let staggerFor = 0;
+  let slow = 0;
+  let flinchT = Infinity;      // seconds since the last shot struck
+  let flinchTwist = 1;
+  let bledAt = -Infinity;
+  /** How fast it can go, for its wounds: dead still as a shot lands, then dragging itself. */
+  const gait = () => (staggerFor > 0 ? 0 : (1 - 0.55 * slow) * (1 - LIMP * wounds));
+
+  /** A shot striking it, as every screen shows it: it flinches, cries out and bleeds. */
+  const feelShot = (at: THREE.Vector3 | null) => {
+    flinchT = 0;
+    flinchTwist = Math.random() < 0.5 ? -1 : 1;
+    cry();
+    if (at) { bleed(at); bledAt = performance.now(); }
+    else if (performance.now() - bledAt > 600) bleed(tmp2.set(pos.x, pos.y + height * (0.62 - 0.3 * kneel), pos.z));
+  };
+
+  /** The leader's side of a shot: `by` (a sense id) hit it, at `at` if known. */
+  const wound = (by: number, at: THREE.Vector3 | null) => {
+    shotCount++;
+    feelShot(at);
+    if (state === 'down' || state === 'rise') return;
+    wounds++;
+    if (wounds >= DOWN_AFTER) {
+      state = 'down';
+      downFor = DOWN_FOR;
+      path = [];
+      target = by;
+      playAttack(false);
+      return;
+    }
+    staggerFor = STAGGER;
+    slow = 1;
+    // It knows where that came from: it comes for whoever fired — if it can get out.
+    const s = senses.find(x => x.id === by);
+    if (s && state !== 'attack' && !penned) {
+      target = by;
+      lastSeen.copy(s.feet);
+      lostFor = 0;
+      state = 'chase';
+      repathIn = 0;
+    }
+  };
+
+  // Where its head turns, penned and staring: eased toward `gazeAt`, or back to ahead.
+  const gaze = { on: false, yaw: 0, pitch: 0 };
+  const gazeAt = new THREE.Vector3();
+  /** Clip, then kneel, flinch and stare over it. The clip only rewrites what changed, so put it back first. */
+  const moveBody = (dt: number) => {
+    if (!mixer) return;
+    body?.restore();
+    mixer.update(dt);
+    if (!body) return;
+    body.keep();
+    flinchT += dt;
+    const f = flinchT < 0.08 ? Math.sin(flinchT / 0.08 * Math.PI / 2) : Math.exp(-(flinchT - 0.08) * 5);
+    let gy = 0, gp = 0;
+    if (gaze.on) {
+      const dx = gazeAt.x - pos.x, dz = gazeAt.z - pos.z;
+      gy = Math.atan2(dx, dz) - yaw;
+      gy = THREE.MathUtils.clamp(Math.atan2(Math.sin(gy), Math.cos(gy)), -1.1, 1.1);
+      gp = THREE.MathUtils.clamp(-Math.atan2(gazeAt.y - (pos.y + height * 0.9), Math.hypot(dx, dz)), -0.6, 0.5);
+    }
+    const ease = 1 - Math.exp(-dt * 6);
+    gaze.yaw += (gy - gaze.yaw) * ease;
+    gaze.pitch += (gp - gaze.pitch) * ease;
+    const t = performance.now() / 1000;
+    body.pose(kneel, flinchT === Infinity ? 0 : f, flinchTwist, t);
+    body.look(gaze.yaw, gaze.pitch, gaze.on ? 1 : 0, t);
+  };
 
   // ── Sound ─────────────────────────────────────────────────────────
   // Its own noise comes from where it stands; the chase music plays over it, everywhere.
@@ -369,7 +502,123 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
     burst(t0 + 0.08, 0.12, 'highpass', 2800, 0.25);
   };
 
-  const pos = new THREE.Vector3(...spec.start);
+  /**
+   * Its cry when a round goes in: a wet smack, then a gurgling, falling bellow,
+   * from where it stands. Made on the spot, a little different each time.
+   */
+  let throat: THREE.PositionalAudio | null = null;
+  let throatIn: GainNode | null = null;
+  const cry = () => {
+    const ear = world.listener();
+    if (!ear || ear.context.state !== 'running') return;
+    const ac = ear.context;
+    if (!throat || !throatIn) {
+      throatIn = ac.createGain();
+      throat = new THREE.PositionalAudio(ear);
+      throat.setNodeSource(throatIn as unknown as AudioBufferSourceNode);
+      throat.setRefDistance(3);
+      throat.setRolloffFactor(1.2);
+      throat.position.y = 1.6;
+      root.add(throat);
+    }
+    if (!noise) {
+      noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const data = noise.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    const t0 = ac.currentTime;
+    const vary = 0.8 + Math.random() * 0.4;
+    const len = 0.7 + Math.random() * 0.4;
+    // The round going in.
+    const smack = ac.createBufferSource();
+    smack.buffer = noise;
+    const sf = ac.createBiquadFilter();
+    sf.type = 'lowpass';
+    sf.frequency.value = 1400;
+    const sg = ac.createGain();
+    sg.gain.setValueAtTime(0.9, t0);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+    smack.connect(sf).connect(sg).connect(throatIn);
+    smack.start(t0, Math.random() * 0.5, 0.12);
+    // The bellow: two rough voices falling, shaken by a gurgle, through a wet throat.
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t0 + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.7, t0 + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+    const gurgle = ac.createOscillator();
+    gurgle.frequency.value = 22 + Math.random() * 14;
+    const depth = ac.createGain();
+    depth.gain.value = 0.45;
+    const am = ac.createGain();
+    am.gain.value = 0.6;
+    gurgle.connect(depth).connect(am.gain);
+    const mouth = ac.createBiquadFilter();
+    mouth.type = 'bandpass';
+    mouth.Q.value = 3;
+    mouth.frequency.setValueAtTime(900 * vary, t0);
+    mouth.frequency.exponentialRampToValueAtTime(380 * vary, t0 + len);
+    for (const [type, f0, detune] of [['sawtooth', 210, 0], ['square', 140, 9]] as const) {
+      const v = ac.createOscillator();
+      v.type = type;
+      v.detune.value = detune;
+      v.frequency.setValueAtTime(f0 * vary, t0 + 0.05);
+      v.frequency.exponentialRampToValueAtTime(f0 * vary * 0.38, t0 + len);
+      v.connect(am);
+      v.start(t0 + 0.05);
+      v.stop(t0 + len + 0.05);
+    }
+    am.connect(mouth).connect(g).connect(throatIn);
+    gurgle.start(t0);
+    gurgle.stop(t0 + len + 0.05);
+  };
+
+  /** Dark blood thrown from a wound, falling away. */
+  const bloodTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const x = c.getContext('2d')!;
+    const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(70,6,4,0.95)');
+    g.addColorStop(0.6, 'rgba(50,4,3,0.7)');
+    g.addColorStop(1, 'rgba(40,0,0,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, 32, 32);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const drops = Array.from({ length: 18 }, () => {
+    const mat = new THREE.SpriteMaterial({ map: bloodTex, transparent: true, depthWrite: false });
+    const s = new THREE.Sprite(mat);
+    s.visible = false;
+    scene.add(s);
+    return { s, mat, v: new THREE.Vector3(), age: 1, size: 0.05 };
+  });
+  let nextDrop = 0;
+  const bleed = (at: THREE.Vector3) => {
+    for (let i = 0; i < 6; i++) {
+      const p = drops[nextDrop];
+      nextDrop = (nextDrop + 1) % drops.length;
+      p.s.position.copy(at);
+      p.v.set((Math.random() - 0.5) * 1.6, 0.4 + Math.random() * 1.2, (Math.random() - 0.5) * 1.6);
+      p.size = 0.04 + Math.random() * 0.07;
+      p.age = 0;
+      p.s.visible = true;
+    }
+  };
+  const updateBlood = (dt: number) => {
+    for (const p of drops) {
+      if (!p.s.visible) continue;
+      p.age += dt / 0.7;
+      if (p.age >= 1) { p.s.visible = false; continue; }
+      p.v.y -= 9.8 * dt;
+      p.s.position.addScaledVector(p.v, dt);
+      p.s.scale.setScalar(p.size * (1 + p.age));
+      p.mat.opacity = 1 - p.age;
+    }
+  };
+
+  const pos = new THREE.Vector3(...(cage?.at ?? spec.start));
   let yaw = Math.random() * Math.PI * 2;
   let state: State = 'wait';
   let path: number[] = [];
@@ -384,6 +633,8 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
   let senses: HunterSense[] = [];
   let pace = 0;
   let leading = true;
+  let penned = false;          // behind its bars, the door down
+  let cageWasShut: boolean | null = null;
   const lastSeen = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   const tmp2 = new THREE.Vector3();
@@ -545,6 +796,8 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
     pace = 0;
   };
 
+  let seenShots = false;
+  let lastFollow: HunterSnapshot | null = null;
   /** Someone else leads it: ease to where they say it is, doing what they say. */
   const followSnapshot = (dt: number, snap: HunterSnapshot) => {
     if (!mixer || !walk) { hold(); return; }
@@ -558,7 +811,17 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
     playAttack(snap.anim === 'attack');
     pace = snap.pace;
     walk.timeScale = snap.anim === 'attack' ? 1 : pace / spec.walkSpeed;
-    mixer.update(dt);
+    // A new shot in the leader's count: it flinches here too.
+    if (snap.shot > shotCount && seenShots) feelShot(null);
+    seenShots = true;
+    shotCount = snap.shot;
+    kneel += ((snap.kneel ?? 0) - kneel) * (1 - Math.exp(-dt * 8));
+    // Penned, its head follows whoever the leader says it stares at.
+    const eyed = snap.caged ? senses.find(x => x.id === snap.target) : undefined;
+    gaze.on = !!eyed;
+    if (eyed) gazeAt.copy(eyed.eye);
+    if (snap.caged && snap.anim !== 'attack') walk.timeScale = snap.pace ? 0.6 : 0;
+    moveBody(dt);
     root.position.copy(pos);
     root.rotation.y = yaw;
   };
@@ -582,9 +845,77 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
     senses = [frame.local, ...frame.others].filter(s => s.active);
     if (!senses.length || !mixer || !walk || nodes.length < 50) { hold(); return; }
     root.visible = true;
-    if (at < 0) {
+    const wasPenned = penned;
+    penned = frame.cageShut && inCage(pos);
+    // The bars come up: off the map behind them until it is flooded, and after whoever it was staring at.
+    if (!penned && inCage(pos) && nearestNode(pos) < 0) openCage(pos);
+    if (wasPenned && !penned && state !== 'down' && state !== 'rise') {
+      const s = senses.find(x => x.id === target);
+      if (s) { lastSeen.copy(s.feet); lostFor = 0; state = 'chase'; repathIn = 0; }
+      at = -1;
+    }
+    if (at < 0 && !penned) {
       at = nearestNode(pos);
       if (at >= 0) pos.set(nodes[at].x, nodes[at].y, nodes[at].z);
+    }
+    gaze.on = false;
+
+    // On its knees it hunts nobody; two minutes, and it gets up and comes on again.
+    if (state === 'down' || state === 'rise') {
+      if (state === 'down') {
+        kneel = Math.min(1, kneel + dt / KNEEL_IN);
+        if ((downFor -= dt) <= 0) { state = 'rise'; riseFor = RISE; }
+      } else {
+        kneel = Math.max(0, kneel - dt / RISE);
+        if ((riseFor -= dt) <= 0) {
+          kneel = 0;
+          wounds = 0;
+          slow = 0;
+          // Back after whoever put it down — or whoever is nearest, if they have gone.
+          const s = senses.find(x => x.id === target)
+            ?? [...senses].sort((a, c) => a.feet.distanceToSquared(pos) - c.feet.distanceToSquared(pos))[0];
+          target = s.id;
+          lastSeen.copy(s.feet);
+          lostFor = 0;
+          state = 'chase';
+          repathIn = 0;
+        }
+      }
+      pace = 0;
+      walk.timeScale = 0;
+      moveBody(dt);
+      root.position.copy(pos);
+      root.rotation.y = yaw;
+      return;
+    }
+
+    // Penned: it stands at its bars and stares at the nearest of you, turning to keep you in view.
+    if (penned) {
+      if (state === 'attack') playAttack(false);
+      state = 'wait';
+      path = [];
+      let eyed: HunterSense | null = null, best = STARE_RANGE * STARE_RANGE;
+      for (const s of senses) {
+        const dd = s.feet.distanceToSquared(pos);
+        if (dd < best) { best = dd; eyed = s; }
+      }
+      target = eyed?.id ?? -1;
+      let turn = 0;
+      if (eyed) {
+        gaze.on = true;
+        gazeAt.copy(eyed.eye);
+        let dy = Math.atan2(eyed.feet.x - pos.x, eyed.feet.z - pos.z) - yaw;
+        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        // The head goes first; the body comes round after it, shuffling, once you are well off to one side.
+        if (Math.abs(dy) > 0.35) turn = Math.sign(dy) * Math.min(Math.abs(dy) - 0.3, STARE_TURN * dt);
+        yaw += turn;
+      }
+      pace = turn ? 0.5 : 0;
+      walk.timeScale = turn ? 0.6 : 0;
+      moveBody(dt);
+      root.position.copy(pos);
+      root.rotation.y = yaw;
+      return;
     }
 
     // Look for anyone a few times a second; keep after the one it has, while it can see them.
@@ -652,7 +983,7 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
           if (p) path = p;
         }
         // Chasing, flat out; going to look, warily.
-        speed = state === 'chase' ? spec.chaseSpeed : (spec.walkSpeed + spec.chaseSpeed) / 2;
+        speed = (state === 'chase' ? spec.chaseSpeed : (spec.walkSpeed + spec.chaseSpeed) / 2) * gait();
         // In the last stretch, close straight in — unless a wall or a low roof is in the way.
         if (state === 'chase' && seesYou && s && sameFloor && toYou < 2.5) {
           path = [];
@@ -678,7 +1009,7 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
     } else if (state === 'pause' || state === 'wait') {
       if ((pauseFor -= dt) <= 0) wanderSomewhere();
     } else if (state === 'wander') {
-      speed = spec.walkSpeed;
+      speed = spec.walkSpeed * gait();
       if (path.length === 0) { state = 'pause'; pauseFor = 1 + Math.random() * 3; }
     }
 
@@ -712,24 +1043,38 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
     }
     pace = state === 'attack' ? 0 : speed;
     walk.timeScale = state === 'attack' ? 1 : speed / spec.walkSpeed;
-    mixer.update(dt);
+    moveBody(dt);
     root.position.copy(pos);
     root.rotation.y = yaw;
   };
 
   const update = (dt: number, frame: HunterFrame) => {
     if (disposed) return;
+    // The bars coming down cut the map through them, on every screen (any of them may lead next).
+    if (cage && nav !== 'loading' && frame.cageShut !== cageWasShut) {
+      if (frame.cageShut && cageWasShut === false) shutCage();
+      cageWasShut = frame.cageShut;
+    }
     buildSome();
     updateFeel(dt, frame.local);
+    updateBlood(dt);
+    staggerFor = Math.max(0, staggerFor - dt);
+    slow = Math.max(0, slow - dt / SLOW_FOR);
+    if (voice && kneel > 0 !== voice.playbackRate < 1) voice.setPlaybackRate(kneel > 0 ? 0.8 : 1);   // a lower, laboured sound while it is down
     if (frame.lead) {
-      // Taking over from another leader: carry on from where it was shown.
-      if (!leading) { at = -1; path = []; state = 'pause'; pauseFor = 0.5; target = -1; playAttack(false); }
+      // Taking over from another leader: carry on from where it was shown, still down if it was.
+      if (!leading) {
+        at = -1; path = []; state = 'pause'; pauseFor = 0.5; target = -1; playAttack(false);
+        wounds = lastFollow?.wounds ?? 0;
+        if (lastFollow?.down) { state = 'down'; downFor = lastFollow.down; }
+      }
       leading = true;
       hunt(dt, frame);
       updateSound(dt, (state === 'chase' || state === 'attack') && target === frame.local.id);
     } else {
       leading = false;
-      if (frame.follow) followSnapshot(dt, frame.follow);
+      senses = [frame.local, ...frame.others].filter(s => s.active);
+      if (frame.follow) { lastFollow = frame.follow; followSnapshot(dt, frame.follow); }
       else hold();
       updateSound(dt, !!frame.follow?.chasing && frame.follow.target === frame.local.id);
     }
@@ -742,12 +1087,38 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
       return {
         p: [pos.x, pos.y, pos.z], yaw, anim: state === 'attack' ? 'attack' : 'walk', pace,
         target, chasing: state === 'chase' || state === 'attack',
+        kneel: Math.round(kneel * 20) / 20, shot: shotCount, wounds,
+        ...(state === 'down' ? { down: Math.ceil(downFor) } : {}),
+        ...(penned ? { caged: true } : {}),
       };
     },
     /** Loaded and mapped: ready to lead. */
     get ready() { return !!mixer && nodes.length >= 50; },
     /** Its blow landed on the investigator at this screen (told by whoever leads it). */
     hit: onHit,
+    /**
+     * Where a shot along `ray` strikes it, if it does before `far` (what else
+     * the round would hit); null on a miss.
+     */
+    struck(ray: THREE.Ray, far: number): THREE.Vector3 | null {
+      if (!root.visible) return null;
+      // A column of spheres from shins to head, lower and hunched forward on its knees.
+      const tall = height * (1 - 0.33 * kneel);
+      const lean = 0.18 * kneel;
+      let best: THREE.Vector3 | null = null, bestD = far;
+      for (const k of [0.25, 0.45, 0.62, 0.78, 0.92]) {
+        const c = tmp.set(pos.x + Math.sin(yaw) * lean * k, pos.y + tall * k, pos.z + Math.cos(yaw) * lean * k);
+        const hitAt = ray.intersectSphere(new THREE.Sphere(c, height * (k > 0.85 ? 0.08 : 0.12)), new THREE.Vector3());
+        if (!hitAt) continue;
+        const dist = hitAt.distanceTo(ray.origin);
+        if (dist < bestD) { bestD = dist; best = hitAt; }
+      }
+      return best;
+    },
+    /** Shot by `by` (a sense id), at `at` if known. Only its leader calls this; the rest hear of it in the snapshot. */
+    wound,
+    /** Shows a shot landing at once, on a screen that doesn't lead it (the leader will confirm it). */
+    showShot(at: THREE.Vector3) { bleed(at); bledAt = performance.now(); },
     /**
      * Floods the whole level now and returns the map as JSON, for spec.nav.
      * Rebake whenever the level's model changes: with the level open, call it
@@ -769,6 +1140,9 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
       if (music?.isPlaying) music.stop();
       voice?.disconnect();
       music?.disconnect();
+      throat?.disconnect();
+      for (const p of drops) { scene.remove(p.s); p.mat.dispose(); }
+      bloodTex.dispose();
       scene.remove(root);
       root.traverse(o => {
         const m = o as THREE.Mesh;
@@ -781,6 +1155,153 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
       });
       marks.remove();
       vignette.remove();
+    },
+  };
+}
+
+// ── Its body, wounded ───────────────────────────────────────────────
+// The model only walks and strikes; kneeling and flinching are posed here,
+// over the clip, on a Mixamo rig whose figure faces +Z.
+
+type Body = {
+  /** Puts back what the clip last set, before the mixer runs (it skips values that haven't changed). */
+  restore: () => void;
+  /** Remembers what the clip set this frame. */
+  keep: () => void;
+  /** 0..1 on its knees; a flinch of 0..1, twisting to `twist` (±1); `t` in seconds, for its breath. */
+  pose: (kneel: number, flinch: number, twist: number, t: number) => void;
+  /** Turns the neck and head `yaw` (toward +X, radians) and `pitch` (down), and breathes slow and deep, by `w` 0..1. */
+  look: (yaw: number, pitch: number, w: number, t: number) => void;
+};
+
+const X = new THREE.Vector3(1, 0, 0);
+const Y = new THREE.Vector3(0, 1, 0);
+const Z = new THREE.Vector3(0, 0, 1);
+const deg = THREE.MathUtils.degToRad;
+const KNEE_CLEAR = 0.17;    // how high its lowest leg joint sits off the floor, kneeling
+
+function rigBody(model: THREE.Object3D): Body | null {
+  const bone = (name: string) => model.getObjectByName(`mixamorig${name}`) ?? model.getObjectByName(`mixamorig:${name}`) ?? null;
+  const names = ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head',
+    'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot',
+    'LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm',
+    'LeftToeBase', 'RightToeBase', 'LeftHand', 'RightHand'] as const;
+  const b = {} as Record<(typeof names)[number], THREE.Object3D>;
+  for (const n of names) {
+    const o = bone(n);
+    if (!o) { console.warn('Hunter: no', n, 'bone; it will not kneel or flinch'); return null; }
+    b[n] = o;
+  }
+  const all = names.map(n => b[n]);
+
+  const sceneQ = new THREE.Quaternion();
+  const pq = new THREE.Quaternion();
+  const r = new THREE.Quaternion();
+  /** Turns a bone about an axis of the figure (+X its left, +Y up, +Z ahead), whatever its parents do. */
+  const turn = (o: THREE.Object3D, axis: THREE.Vector3, angle: number) => {
+    if (!angle) return;
+    o.parent!.updateWorldMatrix(true, false);
+    model.getWorldQuaternion(sceneQ).invert();
+    o.parent!.getWorldQuaternion(pq).premultiply(sceneQ);
+    r.setFromAxisAngle(axis, angle);
+    // local' = P⁻¹ · R · P · local
+    o.quaternion.premultiply(pq).premultiply(r).premultiply(pq.invert());
+  };
+
+  const from = new THREE.Vector3();
+  const to = new THREE.Vector3();
+  /** Swings a bone so it points (toward `child`) along `dir`, in the figure's frame. */
+  const aim = (o: THREE.Object3D, child: THREE.Object3D, dir: THREE.Vector3) => {
+    model.updateMatrixWorld(true);
+    model.worldToLocal(o.getWorldPosition(from));
+    model.worldToLocal(child.getWorldPosition(to));
+    to.sub(from).normalize();
+    o.parent!.updateWorldMatrix(true, false);
+    model.getWorldQuaternion(sceneQ).invert();
+    o.parent!.getWorldQuaternion(pq).premultiply(sceneQ);
+    r.setFromUnitVectors(to, dir.clone().normalize());
+    o.quaternion.premultiply(pq).premultiply(r).premultiply(pq.invert());
+  };
+  const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+  // On its knees, worked out once from the rest pose (already a hunched crouch,
+  // arms hanging): thighs down, shins flat behind, toes back; one hand braced
+  // by its knee, the other clutching its belly; the head hanging.
+  const rest = all.map(o => o.quaternion.clone());
+  const restHips = b.Hips.position.clone();
+  aim(b.LeftUpLeg, b.LeftLeg, v(0.18, -1, 0.3));
+  aim(b.RightUpLeg, b.RightLeg, v(-0.18, -1, 0.3));
+  aim(b.LeftLeg, b.LeftFoot, v(0.05, -0.12, -1));
+  aim(b.RightLeg, b.RightFoot, v(-0.05, -0.12, -1));
+  aim(b.LeftFoot, b.LeftToeBase, v(0, -0.4, -1));
+  aim(b.RightFoot, b.RightToeBase, v(0, -0.4, -1));
+  turn(b.Spine, X, deg(8));
+  turn(b.Head, X, deg(18));
+  aim(b.LeftArm, b.LeftForeArm, v(0.25, -0.8, 0.55));
+  aim(b.LeftForeArm, b.LeftHand, v(0.05, -0.55, 0.85));
+  aim(b.RightArm, b.RightForeArm, v(-0.2, -1, 0.35));
+  aim(b.RightForeArm, b.RightHand, v(0.8, 0.1, 0.5));
+  const kneelQ = all.map(o => o.quaternion.clone());
+  all.forEach((o, i) => o.quaternion.copy(rest[i]));
+  b.Hips.position.copy(restHips);
+
+  // Kept on the floor as it sinks: the lowest joint of its legs, from where the
+  // clip has it down to a knee's clearance, the hips moving to match.
+  const legs = [b.LeftLeg, b.RightLeg, b.LeftFoot, b.RightFoot, b.LeftToeBase, b.RightToeBase];
+  const p = new THREE.Vector3();
+  const lowest = () => {
+    model.updateMatrixWorld(true);
+    return Math.min(...legs.map(o => model.worldToLocal(o.getWorldPosition(p)).y));
+  };
+  const lift = (dy: number) => {
+    model.worldToLocal(b.Hips.getWorldPosition(p));
+    p.y += dy;
+    b.Hips.position.copy(b.Hips.parent!.worldToLocal(model.localToWorld(p)));
+  };
+
+  const kept = all.map(o => o.quaternion.clone());
+  const keptHips = new THREE.Vector3();
+  return {
+    restore() {
+      all.forEach((o, i) => o.quaternion.copy(kept[i]));
+      b.Hips.position.copy(keptHips);
+    },
+    keep() {
+      all.forEach((o, i) => kept[i].copy(o.quaternion));
+      keptHips.copy(b.Hips.position);
+    },
+    pose(kneel, flinch, twist, t) {
+      if (kneel > 0.001) {
+        const w = kneel * kneel * (3 - 2 * kneel);
+        const was = lowest();
+        all.forEach((o, i) => o.quaternion.slerp(kneelQ[i], w));
+        lift(THREE.MathUtils.lerp(was, KNEE_CLEAR, w) - lowest());
+        // Heaving breaths, and the head lolling with them.
+        const breath = Math.sin(t * 1.7);
+        turn(b.Spine1, X, deg(3) * breath * w);
+        turn(b.Head, X, deg(-4) * breath * w);
+      }
+      if (flinch > 0.001) {
+        // Thrown back by the round, twisting away from it, the head snapping.
+        turn(b.Spine, X, deg(-14) * flinch);
+        turn(b.Spine, Y, deg(16) * twist * flinch);
+        turn(b.Spine2, X, deg(-12) * flinch);
+        turn(b.Neck, X, deg(-10) * flinch);
+        turn(b.Head, X, deg(-20) * flinch);
+        turn(b.LeftArm, Z, deg(18) * flinch);
+        turn(b.RightArm, Z, deg(-18) * flinch);
+      }
+    },
+    look(yaw, pitch, w, t) {
+      turn(b.Neck, Y, yaw * 0.4);
+      turn(b.Head, Y, yaw * 0.6);
+      turn(b.Neck, X, pitch * 0.4);
+      turn(b.Head, X, pitch * 0.6);
+      if (w > 0) {
+        const breath = Math.sin(t * 1.1);
+        turn(b.Spine1, X, deg(2.5) * breath * w);
+        turn(b.Spine2, X, deg(1.5) * breath * w);
+      }
     },
   };
 }

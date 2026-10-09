@@ -957,7 +957,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   errorText: 'The house could not be loaded.',
   enterText: 'Click to step inside',
   leaveLabel: 'Leave the house',
-  credit: '"Antique Iron Safe" by pixelgrapher · "Dagon - Lovecraft lore" by CMBC · "Skeleton" by Huargenn — CC BY 4.0',
+  credit: '"Antique Iron Safe" by pixelgrapher · "Dagon - Lovecraft lore" and "Shub-Niggurath - Lovecraft lore" by CMBC · "Iguana sculpture" by Loïc Norgeot · "Skeleton" by Huargenn — CC BY 4.0',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
@@ -1005,12 +1005,15 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
       hidesPeeper: true,
     },
   },
-  sewer: { at: [0, 0, -5.075], shrineLock: 'shrine_padlock' },
+  sewer: { at: [0, 0, -5.075], shrineLock: 'shrine_padlock', grate: 'sewer_grate' },
   // A Deep One loose in the sewer, out of its lair at the end of the west spur (sewer.ts LX0..LX1,
   // LD0..LD1, in world terms). It roams the tunnels, comes to footsteps, sees four metres in the
   // dark — any distance down a torch beam — and goes no further than the foot of the stairs to the
   // house. The crawl pipe is too low for it. Everyone in the level sees the same one.
+  // For now it is penned behind the outfall grate at the main's east end (sewer.ts GRATE..X1),
+  // knee-deep in the channel, staring at whoever comes down; gamelord raising the grate lets it out.
   hunter: {
+    cage: { door: 'sewer_grate', at: [15.4, -3.4, -11.825], min: [14.05, -13.4], max: [18, -10.25] },
     model: '/avatars/deep-one.glb', walkClip: 'Walk', attackClip: 'Attack',
     start: [-15.75, -3.04, -3.075], walkSpeed: 1.0, chaseSpeed: 2.7,
     sightLit: 3.05, sightDark: 4, hear: { walk: 5, run: 12 }, scent: 0.3, ceiling: -1.6,

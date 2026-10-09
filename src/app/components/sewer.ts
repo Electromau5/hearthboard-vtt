@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { buildSanctums } from './sanctums';
 
 /**
  * The sewer under the derelict house, reached through its back door (see
@@ -15,7 +16,9 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
  * to a shrine of Dagon: a hewn chamber, the god on a plinth at its far end,
  * the chamber flooded to the knee with black brine and bone floating in it.
  * The foot of that ladder is walled off from the god by later brickwork, with
- * an iron-bound door through it, padlocked on the ladder's side.
+ * an iron-bound door through it, padlocked on the ladder's side. Beyond the
+ * door, on the god's side, passages climb out of the brine to two inner
+ * sanctums — Shub-Niggurath's and Bokrug's (sanctums.ts).
  *
  * Back under the house, the main's near wall opens on older, lower tunnels:
  * a west and an east branch joined by a cross tunnel beneath the house's
@@ -43,7 +46,10 @@ export type Sewer = {
   pools: Pool[];
   /** The padlocked door into the shrine. */
   door: ShrineDoor;
-  update: (dt: number) => void;
+  /** The outfall grate, raised like a portcullis (0 down … 1 up); `blocking` stands among the walls while it is down. */
+  grate: { blocking: THREE.Mesh[]; set: (k: number) => void; dispose: () => void };
+  /** `eye` is the camera, for whatever down here watches it. */
+  update: (dt: number, eye?: THREE.Vector3) => void;
   dispose: () => void;
 };
 
@@ -104,6 +110,9 @@ const IDOL = [-3.5, SD + 2.0] as const; // where Dagon stands, facing east to th
 const PW0 = 2.9, PW1 = 3.2;          // its west and east faces
 const DD0 = IDOL[1] - 0.5, DD1 = IDOL[1] + 0.5; // the doorway, on the aisle to the altar
 const DOOR_H = 2.1;
+// The passages to the inner sanctums (sanctums.ts), through the near and far walls on the god's side.
+const OX0 = -2.6, OX1 = -1.4;
+const PASS_TOP = DEEP + 2.6;
 // The tunnels under the house (see the header): flat-roofed, LOW high, 2·TH wide.
 const TH = 0.8;
 const U1X = -7, U2X = 10;            // the west and east branches' centre lines
@@ -321,7 +330,10 @@ export function createSewer(at: THREE.Vector3): Sewer {
     block([X0, BED, T0], [X0 + RUBBLE, SPRING + R, T1]);
   }
 
-  // The east end: the outfall grate, rusted fast, and the dark beyond it.
+  // The east end: the outfall grate, and the dark beyond it where something is penned.
+  // It hangs in grooves in the vault and can be winched up into the crown, like a portcullis.
+  const grate = new THREE.Group();
+  const grateBlock = new THREE.Mesh(g(new THREE.BoxGeometry(0.1, SPRING + R - BED, T1 - T0)), blocker);
   {
     const bars: THREE.BufferGeometry[] = [];
     for (let u = -R + 0.08; u <= R - 0.08; u += 0.12) {
@@ -342,8 +354,12 @@ export function createSewer(at: THREE.Vector3): Sewer {
     }
     const merged = g(mergeGeometries(bars.map(b => b.index ? b.toNonIndexed() : b).map(b => { b.deleteAttribute('uv'); return b; }), false)!);
     bars.forEach(b => b.dispose());
-    group.add(new THREE.Mesh(merged, iron));
-    block([GRATE - 0.05, BED, T0], [GRATE + 0.05, SPRING + R, T1]);
+    grate.add(new THREE.Mesh(merged, iron));
+    group.add(grate);
+    grateBlock.position.copy(P(GRATE, (BED + SPRING + R) / 2, TC));
+    grateBlock.visible = false;
+    grateBlock.updateMatrixWorld(true);
+    group.add(grateBlock);
   }
 
   // A storm drain in the crown of the vault, letting a little moonlight down onto the water.
@@ -531,8 +547,12 @@ export function createSewer(at: THREE.Vector3): Sewer {
     box(brick, [SX + SHAFT, low, SD - SHAFT], [SX + SHAFT + 0.2, top, SD + SHAFT]);
     // The chamber: floor, walls, and a ceiling with the shaft let through it.
     box(rock, [RX0 - 0.4, DEEP - 0.3, RD0 - 0.4], [RX1 + 0.4, DEEP, RD1 + 0.4], 1.2);
-    box(rock, [RX0 - 0.4, DEEP - 0.3, RD0 - 0.4], [RX1 + 0.4, CEIL + 0.2, RD0], 1.2);
-    box(rock, [RX0 - 0.4, DEEP - 0.3, RD1], [RX1 + 0.4, CEIL + 0.2, RD1 + 0.4], 1.2);
+    for (const [d0, d1] of [[RD0 - 0.4, RD0], [RD1, RD1 + 0.4]]) {
+      // Either side of a passage's mouth, and over it.
+      box(rock, [RX0 - 0.4, DEEP - 0.3, d0], [OX0, CEIL + 0.2, d1], 1.2);
+      box(rock, [OX1, DEEP - 0.3, d0], [RX1 + 0.4, CEIL + 0.2, d1], 1.2);
+      box(rock, [OX0, PASS_TOP, d0], [OX1, CEIL + 0.2, d1], 1.2);
+    }
     box(rock, [RX0 - 0.4, DEEP - 0.3, RD0], [RX0, CEIL + 0.2, RD1], 1.2);
     box(rock, [RX1, DEEP - 0.3, RD0], [RX1 + 0.4, CEIL + 0.2, RD1], 1.2);
     box(rock, [RX0, CEIL, RD0], [SX - SHAFT, CEIL + 0.2, RD1], 1.2);
@@ -568,8 +588,7 @@ export function createSewer(at: THREE.Vector3): Sewer {
       if (facing === 1) mesh.rotation.y = Math.PI;
       group.add(mesh);
     };
-    foot(RX0, RX1, RD0, 1);
-    foot(RX0, RX1, RD1, -1);
+    for (const [d, f] of [[RD0, 1], [RD1, -1]] as const) { foot(RX0, OX0, d, f); foot(OX1, RX1, d, f); }
 
     // The ladder, from the shrine's floor to a handhold above the cistern's flags.
     const ladder: THREE.BufferGeometry[] = [];
@@ -598,11 +617,15 @@ export function createSewer(at: THREE.Vector3): Sewer {
   }
   const door = buildShrineDoor(P, { iron, g, m });
   group.add(door.group);
+  const sanctums = buildSanctums({
+    at, P, box, group, g, m, tx, rock, water, glowWater,
+    deep: DEEP, brine: BRINE, near: RD0, far: RD1, ox0: OX0, ox1: OX1, passTop: PASS_TOP,
+  });
 
   const a = P(SX - SHAFT, 0, SD + SHAFT), b = P(SX + SHAFT, 0, SD - SHAFT);
   const ladders: Ladder[] = [{ min: [a.x, a.z], max: [b.x, b.z], bottom: at.y + DEEP, top: at.y + FLOOR }];
   const r0 = P(RX0, 0, RD1), r1 = P(RX1, 0, RD0);
-  const pools: Pool[] = [{ min: [r0.x, r0.z], max: [r1.x, r1.z], surface: at.y + BRINE }];
+  const pools: Pool[] = [{ min: [r0.x, r0.z], max: [r1.x, r1.z], surface: at.y + BRINE }, ...sanctums.pools];
 
   // The god and the bones come from models of their own, loaded behind the rest.
   let gone = false;
@@ -635,6 +658,7 @@ export function createSewer(at: THREE.Vector3): Sewer {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) kit.set(mesh.name, mesh.geometry);
     });
+    sanctums.withBones(kit);
     const field = scatterBones(kit, bones, at);
     group.add(field);
     loaded.push(field);
@@ -643,6 +667,8 @@ export function createSewer(at: THREE.Vector3): Sewer {
     group.add(heap);
     loaded.push(heap);
   });
+
+  sanctums.load(loader, (o) => loaded.push(o), () => gone);
 
   // Merge each material's pieces into one mesh: one draw call, and one object
   // for every collision ray to test.
@@ -662,8 +688,18 @@ export function createSewer(at: THREE.Vector3): Sewer {
     ladders,
     pools,
     door: door.door,
-    update(dt) {
+    grate: {
+      blocking: [grateBlock],
+      set(k) {
+        // Up into the crown, slow to start and settling: the bars' feet end 2.2 m clear of the walkways.
+        grate.position.y = 2.2 * (k * k * (3 - 2 * k));
+        grate.updateMatrixWorld(true);
+      },
+      dispose() {},
+    },
+    update(dt, eye) {
       swell.value += dt;
+      sanctums.update(dt, eye ?? null);
       // The water creeps east toward the grate.
       waterTex.offset.x = (waterTex.offset.x - dt * 0.03) % 1;
     },
@@ -717,7 +753,8 @@ function scatterBones(kit: Map<string, THREE.BufferGeometry>, mat: THREE.Materia
     (x > ix + 1.35 && x < ix + 2.15 && d > id - 0.6 && d < id + 0.6) ||         // the altar
     [-1.6, 1.6].some(dd => Math.hypot(x - ix - 2.6, d - id - dd) < 0.4) ||      // the pillars
     (x > PW0 - 0.12 && x < PW1 + 0.12) ||                                       // the wall
-    (x > PW0 - 1.1 && x < PW0 && d > DD0 && d < DD1 + 0.1);                     // the door's swing
+    (x > PW0 - 1.1 && x < PW0 && d > DD0 && d < DD1 + 0.1) ||                   // the door's swing
+    (x > OX0 - 0.25 && x < OX1 + 0.25 && (d < RD0 + 0.8 || d > RD1 - 0.8));     // the passages' mouths
   // Deeper by the walls and the plinth than down the aisle.
   const depth = (x: number, d: number) => {
     const wall = Math.min(x - RX0, RX1 - x, d - RD0, RD1 - d);

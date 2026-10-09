@@ -40,6 +40,21 @@ props/dagon-statue.glb — Dagon on his plinth in the shrine under the derelict 
   decimated to 24 k triangles, rigged to a Mixamo skeleton with a tail added, and
   animated with Mixamo's "Swimming" and "Treading Water" clips.
 
+props/shub-niggurath-statue.glb — the Black Goat in her sanctum off the shrine of Dagon:
+  "Shub-Niggurath - Lovecraft lore" by CMBC — https://sketchfab.com/CMBC
+  https://sketchfab.com/3d-models/shub-niggurath-lovecraft-lore-6ba62224c47b42059f863bcab8421676
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: thirteen pieces joined and decimated from 1.38 M to 82 k faces, texture
+  converted to WebP, meshopt-compressed; tinted to black stone in the walkthrough.
+
+props/bokrug-statue.glb — the idol of Bokrug in his sanctum off the shrine of Dagon:
+  "Iguana sculpture" by Loïc Norgeot — https://sketchfab.com/norgeotloic
+  https://sketchfab.com/3d-models/iguana-sculpture-671dc08749334cab9afd7827d4b0b152
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: the board it was scanned on removed, scaled to 2.2 m and re-centred on its
+  base, the head cut off at the neck (holes filled) so it can turn, textures resized
+  to 1024 px WebP, meshopt-compressed; tinted to sea-green stone in the walkthrough.
+
 props/bones.glb — the bones covering the shrine's floor:
   "Skeleton" by Huargenn — https://sketchfab.com/Huargenn
   https://sketchfab.com/3d-models/skeleton-c5c20626d35e4689b2f2d23c5b262171

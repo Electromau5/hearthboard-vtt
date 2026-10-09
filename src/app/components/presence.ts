@@ -10,7 +10,8 @@ import type { HunterSnapshot } from './hunter';
  *
  * A level's hunter is shared the same way: one client leads it (see
  * `leadsHunter`) and puts where it is in its presence; its blows go out as
- * room events to whoever they land on.
+ * room events to whoever they land on, and shots that strike it go out to
+ * whoever leads it.
  *
  * Tokens come from /api/liveblocks-auth. Without LIVEBLOCKS_SECRET_KEY that
  * refuses, and the level carries on single-player.
@@ -29,6 +30,9 @@ export type Pose = { p: [number, number, number]; yaw: number; pitch?: number; g
 export type Peer = { id: number; userId: string; name: string; slug: string | null; pose: Pose | null; prey: Pose | null; hunter: HunterSnapshot | null; ready: boolean };
 /** A blow from the hunter, sent by whoever leads it to the one it landed on. */
 export type HunterHit = { type: 'hunter-hit'; to: number };
+/** A shot that struck the hunter, sent by whoever fired it; whoever leads it takes the wound. */
+export type HunterShot = { type: 'hunter-shot'; by: number };
+type LevelEvent = HunterHit | HunterShot;
 
 type Presence = { pose: Pose | null; prey?: Pose | null; hunter?: HunterSnapshot | null; hr?: boolean };
 type UserMeta = { id: string; info: { name: string; slug: string | null } };
@@ -52,6 +56,8 @@ export type LevelPresence = {
   selfId: () => number | null;
   /** Tells `to` that the hunter's blow landed on them. */
   sendHit: (to: number) => void;
+  /** Tells the room this client's shot struck the hunter. */
+  sendShot: () => void;
   leave: () => void;
 };
 
@@ -79,7 +85,7 @@ function presenceEnabled() {
  * Joins the level's room if presence is set up. Until (or unless) it connects,
  * setPose is a no-op and onPeers is never called.
  */
-export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onHit?: () => void): LevelPresence {
+export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onHit?: () => void, onShot?: (by: number) => void): LevelPresence {
   let live: { room: Room; leave: () => void; unsub: () => void } | null = null;
   let left = false;
   let last = '';
@@ -92,6 +98,7 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
     const unsubOthers = subscribeOthers(room, onPeers);
     const unsubEvents = room.subscribe('event', ({ event }) => {
       if (event?.type === 'hunter-hit' && event.to === room.getSelf()?.connectionId) onHit?.();
+      if (event?.type === 'hunter-shot') onShot?.(event.by);
     });
     live = { room, leave, unsub: () => { unsubOthers(); unsubEvents(); } };
   });
@@ -115,7 +122,7 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
     setHunter(snap) {
       if (!live) return;
       const r = (n: number) => Math.round(n * 100) / 100;
-      const next = snap && { ...snap, p: [r(snap.p[0]), r(snap.p[1]), r(snap.p[2])] as [number, number, number], yaw: r(snap.yaw), pace: r(snap.pace) };
+      const next = snap && { ...snap, p: [r(snap.p[0]), r(snap.p[1]), r(snap.p[2])] as [number, number, number], yaw: r(snap.yaw), pace: r(snap.pace), kneel: r(snap.kneel) };
       const key = JSON.stringify(next);
       if (key === lastHunter) return;
       lastHunter = key;
@@ -131,6 +138,10 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
     },
     sendHit(to) {
       live?.room.broadcastEvent({ type: 'hunter-hit', to });
+    },
+    sendShot() {
+      const by = live?.room.getSelf()?.connectionId;
+      if (by !== undefined) live?.room.broadcastEvent({ type: 'hunter-shot', by });
     },
     leave() {
       left = true;
@@ -154,7 +165,7 @@ function rounded(pose: Pose): Pose {
 }
 
 const enterLevelRoom = (levelId: string, ready: boolean) =>
-  getClient().enterRoom<Presence, never, HunterHit>(`hearthboard:walk:${levelId}`, {
+  getClient().enterRoom<Presence, never, LevelEvent>(`hearthboard:walk:${levelId}`, {
     initialPresence: { pose: null, hunter: null, hr: ready },
   });
 type Room = ReturnType<typeof enterLevelRoom>['room'];
