@@ -39,9 +39,9 @@ export type Character = {
 export const CHARACTERS: Character[] = [
   {
     slug: "dr-alistair-finch",
-    name: "Dr. Alistair Finch",
+    name: "Dr. Alissa Finch",
     age: 42,
-    gender: "Male",
+    gender: "Female",
     pastDemons: "",
     className: "The Disgraced Mortician",
     cover: "City Morgue Contract Embalmer at Arkham Sanitarium",
@@ -68,9 +68,9 @@ export const CHARACTERS: Character[] = [
       { name: "Buffered Dissection", type: "Buffered Sanity", description: "When dissecting cosmic entities, sanity damage is banked into the Exposed Negative pool. Full psychic recoil triggers only when the surgical session concludes and specimens are fixed." },
     ],
     hooks: [
-      { title: "Watched by the State", description: "Government agents monitor his movements. Rolling a 95–00 on any clandestine check introduces a federal investigation agent or detective tail." },
-      { title: "Tomb Ambition", description: "To recover an uncorrupted, mummified pre-human entity (Elder Thing / Mi-Go tissue) to validate his life's work and master non-terrestrial physiology." },
-      { title: "Ancestral Secret", description: "Finch's bloodline was genetically altered by early necromantic experiments (connected to the salts of Charles Dexter Ward), explaining why preserved specimens never fully rot in his presence." },
+      { title: "Watched by the State", description: "Government agents monitor her movements. Rolling a 95–00 on any clandestine check introduces a federal investigation agent or detective tail." },
+      { title: "Tomb Ambition", description: "To recover an uncorrupted, mummified pre-human entity (Elder Thing / Mi-Go tissue) to validate her life's work and master non-terrestrial physiology." },
+      { title: "Ancestral Secret", description: "Finch's bloodline was genetically altered by early necromantic experiments (connected to the salts of Charles Dexter Ward), explaining why preserved specimens never fully rot in her presence." },
     ],
     equipment: [
       "Master surgeon's dissection kit",
@@ -166,7 +166,7 @@ export const CHARACTERS: Character[] = [
   },
   {
     slug: "thomas-callahan",
-    name: "Thomas \"Mack\" Callahan",
+    name: "Thomas \"Mack\" Calhoun",
     age: 38,
     gender: "Male",
     pastDemons: "",
@@ -251,7 +251,7 @@ export const CHARACTERS: Character[] = [
   },
   {
     slug: "arthur-wright",
-    name: "Arthur Wright",
+    name: "Arjun Sahi",
     age: 45,
     gender: "Male",
     pastDemons: "",
@@ -274,12 +274,12 @@ export const CHARACTERS: Character[] = [
       { name: "History (Pre-Human Monuments)", value: 60, notes: "Identifying architectural epochs of Elder Things and pre-cataclysmic civs" },
     ],
     abilities: [
-      { name: "Structural Resonance", type: "Active", description: "Arthur can analyze cyclopean stone masonry for 1 round to detect load-bearing keystones, hidden counterweight doors, or imminent ceiling collapses, granting +30% to party survival actions." },
+      { name: "Structural Resonance", type: "Active", description: "Arjun can analyze cyclopean stone masonry for 1 round to detect load-bearing keystones, hidden counterweight doors, or imminent ceiling collapses, granting +30% to party survival actions." },
       { name: "Controlled Breacher", type: "Utility", description: "When using dynamite or heavy drills to open sealed vaults, reduces required explosive amounts by 50% and generates 0 excess Exposure Pool tokens." },
       { name: "Spatial Orientation", type: "Passive", description: "Immune to disorientation and vertigo caused by non-Euclidean angles or shifting gravity wells." },
     ],
     hooks: [
-      { title: "Euclidean Sickness", description: "Arthur suffers intense claustrophobia and psychological agitation in ordinary, symmetrical right-angled modern buildings (-10% to all mental checks unless working on cyclopean plans)." },
+      { title: "Euclidean Sickness", description: "Arjun suffers intense claustrophobia and psychological agitation in ordinary, symmetrical right-angled modern buildings (-10% to all mental checks unless working on cyclopean plans)." },
       { title: "Tomb Ambition", description: "To be the first modern engineer to enter an intact pre-human megalithic vault, confirm non-Euclidean structural mechanics, and publish the definitive mathematical treatise." },
       { title: "Ancestral Secret", description: "His lineage traces back to Sarnath and the builders of the sunken basalt spires of R'lyeh; he dreams in five-dimensional geometry." },
     ],

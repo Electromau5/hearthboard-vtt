@@ -112,12 +112,12 @@ type BoardCharacter = {
 // characteristics, skills and avatars reflect edits made on the character
 // sheets. Never render from this array directly.
 const DEFAULT_CHARACTERS: BoardCharacter[] = [
-  { id: 'c1', slug: 'dr-alistair-finch',    name: 'Dr. Alistair Finch',       cls: 'The Disgraced Mortician',         hp: 12, maxHp: 12, abilities: { STR: 50, CON: 65, DEX: 75, INT: 85, POW: 75, EDU: 85 }, inventory: [{ name: 'Dissection kit', qty: 1 }, { name: 'Formaldehyde jars', qty: 3 }, { name: 'Scalpel holster', qty: 1 }, { name: 'Mortuary credentials', qty: 1 }] },
+  { id: 'c1', slug: 'dr-alistair-finch',    name: 'Dr. Alissa Finch',         cls: 'The Disgraced Mortician',         hp: 12, maxHp: 12, abilities: { STR: 50, CON: 65, DEX: 75, INT: 85, POW: 75, EDU: 85 }, inventory: [{ name: 'Dissection kit', qty: 1 }, { name: 'Formaldehyde jars', qty: 3 }, { name: 'Scalpel holster', qty: 1 }, { name: 'Mortuary credentials', qty: 1 }] },
   { id: 'c2', slug: 'silas-vance',           name: 'Silas "The Great" Vance',  cls: 'The Blackmailed Illusionist',     hp: 11, maxHp: 11, abilities: { STR: 55, CON: 60, DEX: 85, INT: 75, POW: 70, EDU: 65 }, inventory: [{ name: 'Lockpick kit', qty: 1 }, { name: 'Flash pellets', qty: 4 }, { name: 'Defense cane', qty: 1 }, { name: 'Debt note', qty: 1 }] },
   { id: 'c3', slug: 'julian-sterling',       name: 'Julian Sterling',           cls: 'The Desperate Auteur',            hp: 10, maxHp: 10, abilities: { STR: 45, CON: 55, DEX: 70, INT: 80, POW: 65, EDU: 75 }, inventory: [{ name: '35mm Eyemo camera', qty: 1 }, { name: 'Nitrate film rolls', qty: 4 }, { name: 'Magnesium dish', qty: 1 }, { name: 'Dev kit', qty: 1 }] },
-  { id: 'c4', slug: 'thomas-callahan',       name: 'Thomas "Mack" Callahan',   cls: 'The Amnesiac Detective',          hp: 14, maxHp: 14, abilities: { STR: 75, CON: 70, DEX: 65, INT: 70, POW: 65, EDU: 60 }, inventory: [{ name: 'Colt M1911', qty: 1 }, { name: 'Spare magazines', qty: 3 }, { name: 'Trench knife', qty: 1 }, { name: 'PI badge', qty: 1 }] },
+  { id: 'c4', slug: 'thomas-callahan',       name: 'Thomas "Mack" Calhoun',    cls: 'The Amnesiac Detective',          hp: 14, maxHp: 14, abilities: { STR: 75, CON: 70, DEX: 65, INT: 70, POW: 65, EDU: 60 }, inventory: [{ name: 'Colt M1911', qty: 1 }, { name: 'Spare magazines', qty: 3 }, { name: 'Trench knife', qty: 1 }, { name: 'PI badge', qty: 1 }] },
   { id: 'c5', slug: 'richard-graves',        name: 'Richard Pickman Graves',   cls: 'The Macabre Visionary',           hp: 9,  maxHp: 9,  abilities: { STR: 40, CON: 45, DEX: 80, INT: 85, POW: 80, EDU: 70 }, inventory: [{ name: 'Charcoal sketchbook', qty: 1 }, { name: 'Bristle brushes', qty: 1 }, { name: 'Oil paint tubes', qty: 1 }, { name: 'Cemetery sketches', qty: 1 }] },
-  { id: 'c6', slug: 'arthur-wright',         name: 'Arthur Wright',             cls: 'The Non-Euclidean Architect',     hp: 12, maxHp: 12, abilities: { STR: 55, CON: 65, DEX: 60, INT: 90, POW: 70, EDU: 85 }, inventory: [{ name: 'Brass compass', qty: 1 }, { name: 'Theodolite', qty: 1 }, { name: 'Dynamite sticks', qty: 2 }, { name: 'Blueprint parchment', qty: 1 }] },
+  { id: 'c6', slug: 'arthur-wright',         name: 'Arjun Sahi',                cls: 'The Non-Euclidean Architect',     hp: 12, maxHp: 12, abilities: { STR: 55, CON: 65, DEX: 60, INT: 90, POW: 70, EDU: 85 }, inventory: [{ name: 'Brass compass', qty: 1 }, { name: 'Theodolite', qty: 1 }, { name: 'Dynamite sticks', qty: 2 }, { name: 'Blueprint parchment', qty: 1 }] },
   { id: 'c7', slug: 'percival-winthrop',     name: 'Percival Winthrop',         cls: 'The Ruined Tycoon',               hp: 11, maxHp: 11, abilities: { STR: 50, CON: 55, DEX: 55, INT: 80, POW: 75, EDU: 85 }, inventory: [{ name: 'Savile Row suit', qty: 1 }, { name: 'Gold pocket watch', qty: 1 }, { name: '.32 ACP revolver', qty: 1 }, { name: 'Bankrupt ledger', qty: 1 }] },
 ];
 
@@ -1053,7 +1053,7 @@ export default function HearthboardPage() {
    * landing in the shared chat for everyone else.
    *
    * `context` names what the check was made against (a walkthrough object),
-   * so the chat reads "Arthur Wright (Spot Hidden · Writing Desk)". Callers
+   * so the chat reads "Arjun Sahi (Spot Hidden · Writing Desk)". Callers
    * that show their own verdict pass `quiet` to skip the toast.
    */
   const rollCheck = useCallback((charName: string, label: string, target: number, context?: string, quiet = false) => {

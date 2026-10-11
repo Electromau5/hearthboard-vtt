@@ -277,7 +277,7 @@ const PATIENT_FILES: Resource[] = ADMISSION_CARDS
  * lands active in Weapons & Hardware, the general kit section.
  * `unclassifiedEquipment()` reports any such drift.
  *
- * The active field roster is Callahan, Finch and Wright; Silas, Julian, Graves
+ * The active field roster is Calhoun, Finch and Sahi; Silas, Julian, Graves
  * and Winthrop are off-roster, which is why most of their kit is archived.
  */
 type Placement = {
@@ -290,7 +290,7 @@ type Placement = {
 };
 
 const EQUIPMENT: Record<string, Placement> = {
-  // ── Dr. Alistair Finch (active) ──────────────────────────────────
+  // ── Dr. Alissa Finch (active) ───────────────────────────────────
   "Master surgeon's dissection kit": { section: 'Medical', status: 'active',
     note: 'Field forensics, biological sampling, and covert seal manipulation.' },
   'Scalpel holster': { section: 'Medical', status: 'active',
@@ -302,7 +302,7 @@ const EQUIPMENT: Record<string, Placement> = {
   'Mortuary bypass credentials': { section: 'Documents', group: 'On Your Person', status: 'active',
     note: 'Safehouse sanitation, off-record transit, bypassing municipal medical oversight.' },
 
-  // ── Thomas "Mack" Callahan (active) ──────────────────────────────
+  // ── Thomas "Mack" Calhoun (active) ───────────────────────────────
   'Colt M1911 .45 ACP pistol (3 spare magazines)': { section: 'Weapons & Hardware', group: 'Firearms & Blades', status: 'active',
     note: 'Primary firearm (80%) against underworld ambushes.' },
   'Trench knife with brass knuckle grip': { section: 'Weapons & Hardware', group: 'Firearms & Blades', status: 'active',
@@ -314,7 +314,7 @@ const EQUIPMENT: Record<string, Placement> = {
   'Scarred silver lighter with unknown initials': { section: 'Artifacts', status: 'active',
     note: 'Pocket tool — revealing invisible ink, lighting cigarettes for bribes. Ties to his amnesia thread.' },
 
-  // ── Arthur Wright (active) ───────────────────────────────────────
+  // ── Arjun Sahi (active) ──────────────────────────────────────────
   'Solid brass drafting compass': { section: 'Weapons & Hardware', group: 'Tools & Entry', status: 'active',
     note: 'Pocket-portable — quick spatial measurements and structural checks.' },
   "Surveyor's theodolite": { section: 'Weapons & Hardware', status: 'archived',
@@ -328,7 +328,7 @@ const EQUIPMENT: Record<string, Placement> = {
 
   // ── Silas "The Great" Vance (off-roster) ─────────────────────────
   'Concealed brass lockpick kit': { section: 'Weapons & Hardware', group: 'Tools & Entry', status: 'active',
-    carriedBy: 'Party pool (Callahan)',
+    carriedBy: 'Party pool (Calhoun)',
     note: 'Transferred — the active trio has no dedicated burglar. Compact enough for covert entry.' },
   '4 smoke/flash pellets': { section: 'Weapons & Hardware', status: 'archived',
     note: 'Off-roster asset; stored at base.' },

@@ -26,7 +26,7 @@ export const SESSION_RECAPS: RecapCard[] = [
   // ── Session 1 — The Briefing & Bellevue ─────────────────────────────
   {
     id: 'recap-retainer', session: 1, title: 'The Retainer',
-    text: 'Arthur Butler retained Callahan, Wright and Finch here at the Black Archive: find the sealed chamber within one year. No bail. Severance the moment the law takes notice. The relics are ours; the chamber’s prize belongs to the patron.',
+    text: 'Arthur Butler retained Calhoun, Sahi and Finch here at the Black Archive: find the sealed chamber within one year. No bail. Severance the moment the law takes notice. The relics are ours; the chamber’s prize belongs to the patron.',
   },
   {
     id: 'recap-day1', session: 1, title: 'Day One Leads',
@@ -35,7 +35,7 @@ export const SESSION_RECAPS: RecapCard[] = [
   },
   {
     id: 'recap-cell66', session: 1, title: 'Bellevue — Cell 66',
-    text: 'Callahan leaned on the chief attendant and got us into the lower block alone. The deformed inmate was gone, taken in an unauthorized night extraction. Behind a loose flagstone: a parchment charting moon phases.',
+    text: 'Calhoun leaned on the chief attendant and got us into the lower block alone. The deformed inmate was gone, taken in an unauthorized night extraction. Behind a loose flagstone: a parchment charting moon phases.',
   },
   {
     id: 'recap-zadok', session: 1, title: 'Zadok Allen',

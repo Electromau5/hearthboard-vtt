@@ -9,7 +9,7 @@
  *
  * Adapted for a shared table rather than a single-player save:
  * - NPC runtime state is kept per investigator (`npc_states[npc][investigator]`)
- *   — the attendant regards Callahan and Finch differently. The fact registry,
+ *   — the attendant regards Calhoun and Finch differently. The fact registry,
  *   reputations, game time and log are the party's, shared.
  * - Answers may be a plain string or an object carrying their own effects (the
  *   spec's worked example gives a crit failure its own reputation hit and a

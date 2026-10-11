@@ -42,7 +42,7 @@ const CHIEF_ATTENDANT: NpcPersona = {
   ].join('\n'),
   setting: 'Bellevue Hospital, Psychiatric Division, the Isolation Ward, Manhattan. A night late in October 1932. You stand behind the caged admissions counter at the entrance of the ward, by the register and the hand bell. The ward is quiet.',
   knowledge: [
-    'Earlier this month three investigators came — a private detective (Callahan), a surveyor or engineer (Wright) and a doctor (Finch). The detective leaned on you, hard, and you let them into the Lower Block unaccompanied.',
+    'Earlier this month three investigators came — a private detective (Calhoun), a surveyor or engineer (Sahi) and a doctor (Finch). The detective leaned on you, hard, and you let them into the Lower Block unaccompanied.',
     'Cell 66 in the Lower Block is empty. Its patient — a deformed man brought down from Innsmouth, pulled out of a cellar there — was removed one night without authorization, or so the paperwork says. You will not discuss who took him.',
     'The party found something under a loose flagstone in Cell 66 (a parchment of moon phases). You know they took it. You are not upset.',
     'Robbie was an orderly. He took a turn — said the patient in 66 sang to him through the wall — and was confined in Cell 65 "for his own good". He wrote all over its wall in pencil. He is gone now, along with an iron lockbox from the stores. You speak of him fondly.',

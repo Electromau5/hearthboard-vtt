@@ -25,7 +25,7 @@ type Outfit = {
   hat?: { kind: 'fedora' | 'cap'; color: string };
 };
 
-/** Dressed from each dossier: Wright's surveyor tweed, Finch's mortuary black, Callahan's worn trench coat. */
+/** Dressed from each dossier: Sahi's surveyor tweed, Finch's mortuary black, Calhoun's worn trench coat. */
 const OUTFITS: Record<string, Outfit> = {
   'arthur-wright': { skin: '#d9a582', eyes: '#2a1d14', hair: '#8a8580', jacket: '#6b5034', trousers: '#4a4640', shoes: '#3a2414', hat: { kind: 'cap', color: '#5a4a38' } },
   'dr-alistair-finch': { skin: '#e2b896', eyes: '#1d1712', hair: '#1f1a16', jacket: '#1c1c20', trousers: '#18181b', shoes: '#0d0d0f' },

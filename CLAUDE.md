@@ -332,7 +332,7 @@ Runs the secure isolation ward with unsettling calm. Protective of patient recor
 Obed Marsh founded the Esoteric Order of Dagon in Innsmouth and brokered deals with the Deep Ones for fish and gold in exchange for interbreeding. The original Winthrop fortune was seeded through Marsh gold. The last surviving Marsh descendant's location is unknown — finding them is a critical intelligence objective.
 
 ### The Great Race of Yith
-An ancient race capable of displacing minds across time. Responsible for Thomas Callahan's amnesia via a mind-swap experiment during the 1918 Meuse-Argonne offensive. Their connection to the tomb is unconfirmed but suspected.
+An ancient race capable of displacing minds across time. Responsible for Thomas Calhoun's amnesia via a mind-swap experiment during the 1918 Meuse-Argonne offensive. Their connection to the tomb is unconfirmed but suspected.
 
 ---
 
@@ -446,8 +446,8 @@ A federal quarantine facility ostensibly maintained for disease control and insp
 
 ## Investigator Roster
 
-### Dr. Alistair Finch — The Disgraced Mortician
-**Age:** 42 | **Gender:** Male
+### Dr. Alissa Finch — The Disgraced Mortician
+**Age:** 42 | **Gender:** Female
 **Cover:** City Morgue Contract Embalmer at Arkham Sanitarium
 **Former Status:** Senior Chief of Surgery, Danvers State Hospital
 
@@ -470,9 +470,9 @@ A federal quarantine facility ostensibly maintained for disease control and insp
 - **Buffered Dissection** *(Buffered Sanity)* — When dissecting cosmic entities, sanity damage is banked into the Exposed Negative pool. Full psychic recoil triggers only when the surgical session concludes and specimens are fixed.
 
 **Narrative Hooks & Flaws:**
-- **Watched by the State** — Government agents monitor his movements. Rolling 95–00 on any clandestine check introduces a federal investigation agent or detective tail.
-- **Tomb Ambition** — To recover an uncorrupted, mummified pre-human entity (Elder Thing / Mi-Go tissue) to validate his life's work and master non-terrestrial physiology.
-- **Ancestral Secret** — Finch's bloodline was genetically altered by early necromantic experiments (connected to the salts of Charles Dexter Ward), explaining why preserved specimens never fully rot in his presence.
+- **Watched by the State** — Government agents monitor her movements. Rolling 95–00 on any clandestine check introduces a federal investigation agent or detective tail.
+- **Tomb Ambition** — To recover an uncorrupted, mummified pre-human entity (Elder Thing / Mi-Go tissue) to validate her life's work and master non-terrestrial physiology.
+- **Ancestral Secret** — Finch's bloodline was genetically altered by early necromantic experiments (connected to the salts of Charles Dexter Ward), explaining why preserved specimens never fully rot in her presence.
 
 **Equipment:** Master surgeon's dissection kit, heavy rubber apron, 3 glass jars of formaldehyde-saline concentrate, scalpel holster, mortuary bypass credentials.
 
@@ -540,7 +540,7 @@ A federal quarantine facility ostensibly maintained for disease control and insp
 
 ---
 
-### Thomas "Mack" Callahan — The Amnesiac Detective
+### Thomas "Mack" Calhoun — The Amnesiac Detective
 **Age:** 38 | **Gender:** Male
 **Cover:** Licensed Private Investigator (Boston/Arkham)
 **Former Status:** 26th Infantry Division, AEF (Service Record Redacted)
@@ -602,7 +602,7 @@ A federal quarantine facility ostensibly maintained for disease control and insp
 
 ---
 
-### Arthur Wright — The Non-Euclidean Architect
+### Arjun Sahi — The Non-Euclidean Architect
 **Age:** 45 | **Gender:** Male
 **Cover:** Independent Civil Surveyor & Demolition Consultant
 **Former Status:** Chief Urban Draftsman, Boston Metropolitan Commission
@@ -620,12 +620,12 @@ A federal quarantine facility ostensibly maintained for disease control and insp
 - History (Pre-Human Monuments) 60% — Identifying architectural epochs of Elder Things and pre-cataclysmic civilizations
 
 **Class Abilities:**
-- **Structural Resonance** *(Active)* — Arthur can analyze cyclopean stone masonry for 1 round to detect load-bearing keystones, hidden counterweight doors, or imminent ceiling collapses, granting +30% to party survival actions.
+- **Structural Resonance** *(Active)* — Arjun can analyze cyclopean stone masonry for 1 round to detect load-bearing keystones, hidden counterweight doors, or imminent ceiling collapses, granting +30% to party survival actions.
 - **Controlled Breacher** *(Utility)* — When using dynamite or heavy drills to open sealed vaults, reduces required explosive amounts by 50% and generates 0 excess Exposure Pool tokens.
 - **Spatial Orientation** *(Passive)* — Immune to disorientation and vertigo caused by non-Euclidean angles or shifting gravity wells.
 
 **Narrative Hooks & Flaws:**
-- **Euclidean Sickness** — Arthur suffers intense claustrophobia and psychological agitation in ordinary, symmetrical right-angled modern buildings (–10% to all mental checks unless working on cyclopean plans).
+- **Euclidean Sickness** — Arjun suffers intense claustrophobia and psychological agitation in ordinary, symmetrical right-angled modern buildings (–10% to all mental checks unless working on cyclopean plans).
 - **Tomb Ambition** — To be the first modern engineer to enter an intact pre-human megalithic vault, confirm non-Euclidean structural mechanics, and publish the definitive mathematical treatise.
 - **Ancestral Secret** — His lineage traces back to Sarnath and the builders of the sunken basalt spires of R'lyeh; he dreams in five-dimensional geometry.
 
@@ -711,10 +711,10 @@ Effects can be targeted at individual players or broadcast to all. Players must 
 ## Mythos Entities & Lore Connections
 
 ### Elder Things
-Pre-human entities whose anatomical structure is the subject of Dr. Finch's obsession. Bipedal, barrel-bodied, with radial symmetry. Created life on Earth as a biological experiment. Their ruins form the basis of the cyclopean architecture Arthur Wright obsessively studies. At least one intact specimen is believed to be within the sealed tomb.
+Pre-human entities whose anatomical structure is the subject of Dr. Finch's obsession. Bipedal, barrel-bodied, with radial symmetry. Created life on Earth as a biological experiment. Their ruins form the basis of the cyclopean architecture Arjun Sahi obsessively studies. At least one intact specimen is believed to be within the sealed tomb.
 
 ### The Great Race of Yith
-A species that conquered time by projecting their minds into the bodies of other beings across eras. Thomas Callahan's amnesia stems from a Yith mind-swap — his original consciousness was displaced during the 1918 Meuse-Argonne offensive while his body was occupied. A Yith fragment remains in Callahan's neural architecture, surfacing as combat flashes and alien weapon intuition.
+A species that conquered time by projecting their minds into the bodies of other beings across eras. Thomas Calhoun's amnesia stems from a Yith mind-swap — his original consciousness was displaced during the 1918 Meuse-Argonne offensive while his body was occupied. A Yith fragment remains in Calhoun's neural architecture, surfacing as combat flashes and alien weapon intuition.
 
 ### Deep Ones / The Esoteric Order of Dagon
 Aquatic humanoid entities that interbreed with coastal human populations in exchange for gold and fish. The Marsh family of Innsmouth brokered this arrangement under Obed Marsh. The Winthrop fortune was built on Dagon gold. Percival's bloodline carries hybrid markers.
@@ -726,7 +726,7 @@ Subterranean humanoid scavengers with a strong connection to graveyards, tunnels
 The Gate and the Key — an Outer God that exists simultaneously across all of time and space. Silas Vance's ancestral hypnotic mirror patterns correspond to Yog-Sothoth summoning lattices. The Wilbur Whatley incident at Miskatonic was a Yog-Sothoth summoning attempt; Dr. Armitage's *Necronomicon* contains the counterspell used.
 
 ### R'lyeh
-The sunken city of Cthulhu, dormant beneath the Pacific. Arthur Wright's ancestral bloodline traces to its original architects. His five-dimensional dreaming and immunity to non-Euclidean spatial distortion stem from this lineage. Julian Sterling's rejected film scripts contain phonetically accurate R'lyehian architectural notation — written in a fugue state he cannot explain.
+The sunken city of Cthulhu, dormant beneath the Pacific. Arjun Sahi's ancestral bloodline traces to its original architects. His five-dimensional dreaming and immunity to non-Euclidean spatial distortion stem from this lineage. Julian Sterling's rejected film scripts contain phonetically accurate R'lyehian architectural notation — written in a fugue state he cannot explain.
 
 ---
 
