@@ -18,7 +18,10 @@ import { buildSanctums } from './sanctums';
  * The foot of that ladder is walled off from the god by later brickwork, with
  * an iron-bound door through it, padlocked on the ladder's side. Beyond the
  * door, on the god's side, passages climb out of the brine to two inner
- * sanctums — Shub-Niggurath's and Bokrug's (sanctums.ts).
+ * sanctums — Shub-Niggurath's and Bokrug's (sanctums.ts). The god turns on
+ * his plinth to face you, but only while you cannot see him: in view he holds
+ * still, whatever you do; look away, or put your torch out, and when you look
+ * again he is facing you.
  *
  * Back under the house, the main's near wall opens on older, lower tunnels:
  * a west and an east branch joined by a cross tunnel beneath the house's
@@ -48,8 +51,11 @@ export type Sewer = {
   door: ShrineDoor;
   /** The outfall grate, raised like a portcullis (0 down … 1 up); `blocking` stands among the walls while it is down. */
   grate: { blocking: THREE.Mesh[]; set: (k: number) => void; dispose: () => void };
-  /** `eye` is the camera, for whatever down here watches it. */
-  update: (dt: number, eye?: THREE.Vector3) => void;
+  /**
+   * `eye` is the camera, for whatever down here watches it; `view` is whether
+   * its torch (or Wood's lamp) is lit, and what to frustum-test, for Dagon.
+   */
+  update: (dt: number, eye?: THREE.Vector3, view?: { camera: THREE.Camera; lit: boolean }) => void;
   dispose: () => void;
 };
 
@@ -106,6 +112,8 @@ const RX0 = -4.6, RX1 = B0 - WALL;   // its west and east walls
 const RD0 = SD - SHAFT, RD1 = SD + 4.5; // its near wall (the ladder's) and far wall
 const BRINE = DEEP + 0.5;            // the flood in it, knee-deep
 const IDOL = [-3.5, SD + 2.0] as const; // where Dagon stands, facing east to the ladder
+/** The turn that sets Dagon's face square to +X: the model's body faces -Z, and his head is cocked a little to his right. */
+const DAGON_FACE = -1.25;
 // The brick wall across the shrine, between the ladder's foot and the god, and its door.
 const PW0 = 2.9, PW1 = 3.2;          // its west and east faces
 const DD0 = IDOL[1] - 0.5, DD1 = IDOL[1] + 0.5; // the doorway, on the aisle to the altar
@@ -630,6 +638,8 @@ export function createSewer(at: THREE.Vector3): Sewer {
   // The god and the bones come from models of their own, loaded behind the rest.
   let gone = false;
   const loaded: THREE.Object3D[] = [];
+  let dagon: THREE.Object3D | null = null;
+  const dagonBounds = new THREE.Sphere();
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   loader.load('/props/dagon-statue.glb', (gltf) => {
@@ -646,10 +656,16 @@ export function createSewer(at: THREE.Vector3): Sewer {
       mesh.castShadow = mesh.receiveShadow = true;
     });
     idol.scale.setScalar(1.3);
-    // The model faces +X: east, down the chamber to the foot of the ladder.
+    // East, down the chamber to the foot of the ladder, until he has someone to face.
+    idol.rotation.y = DAGON_FACE;
     idol.position.copy(P(IDOL[0], DEEP + 0.7, IDOL[1]));
     group.add(idol);
     loaded.push(idol);
+    // Round the vertical through his feet, so the sphere holds him at any turn.
+    const size = new THREE.Box3().setFromObject(idol).getSize(new THREE.Vector3());
+    dagonBounds.center.copy(idol.position).setY(idol.position.y + size.y / 2);
+    dagonBounds.radius = Math.hypot(size.x, size.y, size.z) / 2;
+    dagon = idol;
   });
   loader.load('/props/bones.glb', (gltf) => {
     if (gone) return;
@@ -670,6 +686,33 @@ export function createSewer(at: THREE.Vector3): Sewer {
 
   sanctums.load(loader, (o) => loaded.push(o), () => gone);
 
+  // Whether the camera can see Dagon: lit, some part of him in frame, and a
+  // clear line to his feet, chest, head or either shoulder past rock and the
+  // shrine's door (the bones and the brine hide nothing).
+  const frustum = new THREE.Frustum();
+  const viewProj = new THREE.Matrix4();
+  const sight = new THREE.Raycaster();
+  const toward = new THREE.Vector3(), aside = new THREE.Vector3(), spot = new THREE.Vector3();
+  const occluders: THREE.Object3D[] = [];
+  const seesDagon = (camera: THREE.Camera, eye: THREE.Vector3, lit: boolean) => {
+    if (!lit || !dagon) return false;
+    camera.updateMatrixWorld();
+    frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    if (!frustum.intersectsSphere(dagonBounds)) return false;
+    const { center, radius } = dagonBounds;
+    aside.set(center.z - eye.z, 0, eye.x - center.x).normalize().multiplyScalar(radius * 0.35);
+    for (const [up, side] of [[0, 0], [-0.6, 0], [0.6, 0], [0.25, 1], [0.25, -1]]) {
+      spot.copy(center).addScaledVector(aside, side);
+      spot.y += up * radius * 0.7;
+      toward.subVectors(spot, eye);
+      const far = toward.length();
+      sight.set(eye, toward.divideScalar(far));
+      sight.far = far;
+      if (!sight.intersectObjects(occluders, false).length) return true;
+    }
+    return false;
+  };
+
   // Merge each material's pieces into one mesh: one draw call, and one object
   // for every collision ray to test.
   for (const [mat, list] of bins) {
@@ -681,6 +724,7 @@ export function createSewer(at: THREE.Vector3): Sewer {
     group.add(mesh);
     solids.push(mesh);
   }
+  occluders.push(...solids.filter(o => o.visible), ...door.door.blocking);
 
   return {
     group,
@@ -697,9 +741,13 @@ export function createSewer(at: THREE.Vector3): Sewer {
       },
       dispose() {},
     },
-    update(dt, eye) {
+    update(dt, eye, view) {
       swell.value += dt;
       sanctums.update(dt, eye ?? null);
+      // Dagon turns to face you whenever he is out of your sight, so that he is always facing you when you look.
+      if (dagon && eye && view && !seesDagon(view.camera, eye, view.lit)) {
+        dagon.rotation.y = Math.atan2(-(eye.z - dagon.position.z), eye.x - dagon.position.x) + DAGON_FACE;
+      }
       // The water creeps east toward the grate.
       waterTex.offset.x = (waterTex.offset.x - dt * 0.03) % 1;
     },

@@ -2564,7 +2564,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           else for (const b of d.model.blocking) walls.splice(walls.indexOf(b), 1);
         }
       }
-      sewer?.update(dt, camera.position);
+      sewer?.update(dt, camera.position, { camera, lit: torch.intensity > 0 || (woods?.power ?? 0) > 0.05 });
       // The Deep One: slide in behind the hole from one side, stare, withdraw —
       // unless the door it watches through stands open, and there is nothing there.
       if (peeper && doors.some(d => d.hidesPeeper && d.k > 0)) {
