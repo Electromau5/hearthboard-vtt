@@ -9,6 +9,7 @@
  */
 
 import type { Examinable, GazeHazard, RadioSet, WalkthroughLevel } from './walkthrough';
+import { BOSTON_BAND } from './radio-stations';
 
 const EXAMINABLES: Record<string, Examinable> = {
   // Deck
@@ -100,9 +101,12 @@ const GAZE_HAZARDS: Record<string, GazeHazard> = {
   sigil: { angleDeg: 3, range: 4, maxBlurPx: 7, onsetSec: 3, recoverSec: 1 },
 };
 
-/** The wheelhouse wireless still picks up a news bulletin (station cue, bulletin, cue). */
+/** The wheelhouse wireless still picks up a news bulletin (station cue, bulletin, cue), and the rest of Boston's band. */
 const RADIOS: Record<string, RadioSet> = {
-  wireless: { src: '/news-bulletin-1.mp3', volume: 0.9, refDistance: 1.5, loop: false },
+  wireless: {
+    src: '/news-bulletin-1.mp3', volume: 0.9, refDistance: 1.5, loop: false,
+    dial: { at: 590, name: 'WEEI Boston · news', stations: BOSTON_BAND },
+  },
 };
 
 export const VESSEL_LEVEL: WalkthroughLevel = {

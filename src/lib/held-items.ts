@@ -14,6 +14,7 @@
  *  - "Renaissance Rifle" by denis_cliofas (sketchfab.com/denis_cliofas), CC-BY-4.0
  *  - "Tommy Gun" by lokeig (sketchfab.com/lokeig), CC-BY-NC-4.0 (non-commercial)
  *  - "AK74U | FREE ANIMATION." by BURNER (sketchfab.com/Alexander_Ovelar), CC-BY-4.0
+ *  - "SNIPER FPS ANIMATION" by BURNER (sketchfab.com/Alexander_Ovelar), CC-BY-4.0
  * Also in public/props/CREDITS.txt.
  */
 
@@ -106,8 +107,12 @@ export type ArmsRig = {
   /** The hands' field of view (degrees) at the hip and down the sights. */
   fov: number;
   aimFov: number;
-  /** Clip names in the glb. */
-  clips: { draw: string; idle: string; shoot: string; reload: string; reloadEmpty: string; inspect: string; holster: string };
+  /**
+   * Clip names in the glb; or, for a rig whose every move was baked one after
+   * another into a single clip (`timeline`), each one's [start, end] in it, seconds.
+   */
+  clips: Record<'draw' | 'idle' | 'shoot' | 'reload' | 'reloadEmpty' | 'inspect' | 'holster', string | [number, number]>;
+  timeline?: string;
   /** The bone the gun hangs from; the magazine in it, and the fresh one a reload brings. */
   gunBone: string;
   magBone: string;
@@ -126,6 +131,17 @@ export type ArmsRig = {
   /** Left off the copy on a bench: the arms' meshes (by material name), and bones folded to nothing (the spare magazine). */
   benchHide: string[];
   benchCollapse: string[];
+  /** What a shot sounds like; a rifle's crack (`shot`) if not given. */
+  report?: GunSound;
+  /**
+   * Worked by hand between shots: one shot to a pull of the trigger, the
+   * shoot clip running on through the bolt. `lowerAt` is when in it the hand
+   * leaves the grip for the bolt (the sights come down until it is done),
+   * `ejectAt` when the case flies, and `cues` the bolt's sounds.
+   */
+  bolt?: { lowerAt: number; ejectAt: number; cues: [number, GunSound][] };
+  /** A telescopic sight: down it, the level's field of view (degrees) — the hands give way to the reticle. */
+  scope?: { fov: number };
 };
 
 type Pose = Pick<HeldModel, 'pos' | 'rot'>;
@@ -162,6 +178,52 @@ const AK_ARMS: ArmsRig = {
   reloadEmptyCues: [[0.3, 'latch'], [1.2, 'scrape'], [1.28, 'clack'], [2.22, 'boltBack'], [2.5, 'boltHome']],
   benchHide: ['Ch08_body', 'Ch08_body1', 'Null.001'],
   benchCollapse: ['carg2_048'],
+};
+
+/**
+ * The sniper's arms. Every move is one 27 s take ("Scene"), cut here into
+ * clips at the still frames between them; bones as made: BODY_043 the gun,
+ * MAG_044 the box magazine (the same one comes out and goes back in),
+ * CHAMBER_047 the bolt. Timings measured off those bones. Sketchfab's ×3.08
+ * display scale is taken off in the file (metres as made).
+ */
+const SNIPER_ARMS: ArmsRig = {
+  eye: [0, 0.086, 0.08],
+  // Behind the eyepiece, on the scope's axis.
+  aimEye: [0.0675, 0.0426, -0.07],
+  fov: 64,
+  aimFov: 40,
+  timeline: 'Scene',
+  clips: {
+    draw: [0, 1.1],
+    // There is no breathing clip: the rest pose between moves, held.
+    idle: [1.03, 1.17],
+    // Turned over to look at, the bolt worked, and back.
+    inspect: [1.1, 10.8],
+    // A round still chambered: the magazine changed, the bolt left alone.
+    reload: [10.8, 15.07],
+    // The kick, then the bolt: up, back, home, down.
+    shoot: [15.07, 18.27],
+    // Bolt open, the empty magazine out, a full one in, the bolt run home.
+    reloadEmpty: [18.27, 26.57],
+    holster: [26.57, 27.17],
+  },
+  gunBone: 'BODY_043',
+  magBone: 'MAG_044',
+  spareBone: 'MAG_044',
+  muzzle: [0.0675, 0.0013, -0.734],
+  eject: [0.08, 0.006, -0.18],
+  shell: [0.006, 0.051],       // 7.62 × 51
+  rounds: 5,
+  // The bolt sets the pace (see `bolt`): one shot a cycle.
+  rpm: 18,
+  reloadCues: [[0.57, 'latch'], [2.1, 'scrape'], [2.65, 'clack']],
+  reloadEmptyCues: [[1.03, 'boltBack'], [3.0, 'latch'], [4.73, 'scrape'], [5.6, 'clack'], [7.43, 'boltHome']],
+  benchHide: ['TEXTURA'],
+  benchCollapse: [],
+  report: 'rifle',
+  bolt: { lowerAt: 0.9, ejectAt: 2.05, cues: [[2.0, 'boltBack'], [2.2, 'boltHome']] },
+  scope: { fov: 12 },
 };
 
 export const HELD_MODELS = {
@@ -231,6 +293,12 @@ export const HELD_MODELS = {
     model: '/props/ak74u.glb', orient: [0, 0, 0], length: 0.66,
     gripAt: [0.5, 0.4, 0.6], ...SMG_POSE, hand: false,
     arms: AK_ARMS,
+  },
+  // A scoped bolt-action rifle with its own arms and clips; muzzle along -Z.
+  sniper: {
+    model: '/props/sniper.glb', orient: [0, 0, 0], length: 1.1,
+    gripAt: [0.5, 0.28, 0.8], ...RIFLE_POSE, hand: false,
+    arms: SNIPER_ARMS,
   },
 } satisfies Record<string, HeldModel>;
 

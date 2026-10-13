@@ -63,6 +63,7 @@ src/
       sanctums.ts                 # Inner sanctums off Dagon's shrine (beyond its padlocked door): Shub-Niggurath's (north) and Bokrug's (south) — painted sigils, ritual circles, black candles, skull rings; Bokrug's head (split off at the neck) turns to watch whoever is in his room
       hunter.ts                   # level.hunter — a Deep One that roams on a baked grid (public/*-nav.json), sees/hears and attacks; one client leads it for everyone (presence.ts leadsHunter), blows and the shots that strike it sent as Liveblocks events; a shot staggers and slows it, three put it on its knees for 2 min (kneel/flinch posed over the clip — the model only has Walk and Attack); `cage` pens it behind a gamelord door (the house's sewer grate, `sewer.grate`) where it only stares — no chase, no music — until the door opens
       level-door.ts               # Doors gamelord opens (level.doors) — cut out of the merged architecture at load, swing on a hinge
+      radio-tuner.ts              # Radios and gramophones (level.radios): a set with a `dial` tunes across the AM band (wheel or , / .) — stations fade through static, loop on broadcast time; local to each player
       (dream)                     # level.dream — Godot dream shown over a bed once asleep; the Archive bunks' ocean is public/godot/dream.html (my-summer-game web/dream_ocean.gd, tools/export_dream.sh)
     characters/
       page.tsx                    # Investigator dossier grid — all 7 characters
@@ -125,6 +126,7 @@ src/
     abattoir.ts                   # ABATTOIR_LEVEL — the Underworld Abattoir & Speakeasy (Providence): butcher's shop front, icebox false shelf into the speakeasy, Banks's office; slaughterhouse down the back stairs (killing floor, pens, interrogation, rendering, rum tunnel, counting room, cold locker). No NPCs yet — Npc_* markers only
     downtown.ts                   # DOWNTOWN_LEVEL — the default map's Downtown street (Sketchfab asset, wrapped in my-summer-game)
     marsh-refinery.ts             # REFINERY_LEVEL — the Innsmouth map's Marsh Refinery: a furnace hall (CC-BY Sketchfab shell, credit in public/CREDITS.txt)
+    radio-stations.ts             # BOSTON_BAND — what a tunable wireless picks up besides its own station (590 WEEI news, 990 WBZA symphony, 1230 WNAC dance band)
     session-recaps.ts             # Session cliff notes (from the GM's Drive recaps) — typed cards on the Archive's case board
     innsmouth-scenes.ts           # INNSMOUTH_SCENES — Innsmouth map pins, shared by the board and the Archive's wall chart
     vtt-types.ts                  # Shared TypeScript types

@@ -27,6 +27,7 @@ import { RECAP_ACT, SESSION_RECAPS } from './session-recaps';
 import { INNSMOUTH_SCENES } from './innsmouth-scenes';
 import { fetchBoard, fileNote, NOTE_SIZE, type BoardItem, type BoardState } from './case-board';
 import type { ArchiveDoc, Bed, Collection, Examinable, GazeHazard, LightSwitch, MapPin, PickupTable, PinNote, RadioSet, Typewriter, UvStain, WalkthroughLevel } from './walkthrough';
+import { BOSTON_BAND } from './radio-stations';
 import { HELD_MODELS } from './held-items';
 import { RLYEH_MODEL } from './rlyeh-model';
 
@@ -724,9 +725,12 @@ const GAZE_HAZARDS: Record<string, GazeHazard> = {
   rlyeh_model: { angleDeg: 5, range: 2.5, maxBlurPx: 2.5, onsetSec: 8, recoverSec: 2 },
 };
 
-/** The wireless carries Sgt. Miles's message. */
+/** The wireless carries Sgt. Miles's message, at the top of the band; turn the dial and it finds Boston. */
 const RADIOS: Record<string, RadioSet> = {
-  wireless: { src: '/sgt-miles-1.mp3', volume: 0.9, refDistance: 1.6, loop: false },
+  wireless: {
+    src: '/sgt-miles-1.mp3', volume: 0.9, refDistance: 1.6, loop: false,
+    dial: { at: 1500, name: 'Miles · logistics', stations: BOSTON_BAND },
+  },
 };
 
 /**
@@ -741,7 +745,7 @@ const BEDS: Record<string, Bed> = {
 };
 
 /**
- * The armory workbench: five guns to pick up and carry (E), and put back (E on
+ * The armory workbench: six guns to pick up and carry (E), and put back (E on
  * the empty place). They replace the stand-in rifle the level was built with.
  * The bench's top is 1.2 m (X) by 2.4 m (Z); the vice is at its north end and
  * the brass and ammunition box at its south end, so the long guns lie along it
@@ -756,6 +760,7 @@ const WORKBENCH: PickupTable = {
     { id: 'm1911', title: 'Colt .45', view: HELD_MODELS.coltM1911, at: [0.02, 0.05], turnDeg: 90 },
     { id: 'revolver', title: 'revolver', view: HELD_MODELS.detectiveSpecial, at: [0.02, 0.42], turnDeg: 80 },
     { id: 'ak74u', title: 'AK-74u', view: HELD_MODELS.ak74u, at: [-0.38, -0.8], turnDeg: 0 },
+    { id: 'sniper', title: 'sniper rifle', view: HELD_MODELS.sniper, at: [0.13, 0.7], turnDeg: 0 },
   ],
 };
 

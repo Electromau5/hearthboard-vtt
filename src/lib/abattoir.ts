@@ -13,9 +13,10 @@
  * liquor cellar on the old rum tunnel, a counting room and the cold locker.
  *
  * Set after session 2: the party has drunk at this bar and delivered Miles's
- * envelope to Banks in his office. Nobody is here yet — the model marks where
- * people will stand (`Npc_*`: Banks at his desk, the barman, the butcher, the
- * dealer, a slaughterman) for when they are added. As in the other levels the
+ * envelope to Banks in his office. The only soul here is the pianist — Leroy
+ * Pratt, by the bill on the stage wall — playing on at the upright; the model
+ * marks where the others will stand (`Npc_*`: Banks at his desk, the barman,
+ * the butcher, the dealer, a slaughterman) for when they are added. As in the other levels the
  * text is physical description for the GM to build clues on; the stains, the
  * Newburyport crate and the body in the locker go beyond what play has
  * established, and are the GM's to keep or cut.
@@ -25,6 +26,8 @@ import type { Examinable, RadioSet, UvStain, WalkthroughLevel } from './walkthro
 
 /** The slaughterhouse floor, below the street. */
 const BY = -3.4;
+/** The bandstand's height above the bar-room floor (build_abattoir_cli.gd). */
+const STAGE_H = 0.28;
 
 const EXAMINABLES: Record<string, Examinable> = {
   // ── The shop ─────────────────────────────────────────────────────
@@ -294,10 +297,17 @@ export const ABATTOIR_LEVEL: WalkthroughLevel = {
   errorText: 'The abattoir could not be loaded.',
   enterText: 'Click to step inside',
   leaveLabel: 'Leave by the shop',
-  credit: '"Antique Iron Safe" by pixelgrapher — CC BY 4.0',
+  credit: '"Antique Iron Safe" by pixelgrapher · "Dapper in a Black-Tie Tuxedo" by restore50 — CC BY 4.0',
   examinables: EXAMINABLES,
   radios: RADIOS,
   uvStains: UV_STAINS,
+  // The pianist on the stool at the upright, facing the keys (−X): sized down a
+  // little (1.73 m) so his fingers come down on the keys from the stool's height.
+  // He plays "Late-Night Blues" over and over, heard from the piano in front of him.
+  performers: [{
+    model: '/avatars/pianist.glb', clip: 'Play', at: [-10.6, -5.15], y: STAGE_H, turnDeg: -90, scale: 0.95,
+    sound: { src: '/late-night-blues.mp3', volume: 0.8, refDistance: 2.5, at: [0, 1.1, 0.8] },
+  }],
   // In the corner of Banks's office, where he can watch it from his desk.
   placements: [{ asset: 'iron-safe', id: 'iron_safe', at: [11.55, -3.2], turnDeg: -90 }],
   // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.

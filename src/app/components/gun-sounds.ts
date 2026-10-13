@@ -2,14 +2,14 @@
  * The noises a gun makes in the hands: the reloads in held-viewmodel.ts, and
  * a shot or a dry click from a gun that fires (`fire`).
  * All made with Web Audio except two recordings: the wheel-lock's spanning
- * ratchet (public/sounds/ratchet.mp3, CC0) and the revolver's report
- * (public/sounds/revolver-shot.mp3, a real handgun shot, CC BY-SA 4.0 — see
+ * ratchet (public/sounds/ratchet.mp3, CC0) and the revolver's report, slowed
+ * for the sniper's (public/sounds/revolver-shot.mp3, a real handgun shot, CC BY-SA 4.0 — see
  * public/props/CREDITS.txt). Each reload plays through its own bus, so putting
  * the gun down mid-reload silences what is still to come.
  */
 
 export type GunSound = 'latch' | 'scrape' | 'clack' | 'boltBack' | 'boltHome' | 'pour' | 'rod' | 'thunk' | 'ratchet' | 'click' | 'shot' | 'dry' | 'tink'
-  | 'revolver' | 'crane' | 'eject' | 'round' | 'index' | 'close' | 'spin';
+  | 'revolver' | 'rifle' | 'crane' | 'eject' | 'round' | 'index' | 'close' | 'spin';
 
 export type GunSounds = {
   /** Plays `cues` (seconds after now) on a fresh bus; call the returned function to cut them off. */
@@ -118,6 +118,14 @@ export function createGunSounds(ctx: AudioContext, out: AudioNode): GunSounds {
       playRecording(report, bus, at, 0.95 + Math.random() * 0.08, 1.3);
       tone(bus, at, 85, 0.6, 0.2, 'triangle');
       burst(bus, at + 0.04, 1100, 0.5, 0.14, 0.6, 450);
+    },
+    // A full-power rifle round: the recording slowed and deepened, a heavier
+    // thump under it, and the room ringing on for longer.
+    rifle: (bus, at) => {
+      playRecording(report, bus, at, 0.72 + Math.random() * 0.06, 1.5);
+      tone(bus, at, 70, 0.9, 0.3, 'triangle');
+      burst(bus, at, 2600, 0.7, 1.0, 0.06);
+      burst(bus, at + 0.05, 900, 0.5, 0.2, 0.9, 380);
     },
     // A Colt's latch drawn back and the cylinder swinging out on its crane.
     crane: (bus, at) => { burst(bus, at, 2600, 4, 0.3, 0.05); burst(bus, at + 0.03, 1500, 2, 0.12, 0.14, 2400); tone(bus, at + 0.12, 2100, 0.05, 0.06); },

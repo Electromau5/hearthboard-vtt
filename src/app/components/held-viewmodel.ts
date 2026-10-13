@@ -20,12 +20,40 @@ import { createRevolver, type Revolver } from './revolver';
  * A gun made with its own arms and clips (`HeldModel.arms`, the AK-74u) is
  * played rather than posed: drawn, idled, fired, reloaded, inspected and
  * holstered by its clips, seen from the eye it was made for, which slides to
- * the sights while aiming. The revolver (`HeldModel.revolver`) borrows those
+ * the sights while aiming. A rig baked as one long take (the sniper's) is
+ * cut into its clips here (`ArmsRig.timeline`); a bolt-action one is worked
+ * between shots, and a scoped one hands over to the reticle down the sights
+ * (`scoped`). The revolver (`HeldModel.revolver`) borrows those
  * arms but poses them itself (revolver.ts).
  */
 
 /** Seconds to bring an item up, or put it away. */
 const DRAW_SEC = 0.32;
+
+/** How far into aiming a scope's reticle takes over from the hands (see WalkthroughModal). */
+export const SCOPE_IN = 0.9;
+
+/**
+ * One move cut out of a take baked as a single clip, [from, to] seconds: every
+ * track sampled at 60 fps across it, so it starts and ends exactly on the
+ * pose at those times even where the take's keys are sparse.
+ */
+function cutClip(take: THREE.AnimationClip, name: string, [from, to]: [number, number]): THREE.AnimationClip {
+  const fps = 60;
+  const n = Math.max(2, Math.round((to - from) * fps) + 1);
+  const times = new Float32Array(n);
+  for (let i = 0; i < n; i++) times[i] = (i / (n - 1)) * (to - from);
+  const tracks = take.tracks.map(track => {
+    // Each track's own interpolant: slerped for quaternions, linear otherwise.
+    const interp = (track as unknown as { createInterpolant: () => THREE.Interpolant }).createInterpolant();
+    const size = track.getValueSize();
+    const values = new Float32Array(n * size);
+    for (let i = 0; i < n; i++) values.set(interp.evaluate(from + times[i]), i * size);
+    const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack;
+    return new Track(track.name, times, values);
+  });
+  return new THREE.AnimationClip(name, to - from, tracks);
+}
 
 /**
  * A model as made, turned and scaled to `view` (see HeldModel): its barrel
@@ -90,8 +118,8 @@ export type HeldViewmodel = {
   update: (dt: number, look: [number, number], pace: number) => void;
   /** Reloads what is in hand, if it can be (see reloads.ts) and is not already; false if not. */
   reload: (sounds: GunSounds | null) => boolean;
-  /** A gun with arms: the trigger held or let go, aiming down the sights or not. */
-  setTrigger: (down: boolean) => void;
+  /** A gun with arms: the trigger held or let go (and what a bolt worked after a shot sounds through), aiming down the sights or not. */
+  setTrigger: (down: boolean, sounds?: GunSounds | null) => void;
   setAim: (down: boolean) => void;
   /** A gun with arms: turn it over to look at it (the revolver: open it and spin it); false if busy. */
   inspect: (sounds?: GunSounds | null) => boolean;
@@ -99,6 +127,8 @@ export type HeldViewmodel = {
   takeShots: () => { shots: number; dry: number; cases: SpentCase[]; report: GunSound };
   /** How far into aiming down the sights, 0..1. */
   readonly aim: number;
+  /** Down a telescopic sight: how far (0..1), and the level's field of view through it. */
+  readonly scoped: { k: number; fov: number } | null;
   /** Rounds left, for a gun with arms in hand; null otherwise. */
   readonly ammo: { rounds: number; max: number } | null;
   /** A reload is under way. */
@@ -171,6 +201,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   let report: GunSound = 'shot';
   let revFlash = 0;
   let trigger = false;
+  let triggerSounds: GunSounds | null = null;
   let aiming = false;
   let shotsOut = 0;
   let dryOut = 0;
@@ -188,8 +219,10 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
     left: number;
     rounds: number;
     cooldown: number;
-    /** A dry click per press of the trigger, not per frame. */
+    /** A dry click per press of the trigger, not per frame; a bolt-action's shot too. */
     clicked: boolean;
+    /** Seconds until a bolt throws the spent case; null when there is none to throw. */
+    ejectIn: number | null;
     aim: number;
     flash: THREE.Sprite;
     flashFor: number;
@@ -249,8 +282,10 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       }
     }
     const mixer = new THREE.AnimationMixer(model);
+    const take = rig.timeline ? THREE.AnimationClip.findByName(src.animations, rig.timeline) : null;
+    if (rig.timeline && !take) throw new Error(`${rig.rig ?? view.model} has no clip ${rig.timeline}`);
     const acts = Object.fromEntries(Object.entries(rig.clips).map(([k, name]) => {
-      const clip = THREE.AnimationClip.findByName(src.animations, name);
+      const clip = typeof name === 'string' ? THREE.AnimationClip.findByName(src.animations, name) : take && cutClip(take, k, name);
       if (!clip) throw new Error(`${rig.rig ?? view.model} has no clip ${name}`);
       const act = mixer.clipAction(clip);
       if (k !== 'idle') { act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true; }
@@ -272,7 +307,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       portDir.set(1, 0.55, 0.25).transformDirection(toBone);
     }
     model.traverse(o => { o.frustumCulled = false; });
-    armsBy.set(item, { rig, model, mixer, acts, current: null, busy: null, left: 0, rounds: rig.rounds, cooldown: 0, clicked: false, aim: 0, flash, flashFor: 0, hush: null, bone, port, portDir });
+    armsBy.set(item, { rig, model, mixer, acts, current: null, busy: null, left: 0, rounds: rig.rounds, cooldown: 0, clicked: false, ejectIn: null, aim: 0, flash, flashFor: 0, hush: null, bone, port, portDir });
     return item;
   };
 
@@ -291,6 +326,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
     st.mixer.stopAllAction();
     st.current = null;
     st.busy = null;
+    st.ejectIn = null;
     st.flash.visible = false;
   };
 
@@ -417,6 +453,9 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   return {
     render(r) {
       if (raise <= 0.001 || !shownItem) return;
+      // Down a scope there is only the reticle.
+      const st = armsNow();
+      if (st?.rig.scope && st.aim > SCOPE_IN) return;
       r.render(scene, camera);
     },
     setTorch(k) {
@@ -474,21 +513,34 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
         shownItem.quaternion.identity();
         st.cooldown -= dt;
         const ready = shown === wanted && raise >= 1;
+        const bolt = st.rig.bolt;
+        const throwCase = () => {
+          if (!st.bone || casesOut.length >= 8) return;
+          casesOut.push({
+            at: st.bone.localToWorld(st.port.clone()),
+            dir: st.portDir.clone().transformDirection(st.bone.matrixWorld),
+            shell: st.rig.shell,
+          });
+        };
         // Fire while the trigger is held: the shot cuts through an inspection, not a draw or a reload.
-        if (trigger && ready && (!st.busy || st.busy === 'shoot' || st.busy === 'inspect')) {
-          if (st.rounds > 0 && st.cooldown <= 0) {
+        // A bolt-action fires once a pull, and not again until the bolt is home.
+        if (trigger && ready && (!st.busy || (st.busy === 'shoot' && !bolt) || st.busy === 'inspect')) {
+          if (st.rounds > 0 && st.cooldown <= 0 && !(bolt && st.clicked)) {
             st.rounds--;
             st.cooldown = 60 / st.rig.rpm;
             play(st, 'shoot', 0.02, 'shoot');
             st.flashFor = 0.05;
             st.flash.material.rotation = Math.random() * Math.PI;
             shotsOut++;
-            if (st.bone && casesOut.length < 8) {
-              casesOut.push({
-                at: st.bone.localToWorld(st.port.clone()),
-                dir: st.portDir.clone().transformDirection(st.bone.matrixWorld),
-                shell: st.rig.shell,
-              });
+            report = st.rig.report ?? 'shot';
+            if (bolt) {
+              // The case stays in the chamber until the bolt draws it out.
+              st.clicked = true;
+              st.ejectIn = bolt.ejectAt;
+              st.hush?.();
+              st.hush = triggerSounds ? triggerSounds.play(bolt.cues) : null;
+            } else {
+              throwCase();
             }
           } else if (st.rounds === 0 && !st.clicked) {
             st.clicked = true;
@@ -496,12 +548,16 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
           }
         }
         if (!trigger) st.clicked = false;
+        if (st.ejectIn !== null && (st.ejectIn -= dt) <= 0) { st.ejectIn = null; throwCase(); }
         // A clip done goes back to idle; a reload done fills the magazine.
         if (st.busy && (st.left -= dt) <= 0.12 && st.busy !== 'holster') {
-          if (st.busy === 'reload') { st.rounds = st.rig.rounds; st.hush = null; }
+          if (st.busy === 'reload' || st.busy === 'shoot') st.hush = null;
+          if (st.busy === 'reload') st.rounds = st.rig.rounds;
           play(st, 'idle', 0.18, null);
         }
-        st.aim = THREE.MathUtils.damp(st.aim, aiming && ready && (!st.busy || st.busy === 'shoot') ? 1 : 0, 14, dt);
+        // Down the sights at rest or firing; a bolt-action comes off them while the bolt is worked.
+        const boltWork = !!bolt && st.busy === 'shoot' && st.acts.shoot.time >= bolt.lowerAt;
+        st.aim = THREE.MathUtils.damp(st.aim, aiming && ready && (!st.busy || st.busy === 'shoot') && !boltWork ? 1 : 0, 14, dt);
         const [hx, hy, hz] = st.rig.eye;
         const [ax, ay, az] = st.rig.aimEye;
         st.model.position.set(-(hx + (ax - hx) * st.aim), -(hy + (ay - hy) * st.aim), -(hz + (az - hz) * st.aim));
@@ -550,7 +606,8 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       if (rv) return rv.reload(sounds);
       const st = armsNow();
       if (st) {
-        if ((st.busy && st.busy !== 'shoot' && st.busy !== 'inspect') || st.rounds === st.rig.rounds) return false;
+        // Not while a bolt is being worked: it finishes first.
+        if ((st.busy && st.busy !== 'shoot' && st.busy !== 'inspect') || (st.busy === 'shoot' && st.rig.bolt) || st.rounds === st.rig.rounds) return false;
         const empty = st.rounds === 0;
         play(st, empty ? 'reloadEmpty' : 'reload', 0.15, 'reload');
         st.hush = sounds ? sounds.play(empty ? st.rig.reloadEmptyCues : st.rig.reloadCues) : null;
@@ -562,7 +619,10 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       return true;
     },
     get reloading() { return !!reloading || armsNow()?.busy === 'reload' || revolverNow()?.busy === 'reload'; },
-    setTrigger(down) { trigger = down; },
+    setTrigger(down, sounds) {
+      trigger = down;
+      if (sounds) triggerSounds = sounds;
+    },
     setAim(down) { aiming = down; },
     inspect(sounds) {
       const rv = revolverNow();
@@ -580,6 +640,10 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
       return out;
     },
     get aim() { return armsNow()?.aim ?? revolverNow()?.aim ?? 0; },
+    get scoped() {
+      const st = armsNow();
+      return st?.rig.scope ? { k: st.aim, fov: st.rig.scope.fov } : null;
+    },
     get ammo() {
       const st = armsNow();
       const rv = revolverNow();

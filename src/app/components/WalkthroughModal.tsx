@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, DressedProp, DressingState, NpcSpot, Pickup, Placement, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, DressedProp, DressingState, NpcSpot, Performer, Pickup, Placement, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { PROP_LIBRARY, type PropAssetId } from '@/lib/prop-library';
 import { createDeepOneHead } from './deep-one';
@@ -30,7 +30,8 @@ import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
 import { joinLevel, leadsHunter, type Peer } from './presence';
 import { createWoodsLamp } from './woods-lamp';
-import { createHeldViewmodel, prepareHeldModel } from './held-viewmodel';
+import { BAND, createTuner, stationAt, STEP as DIAL_STEP, type Tuner } from './radio-tuner';
+import { createHeldViewmodel, prepareHeldModel, SCOPE_IN } from './held-viewmodel';
 import { heldModelFor, type HeldModel } from '@/lib/held-items';
 import { createSkyDome } from './sky-dome';
 import { createFlock } from './birds';
@@ -160,6 +161,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const [lampOn, setLampOn] = useState(true);
   const [markersOn, setMarkersOn] = useState(true);
   const [radiosOn, setRadiosOn] = useState<Set<string>>(() => new Set());
+  // Where each tunable set's needle stands, in kc, once someone has turned it.
+  const [radioDial, setRadioDial] = useState<Record<string, number>>({});
   // Light switches turned on (by id); every switched room starts dark.
   const [switchesOn, setSwitchesOn] = useState<Set<string>>(() => new Set());
   // The investigator's sheet equipment (I), the item in hand, and the last use, shown briefly.
@@ -271,6 +274,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Set by the scene once the level loads; switches a radio on or off.
   const toggleRadioRef = useRef<((id: string) => void) | null>(null);
+  // …and turns a tunable one's dial by so many channels.
+  const tuneRadioRef = useRef<((id: string, steps: number) => void) | null>(null);
   const toggleSwitchRef = useRef<((id: string) => void) | null>(null);
   // gamelord walks the levels unseen: he never shares where he is.
   const unseenRef = useRef(!!isGamelord);
@@ -287,6 +292,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const inspectRef = useRef<(() => void) | null>(null);
   // The magazine count over the view, written each frame without a re-render.
   const ammoRef = useRef<HTMLSpanElement>(null);
+  const scopeRef = useRef<HTMLDivElement>(null);
   // Set by the scene when the level has a pinboard; refetches its notes now.
   const refreshPinsRef = useRef<(() => void) | null>(null);
   // Refetches the shared state of the level's models (builders) and redraws them on their tables.
@@ -726,6 +732,18 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, [isGamelord, saveDressing]);
   useEffect(() => () => window.clearTimeout(dressSaveTimer.current), []);
 
+  // The wheel turns the dial of whatever wireless the crosshair is on, a channel a notch.
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (dressingRef.current || typingRef.current || readingRef.current || browsingRef.current || invOpenRef.current) return;
+      const target = focusRef.current;
+      if (!target || !level.radios?.[target.id]?.dial || !e.deltaY) return;
+      tuneRadioRef.current?.(target.id, e.deltaY < 0 ? 1 : -1);
+    };
+    window.addEventListener('wheel', onWheel, { passive: true });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, [level]);
+
   // Escape closes the reading card first, then the level. Pressing Escape to
   // leave pointer lock must not also close the modal, so a key arriving just
   // after the lock was released is ignored.
@@ -787,6 +805,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         else if (browsingRef.current) closeBrowsing();
         else if (target && level.radios?.[target.id]) toggleRadioRef.current?.(target.id);
         else if (target) openTarget(target);
+      }
+      // , and . turn a wireless's dial down and up the band (held, they sweep).
+      if ((e.code === 'Comma' || e.code === 'Period') && !readingRef.current && !browsingRef.current) {
+        const target = focusRef.current;
+        if (target && level.radios?.[target.id]?.dial) tuneRadioRef.current?.(target.id, e.code === 'Comma' ? -1 : 1);
       }
       // With a gun that reloads in hand, R reloads it (skills are still on the open card).
       if (e.code === 'KeyR' && !e.repeat && !readingRef.current && !browsingRef.current) {
@@ -1176,7 +1199,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const bedPieces = new Map<string, THREE.Object3D>();
     const hazards: { hazard: GazeHazard; box: THREE.Box3; center: THREE.Vector3; radius: number }[] = [];
     const fires: THREE.PointLight[] = [];
-    const radios = new Map<string, { set: RadioSet; el: HTMLAudioElement; glow: THREE.PointLight; center: THREE.Vector3; sound: THREE.PositionalAudio | null }>();
+    const radios = new Map<string, { set: RadioSet; glow: THREE.PointLight; center: THREE.Vector3; tuner: Tuner | null; kc: number }>();
     let listener: THREE.AudioListener | null = null;
     // Sound starts on the first click or key in the level (browsers require a
     // gesture); after that, radios and birds share the one listener.
@@ -1601,24 +1624,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         for (const tg of targets) {
           const set = level.radios?.[tg.id];
           if (!set) continue;
-          const el = new Audio(set.src);
-          el.loop = set.loop ?? true;
-          el.preload = 'none';
           const center = tg.box.getCenter(new THREE.Vector3());
           // The dial's warm glow while the set is on.
           const glow = new THREE.PointLight(0xffb060, 0, 1.4, 2);
           glow.position.set(center.x, tg.box.max.y, center.z);
           scene.add(glow);
-          // A one-off broadcast switches the set off when it finishes.
-          el.addEventListener('ended', () => {
-            glow.intensity = 0;
-            setRadiosOn(prev => {
-              const next = new Set(prev);
-              next.delete(tg.id);
-              return next;
-            });
-          });
-          radios.set(tg.id, { set, el, glow, center, sound: null });
+          radios.set(tg.id, { set, glow, center, tuner: null, kc: set.dial?.at ?? 0 });
         }
 
         // Pins in the wall map, one per location, each examinable on its own.
@@ -1959,44 +1970,36 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         .then(r => { if (!r.ok) throw new Error(String(r.status)); })
         .catch(err => console.error('Could not save the light switch:', err));
     };
+    const showRadio = (id: string, on: boolean) => setRadiosOn(prev => {
+      const next = new Set(prev);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
     toggleRadioRef.current = (id) => {
       const r = radios.get(id);
       if (!r) return;
-      const ear = ensureListener();
-      if (!r.sound) {
-        const sound = new THREE.PositionalAudio(ear);
-        sound.setMediaElementSource(r.el);
-        sound.setRefDistance(r.set.refDistance);
-        sound.setRolloffFactor(1.4);
-        sound.setVolume(r.set.volume);
-        // Cut the lows and highs: a 1930s cabinet speaker, not a gramophone.
-        const ctx = ear.context;
-        const low = ctx.createBiquadFilter();
-        low.type = 'highpass';
-        low.frequency.value = 250;
-        const high = ctx.createBiquadFilter();
-        high.type = 'lowpass';
-        high.frequency.value = 3800;
-        sound.setFilters([low, high]);
-        sound.position.copy(r.center);
-        scene.add(sound);
-        r.sound = sound;
-      }
-      const on = r.el.paused;
-      // A broadcast starts over each time, so nobody hears it from the middle.
-      if (on && !r.el.loop) r.el.currentTime = 0;
-      if (on) r.el.play().catch(() => {});
-      else r.el.pause();
-      r.glow.intensity = on ? 0.6 : 0;
-      setRadiosOn(prev => {
-        const next = new Set(prev);
-        if (on) next.add(id); else next.delete(id);
-        return next;
+      // Built on the first switch-on: sound needs a gesture. A record with no dial switches the set off when it ends.
+      r.tuner ??= createTuner(r.set, ensureListener(), r.center, scene, () => {
+        r.tuner?.setOn(false);
+        r.glow.intensity = 0;
+        showRadio(id, false);
       });
+      r.tuner.tune(r.kc);
+      const on = !r.tuner.on;
+      r.tuner.setOn(on);
+      r.glow.intensity = on ? 0.6 : 0;
+      showRadio(id, on);
+    };
+    tuneRadioRef.current = (id, steps) => {
+      const r = radios.get(id);
+      if (!r?.set.dial) return;
+      r.kc = THREE.MathUtils.clamp(r.kc + steps * DIAL_STEP, BAND[0], BAND[1]);
+      r.tuner?.tune(r.kc);
+      setRadioDial(prev => ({ ...prev, [id]: r.kc }));
     };
 
     // ── Input ───────────────────────────────────────────────────────
-    const needsEar = !!(level.birds?.cries || level.weather || level.hunter?.sound || level.hunter?.chaseMusic);
+    const needsEar = !!(level.birds?.cries || level.weather || level.hunter?.sound || level.hunter?.chaseMusic || level.performers?.some(f => f.sound));
     const onKeyDown = (e: KeyboardEvent) => {
       // A level with birds calling (or a hunter growling) needs sound from the start; a key press lets it begin.
       if (needsEar) ensureListener();
@@ -2038,7 +2041,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
       const ear = ensureListener();
       gunSounds ??= createGunSounds(ear.context, ear.getInput());
-      if (e.button === 0) inHand.setTrigger(true);
+      if (e.button === 0) inHand.setTrigger(true, gunSounds);
       if (e.button === 2) inHand.setAim(true);
     };
     const onMouseUp = (e: MouseEvent) => {
@@ -2092,6 +2095,45 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }).catch(err => console.error('Wanderer failed to load:', w.model, err));
     }
     const wanderAhead = new THREE.Vector3();
+
+    // Figures playing one clip where they are put (see Performer).
+    const performers: { root: THREE.Object3D; mixer: THREE.AnimationMixer; spec: Performer; audio: { el: HTMLAudioElement; sound: THREE.PositionalAudio } | null }[] = [];
+    /** A performer's music, once there is an ear for it: streamed, looped, and placed where it is played. */
+    const startPerformerSound = (f: (typeof performers)[number], ear: THREE.AudioListener) => {
+      const spec = f.spec.sound!;
+      const el = new Audio(spec.src);
+      el.loop = true;
+      el.crossOrigin = 'anonymous';
+      // Broadcast time: wherever the tune has got to for everyone else.
+      el.addEventListener('loadedmetadata', () => { if (el.duration > 0) el.currentTime = (Date.now() / 1000) % el.duration; }, { once: true });
+      const sound = new THREE.PositionalAudio(ear);
+      sound.setMediaElementSource(el);
+      sound.setRefDistance(spec.refDistance);
+      sound.setRolloffFactor(1.4);
+      sound.setVolume(spec.volume);
+      sound.position.set(...(spec.at ?? [0, 1, 0.6]));
+      f.root.add(sound);
+      el.play().catch(err => console.error('Performer sound failed to play:', spec.src, err));
+      f.audio = { el, sound };
+    };
+    for (const f of level.performers ?? []) {
+      new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(f.model).then(gltf => {
+        if (disposed) return;
+        const root = gltf.scene;
+        root.position.set(f.at[0], f.y ?? 0, f.at[1]);
+        root.rotation.y = THREE.MathUtils.degToRad(f.turnDeg ?? 0);
+        root.scale.setScalar(f.scale ?? 1);
+        root.traverse(o => {
+          const m = o as THREE.Mesh;
+          if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; }   // skinned bounds are the rest pose's
+        });
+        const mixer = new THREE.AnimationMixer(root);
+        const clip = (f.clip && gltf.animations.find(a => a.name === f.clip)) || gltf.animations[0];
+        if (clip) mixer.clipAction(clip).play();
+        scene.add(root);
+        performers.push({ root, mixer, spec: f, audio: null });
+      }).catch(err => console.error('Performer failed to load:', f.model, err));
+    }
 
     // Something hunting the investigator (see Hunter). It walks by the same collision.
     const litChest = new THREE.Vector3();
@@ -2431,6 +2473,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (peer.pose) avatar.setTarget(tmpFeet.fromArray(peer.pose.p), peer.pose.yaw, peer.pose.gait, !!peer.pose.crouch);
         avatar.update(dt);
       }
+      for (const f of performers) {
+        f.mixer.update(dt);
+        if (f.spec.sound && !f.audio && listener) startPerformerSound(f, listener);
+      }
       // Wanderers walk on round their loops, facing the way they go.
       for (const w of wanderers) {
         w.mixer.update(dt);
@@ -2509,7 +2555,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       for (let i = 0; i < fired.shots; i++) {
         gunSounds?.fire(fired.report);
         muzzleFlash = 1;
-        const spread = 0.07 * (1 - inHand.aim * 0.88);   // radians across: loose from the hip, tight down the sights
+        // Radians across: loose from the hip, tight down the sights, all but none down a scope.
+        const spread = 0.07 * (1 - inHand.aim * 0.88) * (1 - (inHand.scoped?.k ?? 0) * 0.95);
         camera.getWorldDirection(lookDir);
         lookDir.x += (Math.random() - 0.5) * spread;
         lookDir.y += (Math.random() - 0.5) * spread;
@@ -2543,9 +2590,15 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         muzzleFlash = Math.max(0, muzzleFlash - dt / 0.06);
       }
       bulletHoles.update(dt);
-      // Down the sights the view narrows.
-      const fov = 70 - 18 * inHand.aim;
+      // Down the sights the view narrows; down a scope, to the scope's, once its reticle is up.
+      const scoped = inHand.scoped;
+      const scopeK = scoped ? THREE.MathUtils.smoothstep(scoped.k, SCOPE_IN, 1) : 0;
+      const fov = scoped && scoped.k > SCOPE_IN ? THREE.MathUtils.lerp(52, scoped.fov, scopeK) : 70 - 18 * inHand.aim;
       if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+      if (scopeRef.current) {
+        const op = scoped && scoped.k > SCOPE_IN ? Math.min(1, scopeK * 1.5).toFixed(3) : '0';
+        if (scopeRef.current.style.opacity !== op) scopeRef.current.style.opacity = op;
+      }
       const ammo = inHand.ammo;
       const ammoText = ammo ? `${ammo.rounds} / ${ammo.max}${inHand.reloading ? ' · reloading' : ''}` : '';
       if (ammoRef.current && ammoRef.current.textContent !== ammoText) ammoRef.current.textContent = ammoText;
@@ -2601,7 +2654,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         }
       }
 
-      for (const r of radios.values()) if (!r.el.paused) r.glow.intensity = 0.55 + Math.random() * 0.1;
+      for (const r of radios.values()) if (r.tuner?.on) r.glow.intensity = 0.55 + Math.random() * 0.1;
       // Old wiring: now and then a bulb browns out for a moment.
       if (powerRef.current !== shownPower) {
         shownPower = powerRef.current;
@@ -2740,6 +2793,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       canvas.style.filter = '';
       window.removeEventListener('resize', onResize);
       toggleRadioRef.current = null;
+      tuneRadioRef.current = null;
       toggleSwitchRef.current = null;
       applySwitchRef.current = null;
       reloadRef.current = null;
@@ -2749,6 +2803,24 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       markers?.dispose();
       stains?.dispose();
       for (const p of npcs) p.avatar?.dispose();
+      for (const f of performers) {
+        if (f.audio) {
+          f.audio.el.pause();
+          f.audio.el.removeAttribute('src');
+          f.audio.sound.disconnect();
+        }
+        f.mixer.stopAllAction();
+        f.root.removeFromParent();
+        f.root.traverse(o => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          m.geometry.dispose();
+          for (const mat of [m.material].flat()) {
+            for (const v of Object.values(mat)) if (v instanceof THREE.Texture) v.dispose();
+            mat.dispose();
+          }
+        });
+      }
       for (const w of wanderers) {
         w.mixer.stopAllAction();
         w.root.removeFromParent();
@@ -2768,12 +2840,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       rainSound?.dispose();
       for (const o of owned) o.dispose();
       peeper?.head.dispose();
-      for (const r of radios.values()) {
-        r.el.pause();
-        r.el.removeAttribute('src');
-        r.sound?.disconnect();
-      }
+      for (const r of radios.values()) r.tuner?.dispose();
       setRadiosOn(new Set());
+      setRadioDial({});
       setSwitchesOn(new Set());
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       model?.traverse((o) => {
@@ -3005,6 +3074,33 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             )}
           </div>
 
+          {/* Down a telescopic sight: the round field of the lens, its crosshair, and the dark of the tube round it. */}
+          {loaded && gunView?.arms?.scope && (
+            <div ref={scopeRef} style={{ position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none' }}>
+              <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0 }}>
+                <defs>
+                  <mask id="scope-lens">
+                    <rect width="100%" height="100%" fill="#fff" />
+                    <circle cx="50%" cy="50%" r="43vmin" fill="#000" />
+                  </mask>
+                  <radialGradient id="scope-shade">
+                    <stop offset="78%" stopColor="#000" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#000" stopOpacity="0.75" />
+                  </radialGradient>
+                </defs>
+                <circle cx="50%" cy="50%" r="43vmin" fill="url(#scope-shade)" />
+                <rect width="100%" height="100%" fill="#000" mask="url(#scope-lens)" />
+              </svg>
+              {/* The posts: heavy from the edge, a fine wire across the middle. */}
+              <div style={{ position: 'absolute', left: 'calc(50% - 43vmin)', width: '36vmin', top: 'calc(50% - 3px)', height: 6, background: '#000' }} />
+              <div style={{ position: 'absolute', right: 'calc(50% - 43vmin)', width: '36vmin', top: 'calc(50% - 3px)', height: 6, background: '#000' }} />
+              <div style={{ position: 'absolute', top: 'calc(50% - 43vmin)', height: '36vmin', left: 'calc(50% - 3px)', width: 6, background: '#000' }} />
+              <div style={{ position: 'absolute', top: 'calc(50% + 7vmin)', height: '36vmin', left: 'calc(50% - 3px)', width: 6, background: '#000' }} />
+              <div style={{ position: 'absolute', left: 'calc(50% - 7vmin)', width: '14vmin', top: 'calc(50% - 0.5px)', height: 1, background: '#000' }} />
+              <div style={{ position: 'absolute', top: 'calc(50% - 7vmin)', height: '14vmin', left: 'calc(50% - 0.5px)', width: 1, background: '#000' }} />
+            </div>
+          )}
+
           {loaded && locked && asleep === 'no' && !reading && !browsing && !typing && !inspecting && (
             <div style={{
               position: 'absolute', left: '50%', top: '50%', width: 6, height: 6,
@@ -3046,7 +3142,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               ) : level.radios?.[focus.id] ? (
                 <>
                   <span style={{ color: 'var(--brass)' }}>[E]</span> Turn {radiosOn.has(focus.id) ? 'off' : 'on'} {focus.entry.title}
+                  {level.radios[focus.id].dial && <> · <span style={{ color: 'var(--brass)' }}>[wheel]</span> or <span style={{ color: 'var(--brass)' }}>[, .]</span> tune</>}
                   <span style={{ color: 'var(--ink-text-2)' }}> · click to examine</span>
+                  {level.radios[focus.id].dial && <RadioDial set={level.radios[focus.id]} kc={radioDial[focus.id] ?? level.radios[focus.id].dial!.at} />}
                 </>
               ) : (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}</>
@@ -3448,6 +3546,25 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             <span style={{ color: torchOn && !lampOut ? 'var(--brass)' : 'var(--ink-text-2)' }}>Torch {lampOut ? 'stowed' : torchOn ? 'on' : 'off'}</span>
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** A wireless's dial under the prompt: the band, its stations' ticks, the needle, and what it reads. */
+function RadioDial({ set, kc }: { set: RadioSet; kc: number }) {
+  const at = (f: number) => `${((f - BAND[0]) / (BAND[1] - BAND[0])) * 100}%`;
+  const station = stationAt(set, kc);
+  return (
+    <div style={{ marginTop: 6, width: 260, marginInline: 'auto', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+      <div style={{ position: 'relative', height: 14, borderBottom: '1px solid var(--brass-dim)' }}>
+        {[600, 800, 1000, 1200, 1400, 1600].map(f => (
+          <span key={f} style={{ position: 'absolute', left: at(f), bottom: 0, width: 1, height: 5, background: 'var(--brass-dim)' }} />
+        ))}
+        <span style={{ position: 'absolute', left: at(kc), bottom: 0, width: 2, height: 14, marginLeft: -1, background: 'var(--blood)', transition: 'left 80ms' }} />
+      </div>
+      <div style={{ marginTop: 3, color: station ? 'var(--brass)' : 'var(--ink-text-2)' }}>
+        {kc} kc · {station ? station.name : 'static'}
       </div>
     </div>
   );

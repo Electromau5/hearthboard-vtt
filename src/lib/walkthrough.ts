@@ -105,7 +105,18 @@ export type RadioSet = {
   volume: number;
   /** Metres at which the sound is at full volume; it falls off beyond. */
   refDistance: number;
+  /**
+   * A wireless that can be tuned (the wheel or , / . while looking at it):
+   * `src` is the station it is left on at `at` kc, `name` what the dial reads
+   * there, and `stations` the others it can find (see radio-stations.ts).
+   * Between stations there is static. Leave it off for a gramophone, or a set
+   * whose dial will not turn.
+   */
+  dial?: { at: number; name: string; stations?: RadioStation[] };
 };
+
+/** A station somewhere on a tunable set's dial; it plays round the clock unless `loop` is false. */
+export type RadioStation = { kc: number; name: string; src: string; loop?: boolean };
 
 /**
  * Something outside that keeps looking in through the model's "Peephole": it
@@ -582,6 +593,33 @@ export type Wanderer = {
 };
 
 /**
+ * A figure that stays in one place doing one thing over and over — a pianist
+ * at his piano. No collision, nothing to examine, no reaction to players: its
+ * model loops one clip where it is put.
+ */
+export type Performer = {
+  /** A .glb under public/ whose figure faces +Z with its feet at the origin. */
+  model: string;
+  /** The clip to loop. Default: the model's first. */
+  clip?: string;
+  /** World X and Z of its origin. */
+  at: [number, number];
+  /** Height of the floor it is on. Default 0. */
+  y?: number;
+  /** Turn about the vertical: 0 faces +Z, 90 faces +X. */
+  turnDeg?: number;
+  /** Uniform scale. Default 1. */
+  scale?: number;
+  /**
+   * What it plays, heard from it: an audio file under public/ on a loop, kept
+   * to broadcast time so everyone hears the same bar. `at` is where the sound
+   * comes from, in the figure's own frame (metres; it faces +Z) — the piano
+   * before him, not the man.
+   */
+  sound?: { src: string; volume: number; refDistance: number; at?: Vec3 };
+};
+
+/**
  * A creature that roams the level on its own, finds its way between floors,
  * and hunts the investigator once it sees them (src/app/components/hunter.ts).
  * It sees you `sightLit` metres off when you stand in lamplight in front of it,
@@ -669,6 +707,8 @@ export type WalkthroughLevel = {
   npcs?: NpcSpot[];
   /** Figures that walk loops and ignore the investigators. */
   wanderers?: Wanderer[];
+  /** Figures that stay put and loop one clip — a pianist at the piano. */
+  performers?: Performer[];
   /** Something that hunts the investigators. */
   hunter?: Hunter;
   /** Stains for the Wood's lamp to find. A level without them has no lamp to draw. */

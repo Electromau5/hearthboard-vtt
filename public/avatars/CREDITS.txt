@@ -29,3 +29,16 @@ deep-one.glb
   walk-in-place, arms damped to suit the sculpt.
   Attack: Mixamo "Mutant Punch" (Adobe Mixamo), retargeted to the same skeleton; limbs follow the
   source by direction only, elbows and wrists capped, feet kept on the floor.
+
+pianist.glb
+  "Dapper in a Black-Tie Tuxedo" by restore50 — https://sketchfab.com/restore50
+  https://sketchfab.com/3d-models/dapper-in-a-black-tie-tuxedo-112494062e4f46af9efe4548b4f27de3
+  Licence: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+  Changes: rigged in Blender on a Mixamo skeleton fitted to the figure, reduced to 60k triangles,
+  skin weights cleaned where his hands lay against his trousers, scaled to 1.82 m; flat normal map
+  and black emissive map dropped; base colour and roughness at 2048 px WebP; meshopt-compressed.
+  Animation: Mixamo "Piano Playing" (Adobe Mixamo), retargeted to the fitted skeleton and baked ("Play").
+
+late-night-blues.mp3 (public/)
+  "Late-Night Blues", made with Suno and supplied by the GM; the pianist's tune in the Abattoir speakeasy.
+  Changes: converted to mono MP3 (128 kb/s), metadata stripped.
