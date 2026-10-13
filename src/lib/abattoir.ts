@@ -290,6 +290,20 @@ const RADIOS: Record<string, RadioSet> = {
   gramophone: { src: '/speakeasy-1.mp3', volume: 0.7, refDistance: 2.5 },
 };
 
+/** The old man in the white dinner jacket, overheard by whoever comes near his table. */
+const OLD_GENTLEMAN_SPEECH = {
+  src: '/guest-1.mp3',
+  near: 3,
+  lines: [
+    { t: 0, text: 'I\'m telling you. This guy knows how to throw a party.' },
+    { t: 3.84, text: 'There was so much booze that night, I thought everyone in the hotel was going to get wasted.' },
+    { t: 8.86, text: 'Jesus.' },
+    { t: 10.06, text: 'His connection to Marsh, though. That\'s something I need to watch out for.' },
+    { t: 14.04, text: 'He made a ton of his money through Marsh\'s business partnership.' },
+    { t: 17.3, text: 'And now that Marsh is dead, he\'s trying to take control of the entire company by going after Abigail.' },
+  ],
+};
+
 export const ABATTOIR_LEVEL: WalkthroughLevel = {
   id: 'abattoir',
   model: '/abattoir.glb',
@@ -321,6 +335,7 @@ export const ABATTOIR_LEVEL: WalkthroughLevel = {
     ['tyler-banks', [-9.068, 1.25], 0.028, 90, 7],
   ] as const).map(([who, at, y, turnDeg, phase]) => ({
     model: `/avatars/${who}.glb`, clip: 'Sit', at: [at[0], at[1]] as [number, number], y, turnDeg, phase,
+    ...(who === 'old-gentleman' && { speech: OLD_GENTLEMAN_SPEECH }),
   }))],
   // In the corner of Banks's office, where he can watch it from his desk.
   placements: [{ asset: 'iron-safe', id: 'iron_safe', at: [11.55, -3.2], turnDeg: -90 }],

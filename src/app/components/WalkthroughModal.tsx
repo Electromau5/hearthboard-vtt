@@ -173,6 +173,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     try { return heldKey ? localStorage.getItem(heldKey) : null; } catch { return null; }
   });
   const [usedNote, setUsedNote] = useState<string | null>(null);
+  // The line a performer is saying to us just now (Performer.speech), as a subtitle.
+  const [subtitle, setSubtitle] = useState<string | null>(null);
   // Sleeping: the scene runs the lying down, the dark and the getting up; the
   // page asks for it (sleepCmdRef) and is told how far it has got (asleep).
   const [asleep, setAsleep] = useState<'no' | 'lying' | 'asleep' | 'waking'>('no');
@@ -1999,7 +2001,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     };
 
     // ── Input ───────────────────────────────────────────────────────
-    const needsEar = !!(level.birds?.cries || level.weather || level.hunter?.sound || level.hunter?.chaseMusic || level.performers?.some(f => f.sound));
+    const needsEar = !!(level.birds?.cries || level.weather || level.hunter?.sound || level.hunter?.chaseMusic || level.performers?.some(f => f.sound || f.speech));
     const onKeyDown = (e: KeyboardEvent) => {
       // A level with birds calling (or a hunter growling) needs sound from the start; a key press lets it begin.
       if (needsEar) ensureListener();
@@ -2097,7 +2099,15 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const wanderAhead = new THREE.Vector3();
 
     // Figures playing one clip where they are put (see Performer).
-    const performers: { root: THREE.Object3D; mixer: THREE.AnimationMixer; spec: Performer; audio: { el: HTMLAudioElement; sound: THREE.PositionalAudio } | null }[] = [];
+    const performers: {
+      root: THREE.Object3D; mixer: THREE.AnimationMixer; spec: Performer;
+      audio: { el: HTMLAudioElement; sound: THREE.PositionalAudio } | null;
+      /** Its speech, once there is an ear for it; `armed` until it is said, and again once we walk off. */
+      voice: { el: HTMLAudioElement; sound: THREE.PositionalAudio; armed: boolean } | null;
+    }[] = [];
+    let saying: string | null = null;   // the subtitle on screen, so it is set only when it changes
+    const say = (text: string | null) => { if (text !== saying) { saying = text; setSubtitle(text); } };
+    const performerAt = new THREE.Vector3();
     /** A performer's music, once there is an ear for it: streamed, looped, and placed where it is played. */
     const startPerformerSound = (f: (typeof performers)[number], ear: THREE.AudioListener) => {
       const spec = f.spec.sound!;
@@ -2115,6 +2125,21 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       f.root.add(sound);
       el.play().catch(err => console.error('Performer sound failed to play:', spec.src, err));
       f.audio = { el, sound };
+    };
+    /** A performer's speech: loaded, placed at its mouth, and played when we come near. */
+    const prepareVoice = (f: (typeof performers)[number], ear: THREE.AudioListener) => {
+      const spec = f.spec.speech!;
+      const el = new Audio(spec.src);
+      el.crossOrigin = 'anonymous';
+      el.preload = 'auto';
+      const sound = new THREE.PositionalAudio(ear);
+      sound.setMediaElementSource(el);
+      sound.setRefDistance(1.5);
+      sound.setRolloffFactor(1.2);
+      sound.setVolume(spec.volume ?? 1);
+      sound.position.set(...(spec.at ?? [0, 1.2, 0.1]));
+      f.root.add(sound);
+      f.voice = { el, sound, armed: true };
     };
     for (const f of level.performers ?? []) {
       new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(f.model).then(gltf => {
@@ -2137,7 +2162,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         const clip = (f.clip && gltf.animations.find(a => a.name === f.clip)) || gltf.animations[0];
         if (clip) mixer.clipAction(clip).play().time = (f.phase ?? 0) % clip.duration;
         scene.add(root);
-        performers.push({ root, mixer, spec: f, audio: null });
+        performers.push({ root, mixer, spec: f, audio: null, voice: null });
       }).catch(err => console.error('Performer failed to load:', f.model, err));
     }
 
@@ -2482,6 +2507,31 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       for (const f of performers) {
         f.mixer.update(dt);
         if (f.spec.sound && !f.audio && listener) startPerformerSound(f, listener);
+        const speech = f.spec.speech;
+        if (speech && !f.voice && listener) prepareVoice(f, listener);
+        if (speech && f.voice) {
+          const v = f.voice;
+          f.root.getWorldPosition(performerAt);
+          const d = Math.hypot(feet.x - performerAt.x, feet.z - performerAt.z);
+          const sameFloor = Math.abs(feet.y - performerAt.y) < 1.5;
+          if (v.armed && sameFloor && d < speech.near) {
+            v.armed = false;
+            v.el.currentTime = 0;
+            v.el.play().catch(err => console.error('Performer speech failed to play:', speech.src, err));
+          } else if (!v.armed && v.el.paused && (!sameFloor || d > speech.near + 2)) {
+            v.armed = true;
+          }
+        }
+      }
+      // Subtitles for whichever performer is speaking.
+      {
+        let line: string | null = null;
+        for (const f of performers) {
+          const v = f.voice;
+          if (!v || v.el.paused || v.el.ended) continue;
+          for (const l of f.spec.speech!.lines) if (l.t <= v.el.currentTime) line = l.text;
+        }
+        say(line);
       }
       // Wanderers walk on round their loops, facing the way they go.
       for (const w of wanderers) {
@@ -2810,10 +2860,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       stains?.dispose();
       for (const p of npcs) p.avatar?.dispose();
       for (const f of performers) {
-        if (f.audio) {
-          f.audio.el.pause();
-          f.audio.el.removeAttribute('src');
-          f.audio.sound.disconnect();
+        for (const a of [f.audio, f.voice]) {
+          if (!a) continue;
+          a.el.pause();
+          a.el.removeAttribute('src');
+          a.sound.disconnect();
         }
         f.mixer.stopAllAction();
         f.root.removeFromParent();
@@ -3161,6 +3212,19 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               {(carriedPickup || heldItem) && !focus.pickup && (
                 <span style={{ color: 'var(--ink-text-2)' }}> · <span style={{ color: 'var(--brass)' }}>[U]</span> use {carriedPickup ? `the ${carriedPickup.title}` : heldItem}</span>
               )}
+            </div>
+          )}
+
+          {/* What a performer near us is saying (Performer.speech). */}
+          {loaded && subtitle && !dreaming && (
+            <div style={{
+              position: 'absolute', left: '50%', bottom: 64, transform: 'translateX(-50%)', width: 'min(720px, 86%)',
+              pointerEvents: 'none', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 17, lineHeight: 1.4,
+              color: 'var(--parchment)', textShadow: '0 1px 3px #000, 0 0 8px #000',
+            }}>
+              <span style={{ background: 'rgba(0,0,0,0.55)', padding: '3px 10px', borderRadius: 'var(--r-sm)', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}>
+                {subtitle}
+              </span>
             </div>
           )}
 

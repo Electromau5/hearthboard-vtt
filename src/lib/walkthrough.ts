@@ -619,6 +619,14 @@ export type Performer = {
    * before him, not the man.
    */
   sound?: { src: string; volume: number; refDistance: number; at?: Vec3 };
+  /**
+   * What it says to an investigator who comes within `near` metres: a
+   * recording under public/, heard from its mouth (`at`, in its own frame;
+   * default seated head height) and shown as subtitles — each line from `t`
+   * seconds in. Each player hears it alone, once per approach: walk off and
+   * come back to hear it again.
+   */
+  speech?: { src: string; near: number; volume?: number; at?: Vec3; lines: { t: number; text: string }[] };
 };
 
 /**
