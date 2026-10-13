@@ -12,6 +12,11 @@ import type { Examinable, GazeHazard, RadioSet, WalkthroughLevel } from './walkt
 import { BOSTON_BAND } from './radio-stations';
 
 const EXAMINABLES: Record<string, Examinable> = {
+  // The beach
+  shore_culvert: {
+    title: 'Sewer Outfall',
+    text: 'A brick culvert through the sea wall, its grating rusted off a hinge and hanging open. Black water trickles out of it and down the sand to the sea. Back inside, the tunnel runs up under the town.',
+  },
   // Deck
   windlass: {
     title: 'Anchor Windlass',
@@ -117,7 +122,7 @@ export const VESSEL_LEVEL: WalkthroughLevel = {
   errorText: 'The vessel could not be loaded.',
   enterText: 'Click to climb aboard',
   leaveLabel: 'Leave the vessel',
-  credit: '"Antique Iron Safe" by pixelgrapher — CC BY 4.0',
+  credit: '"Antique Iron Safe" by pixelgrapher · "Puzzle Box 01" by Nobby76 — CC BY 4.0',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
@@ -130,8 +135,22 @@ export const VESSEL_LEVEL: WalkthroughLevel = {
         title: 'Iron Safe — Open',
         text: 'Seawater sloshes out over your boots as the door comes open. Inside, wrapped in oilcloth and still dry, is a ship\'s manifest for a cargo that never reached any harbourmaster\'s books, and a pouch heavy with something that clinks. The bottom of the safe is lined with the same broad grey-green scales as the hold floor.',
       },
+      // Taking it lets the Deep One out of its pen in the sewer under the derelict house.
+      item: {
+        id: 'puzzle_box',
+        title: 'Puzzle Box',
+        model: '/props/puzzle-box.glb',
+        text: 'This is an ancient puzzle box that would take time to open. You can take it back to the Black Archive to open it and find the artifact inside.',
+        gone: {
+          title: 'Iron Safe — Open',
+          text: 'Seawater has drained out over the planking. Inside, wrapped in oilcloth and still dry, is a ship\'s manifest for a cargo that never reached any harbourmaster\'s books, and a pouch heavy with something that clinks. Beside them a clean square is pressed into the salt crust, where the puzzle box sat until it was taken.',
+        },
+        releases: { level: 'house', door: 'sewer_grate' },
+      },
     },
   },
+  // The beach ahead of her bow: a jetty along her port side, and the sewer's outfall back to the derelict house (HOUSE_LEVEL.sewer.outfall).
+  shore: { culvert: { examine: 'shore_culvert', to: 'house', arrive: 'outfall', prompt: 'Go back into the sewer' } },
   // The GM sets dawn, day, evening or night (`/admin/experience`); night is the atmosphere below.
   weather: true,
   // Herring gulls over the wreck by day: a flock every two minutes, out and back.

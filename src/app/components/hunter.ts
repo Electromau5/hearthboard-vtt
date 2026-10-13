@@ -1102,6 +1102,10 @@ export function createHunter(spec: Hunter, scene: THREE.Scene, mount: HTMLElemen
         ...(penned ? { caged: true } : {}),
       };
     },
+    /** Behind its bars, as this client leads it or is shown it. */
+    get caged() { return leading ? penned : !!lastFollow?.caged; },
+    /** Its own noise drops low while it speaks (spec.cage.plea). */
+    set hushed(on: boolean) { voice?.setVolume(on ? 0.12 : 0.9); },
     /** Loaded and mapped: ready to lead. */
     get ready() { return !!mixer && nodes.length >= 50; },
     /** Its blow landed on the investigator at this screen (told by whoever leads it). */

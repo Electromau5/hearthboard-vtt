@@ -382,9 +382,11 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--parchment)', margin: '3px 0 8px' }}>{title}</div>
           <p style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--parchment)', margin: 0 }}>{intro}</p>
         </div>
-        <div style={{ padding: '8px 14px', ...mono, fontSize: 9, color: foundClues.length === clueIds.length ? 'var(--forest)' : 'var(--brass)' }}>
-          Clues found · {foundClues.length} of {clueIds.length}
-        </div>
+        {clueIds.length > 0 && (
+          <div style={{ padding: '8px 14px', ...mono, fontSize: 9, color: foundClues.length === clueIds.length ? 'var(--forest)' : 'var(--brass)' }}>
+            Clues found · {foundClues.length} of {clueIds.length}
+          </div>
+        )}
         <div style={{ padding: '0 14px 10px' }}>
           <button
             onClick={onToggleUv}
@@ -403,7 +405,7 @@ export function InspectViewer({ title, intro, inspectable, uvOn, onToggleUv, fou
           </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 10px 10px' }}>
-          {foundClues.length === 0 && (
+          {foundClues.length === 0 && clueIds.length > 0 && (
             <p style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--ink-text-2)', margin: '4px 4px' }}>
               Turn it over and look closely. Some things only show under the Wood&apos;s lamp.
             </p>

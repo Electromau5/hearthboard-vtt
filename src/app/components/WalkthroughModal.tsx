@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, DressedProp, DressingState, NpcSpot, Performer, Pickup, Placement, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
+import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, DressedProp, DressingState, NpcSpot, Passage, Performer, Pickup, Placement, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
 import { PROP_LIBRARY, type PropAssetId } from '@/lib/prop-library';
 import { createDeepOneHead } from './deep-one';
@@ -24,6 +24,7 @@ import { SetDressing } from './SetDressing';
 import { createDressing, type Dressing } from './set-dressing';
 import { createModelInLevel } from './model-pieces';
 import { createSewer } from './sewer';
+import { createShore } from './shore';
 import { createDoor, type DoorModel } from './level-door';
 import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
 import type { CheckLevel } from '@/lib/coc-skills';
@@ -59,6 +60,10 @@ interface Props {
   isGM?: boolean;
   /** gamelord himself: in a level with lamps, can throw the mains for everyone (L, or the header button). */
   isGamelord?: boolean;
+  /** Where to come in, if not at the level's PlayerStart: an arrival from another level (see Passage). */
+  arrive?: string;
+  /** Takes this investigator through a Passage into another level, arriving at `arrive`. */
+  onTravel?: (to: string, arrive: string) => void;
 }
 
 const EYE = 1.6;           // camera height above the feet
@@ -113,6 +118,10 @@ type Target = {
   lightSwitch?: LightSwitch;
   /** The sanctums' gates, or the key to them (level.sewer.sanctumGate). */
   seal?: 'gate' | 'key';
+  /** The penned hunter's bars (level.hunter.cage.plea): E hears what it has to say. */
+  plea?: true;
+  /** A way into another level: E goes through it. */
+  passage?: Passage;
 };
 type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
 
@@ -129,7 +138,7 @@ function gunOf(level: WalkthroughLevel, carried: string | null, held: string | n
   const pickup = carried ? level.pickups?.flatMap(t => t.items).find(p => p.id === carried) : undefined;
   return pickup ? pickup.view : heldModelFor(held);
 }
-export function WalkthroughModal({ level, onClose, onShare, author, investigator, onCheck, isGM, isGamelord }: Props) {
+export function WalkthroughModal({ level, onClose, onShare, author, investigator, onCheck, isGM, isGamelord, arrive, onTravel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -196,6 +205,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // the same and the level is not rebuilt.
   const onShareRef = useRef(onShare);
   useEffect(() => { onShareRef.current = onShare; }, [onShare]);
+  const onTravelRef = useRef(onTravel);
+  useEffect(() => { onTravelRef.current = onTravel; }, [onTravel]);
   // Time of day, where the level has weather: set by the GM, fetched by everyone (see src/lib/weather.ts).
   const [weatherTime, setWeatherTime] = useState<TimeOfDay>('night');
   const weatherRef = useRef<TimeOfDay>('night');
@@ -283,6 +294,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // …and turns a tunable one's dial by so many channels.
   const tuneRadioRef = useRef<((id: string, steps: number) => void) | null>(null);
   const toggleSwitchRef = useRef<((id: string) => void) | null>(null);
+  // The penned hunter begs, when E is pressed at its bars (level.hunter.cage.plea).
+  const pleaRef = useRef<(() => void) | null>(null);
   // gamelord walks the levels unseen: he never shares where he is.
   const unseenRef = useRef(!!isGamelord);
   useEffect(() => { unseenRef.current = !!isGamelord; }, [isGamelord]);
@@ -410,6 +423,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // reading card.
   const openTarget = useCallback((t: Target) => {
     if (t.lightSwitch) { toggleSwitchRef.current?.(t.lightSwitch.id); return; }
+    if (t.plea) { pleaRef.current?.(); return; }
+    if (t.passage) { onTravelRef.current?.(t.passage.to, t.passage.arrive); return; }
     // A bed: lie down and sleep. The scene takes it from here.
     if (t.bed) {
       if (asleepRef.current === 'no') {
@@ -474,6 +489,24 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     }
     if (level.locks?.[t.id]) {
       const inside = insideOf(t)!;
+      // Something to take out of it: E takes it while it is there (on the party's latest word),
+      // turned over in the hands; once gone, E reads the empty safe, and the GM puts it back.
+      const item = level.locks[t.id].item;
+      if (openLocksRef.current[t.id] && item) {
+        void fetchLocks().then(s => {
+          if (s[item.id]) {
+            if (isGM) { void setLock(item.id, true); onShareRef.current(`put the ${item.title.toLowerCase()} back in the ${t.entry.title.toLowerCase()}`); }
+            else openReading({ ...t, id: `${t.id}-gone`, entry: item.gone });
+            return;
+          }
+          void setLock(item.id);
+          onShareRef.current(`took the ${item.title.toLowerCase()} from the ${t.entry.title.toLowerCase()}`);
+          setInspecting({ id: item.id, entry: { title: item.title, text: item.text }, box: t.box, inspect: { model: item.model, clues: {} } });
+          setInspectUv(false);
+          document.exitPointerLock?.();
+        });
+        return;
+      }
       if (openLocksRef.current[t.id]) { openReading(inside); return; }
       setTyping(t);
       document.exitPointerLock?.();
@@ -1260,6 +1293,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // door with a `lockId` is padlocked instead: it opens once that lock is cracked.
     const doors: { id: string; lockId?: string; hidesPeeper: boolean; model: DoorModel; k: number; blocking: boolean }[] = [];
     let sewer: ReturnType<typeof createSewer> | null = null;
+    // Where an investigator coming in from another level stands, by arrival id (see Passage).
+    const arrivals = new Map<string, { at: THREE.Vector3; yaw: number }>();
     // Every lamp in the level, but only the nearest LAMP_POOL are lit by real
     // lights: each light costs every pixel, and 18 of them made the Archive
     // crawl. `w` fades a lamp in and out of the pool so none ever pops.
@@ -1384,6 +1419,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           scene.add(sewer.group);
           walls.push(...sewer.solids);
           owned.push(sewer);
+          // The end of the outfall tunnel: out to the shore, and back in from it.
+          const out = level.sewer.outfall;
+          const outEntry = out && level.examinables[out.examine];
+          if (out && outEntry) targets.push({ id: out.examine, entry: outEntry, box: sewer.outfall.box, passage: out });
+          arrivals.set('outfall', sewer.outfall.arrive);
           // The outfall grate, which gamelord raises and lowers like a door.
           if (level.sewer.grate) {
             const k = doorsOpenRef.current[level.sewer.grate] ? 1 : 0;
@@ -1415,6 +1455,27 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             for (const box of gm.locks) targets.push({ id: seal.gate, entry: gateEntry, box, seal: 'gate' });
             targets.push({ id: seal.key, entry: keyEntry, box: sewer.key.box, seal: 'key' });
           }
+        }
+        // The penned hunter's bars, from just in front of them to the back of its pen.
+        const cage = level.hunter?.cage;
+        const pleaEntry = cage?.plea && level.examinables[cage.plea.id];
+        if (cage?.plea && pleaEntry) {
+          const box = new THREE.Box3(
+            new THREE.Vector3(cage.min[0] - 0.6, cage.at[1], cage.min[1]),
+            new THREE.Vector3(cage.max[0], cage.at[1] + 2.2, cage.max[1]),
+          );
+          targets.push({ id: cage.plea.id, entry: pleaEntry, box, plea: true });
+        }
+        // The beach by the wreck, with the sewer's outfall culvert in its sea wall.
+        if (level.shore) {
+          const shore = createShore();
+          scene.add(shore.group);
+          walls.push(...shore.solids);
+          owned.push(shore);
+          const back = level.shore.culvert;
+          const backEntry = level.examinables[back.examine];
+          if (backEntry) targets.push({ id: back.examine, entry: backEntry, box: shore.culvert.box, passage: back });
+          arrivals.set('culvert', shore.culvert.arrive);
         }
         // Where the rain cannot reach: over the architecture, cast down from above.
         if (rainFall && arch) {
@@ -1510,6 +1571,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           start.getWorldPosition(feet);
           const q = start.getWorldQuaternion(new THREE.Quaternion());
           yaw = new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+        }
+        // Come in from another level: where that way in lets out.
+        const arrival = arrive ? arrivals.get(arrive) : undefined;
+        if (arrival) {
+          feet.copy(arrival.at);
+          yaw = arrival.yaw;
         }
         // Stand on whatever is under the start (a deck can sit above or below y = 0).
         const floor = groundAt(feet.x, feet.z, feet.y);
@@ -2234,6 +2301,32 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     }) : null;
     const hunterLook = new THREE.Vector3();
     let hunterLeads = true;
+    /** The hunter's bars: down and in the way. */
+    const cageShut = () => !!level.hunter?.cage && !!doors.find(d => d.id === level.hunter!.cage!.door)?.blocking;
+    // What it says from behind them (cage.plea): loaded on the first E, heard from where it stands.
+    let plea: { el: HTMLAudioElement; sound: THREE.PositionalAudio } | null = null;
+    pleaRef.current = () => {
+      const spec = level.hunter?.cage?.plea;
+      const ear = ensureListener();
+      if (!spec || !ear) return;
+      if (!plea) {
+        const el = new Audio(spec.src);
+        el.crossOrigin = 'anonymous';
+        el.preload = 'auto';
+        const sound = new THREE.PositionalAudio(ear);
+        sound.setMediaElementSource(el);
+        sound.setRefDistance(2.5);
+        sound.setRolloffFactor(1);
+        sound.setVolume(spec.volume ?? 1);
+        sound.position.set(level.hunter!.cage!.at[0], level.hunter!.cage!.at[1] + 1.6, level.hunter!.cage!.at[2]);
+        scene.add(sound);
+        plea = { el, sound };
+      }
+      // Once it has begun, it says it through; E again after it has finished hears it again.
+      if (!plea.el.paused) return;
+      plea.el.currentTime = 0;
+      plea.el.play().catch(err => console.error('Hunter plea failed to play:', spec.src, err));
+    };
     /** Up and about in the level: not loading, reading, asleep or in a pane. */
     const hunterAwake = () => !!model && !sleep && !readingRef.current && !browsingRef.current && !typingRef.current && !invOpenRef.current && !inspectingRef.current;
     // Everyone in the room, gamelord too: whoever leads the hunter shares it in their presence.
@@ -2582,6 +2675,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           if (!v || v.el.paused || v.el.ended) continue;
           for (const l of f.spec.speech!.lines) if (l.t <= v.el.currentTime) line = l.text;
         }
+        const pleaLines = level.hunter?.cage?.plea?.lines;
+        if (plea && pleaLines && !plea.el.paused && !plea.el.ended) {
+          for (const l of pleaLines) if (l.t <= plea.el.currentTime) line = l.text;
+        }
         say(line);
       }
       // Wanderers walk on round their loops, facing the way they go.
@@ -2630,8 +2727,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           voice: voiceRef.current && voiceRef.current.until > performance.now() ? { feet, level: voiceRef.current.level } : null,
           onBlow: (id) => presence.sendHit(id),
           // Its bars: down and in the way.
-          cageShut: !!level.hunter?.cage && !!doors.find(d => d.id === level.hunter!.cage!.door)?.blocking,
+          cageShut: cageShut(),
         });
+        hunter.hushed = !!plea && !plea.el.paused;
         presence.setHunter(lead && selfId !== null ? hunter.snapshot() : null);
         presence.setHunterReady(canLead);
         camera.position.add(hunter.jolt);
@@ -2809,6 +2907,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           if (tg.uv && uvLightAt(uvLamps, tg.uv.point, tg.uv.normal) < UV_SEEN) continue;
           // The key once taken; an open gate, for all but the GM, who can shut it again.
           if (tg.seal && seal && openLocksRef.current[tg.seal === 'key' ? seal.key : seal.gate] && (tg.seal === 'key' || !isGMRef.current)) continue;
+          // The hunter speaks only from behind its bars.
+          if (tg.plea && !(hunter?.caged && cageShut())) continue;
           const hit = ray.ray.intersectBox(tg.box, tmpV);
           if (!hit) continue;
           // A person wins over whatever they stand behind (the admissions counter, a desk).
@@ -2908,6 +3008,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       toggleRadioRef.current = null;
       tuneRadioRef.current = null;
       toggleSwitchRef.current = null;
+      pleaRef.current = null;
+      if (plea) {
+        plea.el.pause();
+        plea.el.removeAttribute('src');
+        plea.sound.disconnect();
+        scene.remove(plea.sound);
+      }
       applySwitchRef.current = null;
       reloadRef.current = null;
       refreshPinsRef.current = null;
@@ -2997,7 +3104,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       canvasRef.current = null;
       if (el.contains(canvas)) el.removeChild(canvas);
     };
-  }, [openTarget, webgl, level, godot]);
+  }, [openTarget, webgl, level, godot, arrive]);
 
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
@@ -3233,6 +3340,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             }}>
               {focus.npc ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Speak to {focus.entry.title.replace(/^The /, 'the ')}</>
+              ) : focus.passage ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> {focus.passage.prompt}</>
+              ) : focus.plea ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Listen to the {focus.entry.title.charAt(0).toLowerCase()}{focus.entry.title.slice(1)}</>
               ) : focus.lightSwitch ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Switch the {focus.lightSwitch.room} lights {switchesOn.has(focus.lightSwitch.id) ? 'off' : 'on'}</>
               ) : focus.bed ? (
@@ -3255,6 +3366,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Unlock the gates with the {level.examinables[level.sewer.sanctumGate.key]?.title.toLowerCase() ?? 'key'}</>
               ) : focus.id === level.sewer?.shrineLock && level.sewer.shrineSealed && !isGamelord ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {level.sewer.shrineSealed.title}</>
+              ) : level.locks?.[focus.id]?.item && openLocks[focus.id] ? (
+                openLocks[level.locks[focus.id].item!.id]
+                  ? isGM
+                    ? <><span style={{ color: 'var(--brass)' }}>[E]</span> Put the {level.locks[focus.id].item!.title.toLowerCase()} back<span style={{ color: 'var(--ink-text-2)' }}> · GM</span></>
+                    : <><span style={{ color: 'var(--brass)' }}>[E]</span> Look inside the {focus.entry.title.toLowerCase()}</>
+                  : <><span style={{ color: 'var(--brass)' }}>[E]</span> Take the {level.locks[focus.id].item!.title.toLowerCase()}</>
               ) : level.locks?.[focus.id] ? (
                 openLocks[focus.id]
                   ? <><span style={{ color: 'var(--brass)' }}>[E]</span> {level.locks[focus.id].prompt?.open ?? `Look inside the ${focus.entry.title.toLowerCase()}`}</>

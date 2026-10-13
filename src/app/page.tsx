@@ -460,6 +460,14 @@ export default function HearthboardPage() {
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [reliefModalOpen, setReliefModalOpen] = useState(false);
   const [walkthrough, setWalkthrough] = useState<WalkthroughLevel | null>(null);
+  // Where the open walkthrough was entered from, if through another level's Passage (the sewer's outfall…).
+  const [walkArrive, setWalkArrive] = useState<string | undefined>(undefined);
+  const travel = useCallback((to: string, arrive: string) => {
+    const next = Object.values(WALKTHROUGHS).find(w => w.level.id === to)?.level;
+    if (!next) return;
+    setWalkArrive(arrive);
+    setWalkthrough(next);
+  }, []);
   const [allSkillsOpen, setAllSkillsOpen] = useState(false);
   const [allResourcesOpen, setAllResourcesOpen] = useState(false);
   // Archived resources the gamelord has released to the party (shared, server-side).
@@ -2801,8 +2809,12 @@ export default function HearthboardPage() {
       {/* Derelict Innsmouth house — first-person walkthrough */}
       {walkthrough && (
         <WalkthroughModal
+          // A new level (or a new way into it) starts a new walkthrough.
+          key={`${walkthrough.id}:${walkArrive ?? ''}`}
           level={walkthrough}
-          onClose={() => setWalkthrough(null)}
+          arrive={walkArrive}
+          onTravel={travel}
+          onClose={() => { setWalkthrough(null); setWalkArrive(undefined); }}
           onShare={text => pushTextToChat(myDisplayName, text)}
           author={session?.user?.name ?? 'Unknown'}
           investigator={walkthroughInvestigator}

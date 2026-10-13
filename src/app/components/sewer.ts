@@ -30,6 +30,10 @@ import { buildSanctums, type SanctumGates } from './sanctums';
  * dead end where something has made its lair. Together they make a loop to
  * run round, and a pipe only a crouching man fits through.
  *
+ * Off the main's far walkway, short of the grate, the outfall tunnel runs on
+ * out under the yard to where the sewer empties onto the shore, a pale smudge
+ * of moonlight at its end: the way out to the beach and the wreck (`outfall`).
+ *
  * No lights of its own (every light costs every pixel in the level): the
  * investigators' torches light it, helped by a little moonlight from a
  * storm drain and a faint phosphorescence on the cistern pool.
@@ -55,6 +59,11 @@ export type Sewer = {
   gates: SanctumGates;
   /** Their key, lying in the lair's pool: `box` to take it by, `show` while no one has. */
   key: { box: THREE.Box3; show: (on: boolean) => void };
+  /**
+   * The far end of the outfall tunnel: `box` to go out by, and `arrive`, where
+   * whoever comes back in from the shore stands, facing back up the tunnel.
+   */
+  outfall: { box: THREE.Box3; arrive: { at: THREE.Vector3; yaw: number } };
   /**
    * `eye` is the camera, for whatever down here watches it; `view` is whether
    * its torch (or Wood's lamp) is lit, and what to frustum-test, for Dagon.
@@ -135,6 +144,9 @@ const CX = 2, CH = 0.4;              // the crawl pipe's centre line and half-wi
 const CTOP = FLOOR + 1.15;           // too low to walk upright
 const SPUR_D = -2;                   // the spur to the lair, west off the west branch
 const LX0 = -17.5, LX1 = -14, LD0 = -4.2, LD1 = 0.2; // the lair
+// The outfall tunnel, out from the main's far wall between the cistern's passage and the grate.
+const OX = 11;                       // its centre line
+const OD1 = 26;                      // its end, where it lets out
 
 type V3 = [number, number, number];
 
@@ -265,7 +277,7 @@ export function createSewer(at: THREE.Vector3): Sewer {
     { a: U2X - TH, b: U2X + TH, top: LOW },
   ]);
   box(brick, [X0 - WALL, BED - 0.3, T1], [B0, SPRING, T1 + WALL]);
-  box(brick, [B1, BED - 0.3, T1], [X1 + WALL, SPRING, T1 + WALL]);
+  wallX(B1, X1 + WALL, T1, T1 + WALL, BED - 0.3, SPRING, [{ a: OX - TH, b: OX + TH, top: LOW }]);
   box(brick, [B0, LOW, T1], [B1, SPRING, T1 + WALL]);
   box(brick, [X0 - WALL, BED - 0.3, T0], [X0, SPRING, T1]);
   box(brick, [X1, BED - 0.3, T0], [X1 + WALL, SPRING, T1]);
@@ -310,7 +322,8 @@ export function createSewer(at: THREE.Vector3): Sewer {
     band(x0, x1, FLOOR, 0.75, T0, 1);
   }
   band(X0, B0, FLOOR, 0.75, T1, -1);
-  band(B1, X1, FLOOR, 0.75, T1, -1);
+  band(B1, OX - TH, FLOOR, 0.75, T1, -1);
+  band(OX + TH, X1, FLOOR, 0.75, T1, -1);
   band(X0, X1, BED, FLOOR - BED, T0 + WALK, 1);
   band(X0, X1, BED, FLOOR - BED, T1 - WALK, -1);
 
@@ -450,6 +463,29 @@ export function createSewer(at: THREE.Vector3): Sewer {
   runnel(U2X - 0.18, U2X + 0.18, U3D, STAIR_END);
   runnel(U1X + 0.18, U2X - 0.18, U3D - 0.18, U3D + 0.18);
   runnel(LX1, U1X - 0.18, SPUR_D - 0.18, SPUR_D + 0.18);
+
+  // ── The outfall tunnel ──────────────────────────────────────────
+  // Straight out under the yard from the main's far wall, the same bore as the
+  // tunnels under the house. Its end wall is broken through low down, and past
+  // it the night shows grey: the outfall, and the shore beyond.
+  const [ow, oe] = [OX - TH, OX + TH];
+  floorBox(ow, oe, T1 + WALL, OD1);
+  wallD(T1 + WALL, OD1 + WALL, ow - WALL, ow, YB, LOW);
+  wallD(T1 + WALL, OD1 + WALL, oe, oe + WALL, YB, LOW);
+  roof(ow - WALL, oe + WALL, T1 + WALL, OD1 + WALL);
+  wallX(ow, oe, OD1, OD1 + WALL, YB, LOW, [{ a: OX - 0.45, b: OX + 0.45, top: FLOOR + 1.3, floor: false }]);
+  runnel(OX - 0.18, OX + 0.18, T1 + WALL, OD1);
+  {
+    // The night through the break: a grey glow that lights nothing, and a little on the wet floor before it.
+    const night = new THREE.Mesh(g(new THREE.PlaneGeometry(0.9, 1.3)), m(new THREE.MeshBasicMaterial({
+      color: 0x8494b0, map: tx(paintNightGlow()), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    })));
+    night.position.copy(P(OX, FLOOR + 0.65, OD1 + WALL + 0.35));
+    const sheen = new THREE.Mesh(g(new THREE.CircleGeometry(0.7, 24).rotateX(-Math.PI / 2)), moonPool);
+    sheen.position.copy(P(OX, FLOOR + 0.01, OD1 - 0.5));
+    group.add(night, sheen);
+    block([OX - 0.5, FLOOR, OD1 + WALL], [OX + 0.5, FLOOR + 1.3, OD1 + WALL + 0.4]);
+  }
   // In the lair, a pool of the same glowing brine as the cistern's sump.
   {
     const pool = new THREE.Mesh(g(new THREE.CircleGeometry(0.9, 28).rotateX(-Math.PI / 2)), glowWater);
@@ -773,6 +809,11 @@ export function createSewer(at: THREE.Vector3): Sewer {
     },
     gates: sanctums.gates,
     key: { box: keyBox, show(on) { key.visible = on; } },
+    outfall: {
+      box: new THREE.Box3().setFromPoints([P(OX - 0.7, FLOOR, OD1 - 0.6), P(OX + 0.7, FLOOR + 1.6, OD1 + WALL)]),
+      // Two metres in from the break, looking back up the tunnel toward the main (world +z).
+      arrive: { at: P(OX, FLOOR, OD1 - 2), yaw: Math.PI },
+    },
     update(dt, eye, view) {
       swell.value += dt;
       sanctums.update(dt, eye ?? null);
@@ -1018,7 +1059,7 @@ function buildShrineDoor(
 // ── Helpers ───────────────────────────────────────────────────────
 
 /** BoxGeometry's faces each run 0..1; lay its texture at `tile` metres instead. */
-function scaleBoxUv(geo: THREE.BoxGeometry, w: number, h: number, d: number, tile: number) {
+export function scaleBoxUv(geo: THREE.BoxGeometry, w: number, h: number, d: number, tile: number) {
   const uv = geo.attributes.uv as THREE.BufferAttribute;
   // Faces in order +x, -x, +y, -y, +z, -z, four vertices each.
   const spans: [number, number][] = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
@@ -1029,18 +1070,18 @@ function scaleBoxUv(geo: THREE.BoxGeometry, w: number, h: number, d: number, til
   uv.needsUpdate = true;
 }
 
-function scaleUv(geo: THREE.BufferGeometry, su: number, sv: number) {
+export function scaleUv(geo: THREE.BufferGeometry, su: number, sv: number) {
   const uv = geo.attributes.uv as THREE.BufferAttribute;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
   uv.needsUpdate = true;
 }
 
-function seeded(seed: number) {
+export function seeded(seed: number) {
   let s = seed;
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
-function repeatTexture(canvas: HTMLCanvasElement) {
+export function repeatTexture(canvas: HTMLCanvasElement) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -1048,14 +1089,14 @@ function repeatTexture(canvas: HTMLCanvasElement) {
   return tex;
 }
 
-function canvas(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+export function canvas(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   return [c, c.getContext('2d')!];
 }
 
 /** A metre of old sewer brick: soot-dark, uneven, streaked where water has run down it. */
-function paintBrick() {
+export function paintBrick() {
   const S = 512;
   const [c, ctx] = canvas(S);
   const rnd = seeded(31);
@@ -1090,8 +1131,22 @@ function paintBrick() {
   return c;
 }
 
+/** The night through the outfall's break: grey low down, where the shore is, fading up into the dark. */
+function paintNightGlow() {
+  const [c, ctx] = canvas(128);
+  const grad = ctx.createRadialGradient(64, 118, 4, 64, 100, 92);
+  grad.addColorStop(0, 'rgba(255,255,255,0.42)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.16)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** Worn stone flags, dark with damp. */
-function paintStone() {
+export function paintStone() {
   const S = 512;
   const [c, ctx] = canvas(S);
   const rnd = seeded(53);
@@ -1115,7 +1170,7 @@ function paintStone() {
 }
 
 /** Slow ripples and scum on black water. */
-function paintWater() {
+export function paintWater() {
   const S = 256;
   const [c, ctx] = canvas(S);
   const rnd = seeded(97);

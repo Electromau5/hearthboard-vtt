@@ -448,6 +448,14 @@ const EXAMINABLES: Record<string, Examinable> = {
       },
     ],
   },
+  outfall_tunnel: {
+    title: 'Outfall',
+    text: 'The tunnel ends in a break in the brickwork, low enough to stoop through. The air through it is cold and smells of salt and weed, and past it, faint and grey, the night is lighter than the dark in here. You can hear the sea.',
+  },
+  caged_deep_one: {
+    title: 'Thing Behind the Grate',
+    text: 'Knee-deep in the outfall channel, behind iron bars as thick as your wrist, a Deep One stands and watches you, its grey-green hands round the bars. It does not lunge. It waits for you to come closer.',
+  },
   sanctum_key: {
     title: 'Green-Black Key',
     text: 'It lay in the glowing pool, where nothing that lives in this lair would ever have to stoop for it. A key as long as your hand, cast in a green-black metal that is cold through your glove and stays cold. Its bow is a ring of webbed fingers closed round nothing, and its bit forks like a claw. Everything else down here is scabbed with rust. This is not.',
@@ -1034,6 +1042,8 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
     at: [0, 0, -5.075], shrineLock: 'shrine_padlock', grate: 'sewer_grate',
     // Shub-Niggurath's and Bokrug's rooms off the shrine stay sealed until someone brings the key from the lair.
     sanctumGate: { gate: 'sanctum_gate', key: 'sanctum_key' },
+    // The outfall tunnel lets out on the beach by the wrecked trawler (VESSEL_LEVEL.shore).
+    outfall: { examine: 'outfall_tunnel', to: 'vessel', arrive: 'culvert', prompt: 'Follow the tunnel out to the shore' },
     // Sealed for now: the shrine of Dagon stays shut to the party. Remove this to let them work the padlock again.
     shrineSealed: {
       title: 'Padlocked Door',
@@ -1047,7 +1057,21 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   // For now it is penned behind the outfall grate at the main's east end (sewer.ts GRATE..X1),
   // knee-deep in the channel, staring at whoever comes down; gamelord raising the grate lets it out.
   hunter: {
-    cage: { door: 'sewer_grate', at: [15.4, -3.4, -11.825], min: [14.05, -13.4], max: [18, -10.25] },
+    cage: {
+      door: 'sewer_grate', at: [15.4, -3.4, -11.825], min: [14.05, -13.4], max: [18, -10.25],
+      // E at the bars while it is penned: it begs (public/abigail-1.mp3).
+      plea: {
+        id: 'caged_deep_one', src: '/abigail-1.mp3',
+        lines: [
+          { t: 0, text: 'Please… please do not open this gate.' },
+          { t: 3.52, text: 'I only have a few hours left before my mind completely transforms.' },
+          { t: 8.05, text: 'I know what you are looking for.' },
+          { t: 9.9, text: 'It\'s in a safe inside an abandoned fishing vessel.' },
+          { t: 13.26, text: 'You can follow this tunnel system to get outside and find the fishing vessel.' },
+          { t: 17.67, text: 'Hurry… before they find it.' },
+        ],
+      },
+    },
     model: '/avatars/deep-one.glb', walkClip: 'Walk', attackClip: 'Attack',
     start: [-15.75, -3.04, -3.075], walkSpeed: 1.0, chaseSpeed: 2.7,
     sightLit: 3.05, sightDark: 4, hear: { walk: 5, run: 12 }, scent: 0.3, ceiling: -1.6,

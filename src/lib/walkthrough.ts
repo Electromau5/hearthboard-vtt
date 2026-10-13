@@ -416,6 +416,30 @@ export type SafeLock = {
   opened: Examinable;
   /** What the prompt offers, locked and open, in place of "Crack the …" and "Look inside the …". */
   prompt?: { locked: string; open: string };
+  /** Something inside to take out, once it is open (see SafeItem). */
+  item?: SafeItem;
+};
+
+/**
+ * What lies in a safe to be taken out. E on the open safe takes it, for the
+ * whole party (`/api/locks` keeps `id` once it is taken), and turns it over in
+ * the hands with `text` beside it; after that E reads `gone`. gamelord's own
+ * taking is his alone, like his safes; the GM puts it back with E.
+ */
+export type SafeItem = {
+  id: string;
+  /** "Puzzle Box" reads as "Take the puzzle box". */
+  title: string;
+  /** A .glb under public/, turned over in the inspect viewer. */
+  model: string;
+  text: string;
+  /** The safe once it has been taken. */
+  gone: Examinable;
+  /**
+   * Taking it (anyone but gamelord) opens this gamelord door in another level
+   * for everyone — done by `/api/locks`, so no one can open it otherwise.
+   */
+  releases?: { level: string; door: string };
 };
 
 /** What `/api/locks` keeps for a level: the locks that are open, by examinable id. */
@@ -630,6 +654,13 @@ export type Performer = {
 };
 
 /**
+ * A way into another level: E on the examinable `examine` takes this
+ * investigator to the level whose id is `to`, standing at its arrival
+ * `arrive`. `prompt` follows [E].
+ */
+export type Passage = { examine: string; to: string; arrive: string; prompt: string };
+
+/**
  * A creature that roams the level on its own, finds its way between floors,
  * and hunts the investigator once it sees them (src/app/components/hunter.ts).
  * It sees you `sightLit` metres off when you stand in lamplight in front of it,
@@ -655,7 +686,16 @@ export type Hunter = {
    * (world x, z); the moment the door opens it comes for whoever it was
    * staring at. Shut again with it outside, it hunts on.
    */
-  cage?: { door: string; at: Vec3; min: [number, number]; max: [number, number] };
+  cage?: {
+    door: string; at: Vec3; min: [number, number]; max: [number, number];
+    /**
+     * What it says to an investigator who presses E at its bars while it is
+     * penned: the examinable `id` (its title names it in the prompt), a
+     * recording under public/ heard from where it stands, and subtitles —
+     * each line from `t` seconds in. Each player hears it alone.
+     */
+    plea?: { id: string; src: string; volume?: number; lines: { t: number; text: string }[] };
+  };
   /** Metres per second at the walk clip's natural pace, and when it closes in. */
   walkSpeed: number;
   chaseSpeed: number;
@@ -755,7 +795,16 @@ export type WalkthroughLevel = {
      * the key back) with E on an open gate.
      */
     sanctumGate?: { gate: string; key: string };
+    /** The end of the outfall tunnel (sewer.ts): out to the shore by the wreck. Arriving back here is `'outfall'`. */
+    outfall?: Passage;
   };
+  /**
+   * The beach behind the breakwater (shore.ts), in the level's own metres: a
+   * sea wall with the sewer's outfall culvert in it, sand down to the water and
+   * a jetty out to the wreck, with a gangplank over her port rail. The culvert
+   * leads back into the sewer; arriving here from it is `'culvert'`.
+   */
+  shore?: { culvert: Passage };
   /** Props from the Blender prop library, set down in the level. */
   placements?: Placement[];
   /** Objects to pick up and turn over, keyed by examinable id. */
