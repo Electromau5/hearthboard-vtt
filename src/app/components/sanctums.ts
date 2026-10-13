@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Pool } from './sewer';
 
 /**
@@ -56,7 +57,16 @@ export type Sanctums = {
   load: (loader: GLTFLoader, keep: (o: THREE.Object3D) => void, gone: () => boolean) => void;
   /** Candles flicker; Bokrug watches `eye` (world). */
   update: (dt: number, eye: THREE.Vector3 | null) => void;
+  /** The gates sealing both rooms, which one key opens together. */
+  gates: SanctumGates;
 };
+
+/**
+ * The iron gates in both sanctums' doorways. `blocking` stands among the
+ * walls while they are shut; `locks` are what E examines, one a gate. `set`
+ * swings both together, 0 shut … 1 open, into their rooms.
+ */
+export type SanctumGates = { blocking: THREE.Mesh[]; locks: THREE.Box3[]; set: (k: number) => void; dispose: () => void };
 
 /** Where Bokrug's head was cut from it, in the model's own metres (measured in the Blender build). */
 const BOKRUG_NECK: V3 = [0.1024, 1.8259, 0.2809];
@@ -425,7 +435,85 @@ export function buildSanctums(k: SanctumKit): Sanctums {
     head.quaternion.copy(qYaw).multiply(qPitch);
   };
 
-  return { pools, withBones, load, update };
+  // ── The gates ───────────────────────────────────────────────────
+  // Black iron in each room's doorway, at its room face: bars as thick as a
+  // thumb, a lock plate on the free edge with a keyhole branched like a claw,
+  // and a warding boss at the heart that glows like the brine. Nothing to
+  // pick, nothing to prise: hung on the west jamb, each swings into its room
+  // only once the key has turned (sewer.ts keeps the key, in the lair).
+  const gateIron = m(new THREE.MeshStandardMaterial({ color: 0x17181a, metalness: 0.7, roughness: 0.55 }));
+  const ward = m(new THREE.MeshStandardMaterial({ color: 0x2c4a3c, emissive: 0x1f6b48, emissiveIntensity: 0.5, roughness: 0.5, metalness: 0.3 }));
+  const hole = m(new THREE.MeshBasicMaterial({ color: 0x000000 }));
+  const unseen = m(new THREE.MeshBasicMaterial());
+  const GW = ox1 - ox0 - 0.02, GH = passTop - SF - 0.02, LOCK_Y = 1.05;
+  const swings: { hinge: THREE.Group; open: number }[] = [];
+  const blocking: THREE.Mesh[] = [];
+  const locks: THREE.Box3[] = [];
+  /** A gate across the doorway at `at` (a d), opening toward `dir` along d: into its room. */
+  const gate = (at: number, dir: number) => {
+    const hinge = new THREE.Group();
+    hinge.position.copy(P(ox0 + 0.01, SF + 0.01, at));
+    group.add(hinge);
+    // In the hinge's frame the leaf runs along +X; +Z faces the way back to the shrine when dir is +1.
+    const front = dir;
+    const iron: THREE.BufferGeometry[] = [];
+    const bar = (sx: number, sy: number, sz: number, x: number, y: number, z = 0) => iron.push(new THREE.BoxGeometry(sx, sy, sz).translate(x, y, z));
+    bar(0.07, GH, 0.07, 0.035, GH / 2);
+    bar(0.07, GH, 0.07, GW - 0.035, GH / 2);
+    for (const y of [0.05, GH / 2, GH - 0.05]) bar(GW, 0.07, 0.06, GW / 2, y);
+    for (let i = 1; i <= 9; i++) iron.push(new THREE.CylinderGeometry(0.019, 0.019, GH, 8).translate((GW * i) / 10, GH / 2, 0));
+    // Hinge knuckles on the jamb, and the lock plate, through both faces.
+    for (const y of [0.3, GH - 0.3]) iron.push(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 10).translate(0, y, 0));
+    bar(0.2, 0.3, 0.1, GW - 0.15, LOCK_Y);
+    const leaf = new THREE.Mesh(g(mergeGeometries(iron, false)!), gateIron);
+    iron.forEach(x => x.dispose());
+    leaf.castShadow = leaf.receiveShadow = true;
+    hinge.add(leaf);
+    // The warding boss, on the middle rail.
+    const boss = new THREE.Mesh(g(new THREE.CylinderGeometry(0.15, 0.15, 0.09, 24).rotateX(Math.PI / 2)), ward);
+    boss.position.set(GW / 2, GH / 2, 0);
+    hinge.add(boss);
+    // The escutcheon and its keyhole, on the shrine side: a slot that forks at its foot like a claw.
+    const plate = new THREE.Mesh(g(new THREE.CylinderGeometry(0.065, 0.065, 0.012, 20).rotateX(Math.PI / 2)), ward);
+    plate.position.set(GW - 0.15, LOCK_Y, front * 0.056);
+    hinge.add(plate);
+    const slit = (w: number, h: number, x: number, y: number, tilt = 0) => {
+      const s = new THREE.Mesh(g(new THREE.BoxGeometry(w, h, 0.004)), hole);
+      s.position.set(GW - 0.15 + x, LOCK_Y + y, front * 0.063);
+      s.rotation.z = tilt;
+      hinge.add(s);
+    };
+    slit(0.012, 0.05, 0, 0.008);
+    slit(0.008, 0.028, -0.011, -0.026, -0.6);
+    slit(0.008, 0.028, 0.011, -0.026, 0.6);
+    hinge.updateMatrixWorld(true);
+    locks.push(new THREE.Box3().setFromObject(hinge).expandByScalar(0.1));
+    // What stops anyone: a sheet across the doorway, where the bars are.
+    const stop = new THREE.Mesh(g(new THREE.BoxGeometry(ox1 - ox0, passTop - SF, 0.12)), unseen);
+    stop.position.copy(P(MX, (SF + passTop) / 2, at));
+    stop.visible = false;
+    stop.updateMatrixWorld(true);
+    group.add(stop);
+    blocking.push(stop);
+    // Swung square into the room, and a little past.
+    swings.push({ hinge, open: dir * 1.7 });
+  };
+  gate(N1 + 0.08, -1);
+  gate(S0 - 0.08, 1);
+  const gates: SanctumGates = {
+    blocking,
+    locks,
+    set(k) {
+      const e = k * k * (3 - 2 * k);
+      for (const s of swings) {
+        s.hinge.rotation.y = s.open * e;
+        s.hinge.updateMatrixWorld(true);
+      }
+    },
+    dispose() {},
+  };
+
+  return { pools, withBones, load, update, gates };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────

@@ -739,8 +739,22 @@ export type WalkthroughLevel = {
      * off the shrine of Dagon. The door opens once the padlock is cracked.
      */
     shrineLock?: string;
+    /**
+     * While set, the shrine door is sealed: its padlock cannot be worked and the
+     * door stays shut, however the lock stands in `/api/locks`, and E on the
+     * padlock reads this card instead. gamelord can still crack it for himself.
+     */
+    shrineSealed?: Examinable;
     /** The id (in `/api/doors`) of the outfall grate: gamelord raises and lowers it like the level's doors. */
     grate?: string;
+    /**
+     * The gates sealing the inner sanctums off the shrine, and the key to them
+     * lying in the lair: both examinable ids. Taking the key and opening the
+     * gates are shared like the safes (`/api/locks`), so once anyone has the
+     * key, anyone at a gate can turn it; gamelord shuts them again (and puts
+     * the key back) with E on an open gate.
+     */
+    sanctumGate?: { gate: string; key: string };
   };
   /** Props from the Blender prop library, set down in the level. */
   placements?: Placement[];

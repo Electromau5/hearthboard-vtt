@@ -427,6 +427,31 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Sash Lock',
     text: 'Through the gap between two boards you can reach the meeting rails of the sash. The brass lock is thrown, the cam turned hard into its keeper, and the sill below is white with something that crunches under your glove.',
   },
+  sanctum_gate: {
+    title: 'Sealed Gate',
+    text: 'A gate of black iron fills the doorway at the top of the steps, its bars as thick as a thumb and socketed into the living rock. There are no hinge pins on this side and no bolts to draw. A green stone boss at its heart glows faintly, like the brine. In the lock plate at its free edge is a keyhole of no shape a locksmith would know: a slot that forks at its foot like a claw. Through the bars, candles are burning in a room where no one has been.',
+    checks: [
+      {
+        skill: 'Locksmith', action: 'Try the keyhole',
+        success: 'There are no tumblers to feel for. The wards behind the plate are curved, and when your pick touches them they shift, slowly, as if settling. No pick will open this. It wants its own key: long, with a bit forked to match the hole.',
+        failure: 'Your picks find nothing to catch on, and the hole is colder than the iron round it.',
+      },
+      {
+        skill: 'Occult', action: 'Read the boss',
+        success: 'The sign on the boss is a seal, and it is cut facing outward, toward you. This gate was not made to keep anyone out of the room. It was made to keep something in. Whoever keeps the key would keep it close, somewhere down here where nothing human would go for it.',
+        failure: 'Worn glyphs on a green stone. They mean something to someone.',
+      },
+      {
+        skill: 'Spot Hidden', action: 'Look at the steps',
+        success: 'Dried brine on the top step holds webbed prints. They come up to the gate and stop, then turn back down into the flood and away, toward the ladder and the tunnels beyond it. Something comes here, opens nothing, and goes home.',
+        failure: 'Wet stone and old salt.',
+      },
+    ],
+  },
+  sanctum_key: {
+    title: 'Green-Black Key',
+    text: 'It lay in the glowing pool, where nothing that lives in this lair would ever have to stoop for it. A key as long as your hand, cast in a green-black metal that is cold through your glove and stays cold. Its bow is a ring of webbed fingers closed round nothing, and its bit forks like a claw. Everything else down here is scabbed with rust. This is not.',
+  },
   shrine_padlock: {
     title: 'Padlocked Door',
     text: 'An iron-bound plank door in a wall of sewer brick, put up long after the rock it closes off. A hasp on its edge folds over a staple in the brickwork, and through the staple hangs a combination padlock, iron with a brass dial. Everything else down here is scabbed with rust, but the lock is new, and it is on this side of the door.',
@@ -1005,7 +1030,16 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
       hidesPeeper: true,
     },
   },
-  sewer: { at: [0, 0, -5.075], shrineLock: 'shrine_padlock', grate: 'sewer_grate' },
+  sewer: {
+    at: [0, 0, -5.075], shrineLock: 'shrine_padlock', grate: 'sewer_grate',
+    // Shub-Niggurath's and Bokrug's rooms off the shrine stay sealed until someone brings the key from the lair.
+    sanctumGate: { gate: 'sanctum_gate', key: 'sanctum_key' },
+    // Sealed for now: the shrine of Dagon stays shut to the party. Remove this to let them work the padlock again.
+    shrineSealed: {
+      title: 'Padlocked Door',
+      text: 'An iron-bound plank door in a wall of sewer brick, and through the staple on its edge a combination padlock, iron with a brass dial. The dial will not turn. Something has been poured into the works and has set as hard as horn, and fresh pitch seals every seam of the door. Whoever closed this did not mean it to be opened again soon.',
+    },
+  },
   // A Deep One loose in the sewer, out of its lair at the end of the west spur (sewer.ts LX0..LX1,
   // LD0..LD1, in world terms). It roams the tunnels, comes to footsteps, sees four metres in the
   // dark — any distance down a torch beam — and goes no further than the foot of the stairs to the

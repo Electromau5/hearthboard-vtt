@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { buildSanctums } from './sanctums';
+import { buildSanctums, type SanctumGates } from './sanctums';
 
 /**
  * The sewer under the derelict house, reached through its back door (see
@@ -51,6 +51,10 @@ export type Sewer = {
   door: ShrineDoor;
   /** The outfall grate, raised like a portcullis (0 down … 1 up); `blocking` stands among the walls while it is down. */
   grate: { blocking: THREE.Mesh[]; set: (k: number) => void; dispose: () => void };
+  /** The gates sealing the inner sanctums (sanctums.ts). */
+  gates: SanctumGates;
+  /** Their key, lying in the lair's pool: `box` to take it by, `show` while no one has. */
+  key: { box: THREE.Box3; show: (on: boolean) => void };
   /**
    * `eye` is the camera, for whatever down here watches it; `view` is whether
    * its torch (or Wood's lamp) is lit, and what to frustum-test, for Dagon.
@@ -452,6 +456,32 @@ export function createSewer(at: THREE.Vector3): Sewer {
     pool.position.copy(P(LX0 + 1.2, FLOOR + 0.008, LD0 + 1.2));
     group.add(pool);
   }
+  // Lying in that pool, where nothing that lives here need stoop for it: the
+  // key to the sanctums' gates. Green-black, unrusted, its bow a ring of
+  // webbed fingers and its bit forked like a claw; it glints in the glow.
+  const key = new THREE.Group();
+  {
+    const metal = m(new THREE.MeshStandardMaterial({
+      color: 0x1c2b23, metalness: 0.8, roughness: 0.38, emissive: 0x0f3324, emissiveIntensity: 0.6,
+    }));
+    const part = (geo: THREE.BufferGeometry, x: number, z = 0, turn = 0) => {
+      const mesh = new THREE.Mesh(g(geo), metal);
+      mesh.position.set(x, 0, z);
+      mesh.rotation.y = turn;
+      mesh.castShadow = true;
+      key.add(mesh);
+    };
+    part(new THREE.TorusGeometry(0.034, 0.009, 8, 20).rotateX(Math.PI / 2), -0.115);
+    part(new THREE.CylinderGeometry(0.0065, 0.0065, 0.17, 8).rotateZ(Math.PI / 2), -0.01);
+    part(new THREE.BoxGeometry(0.014, 0.007, 0.04), 0.06, 0.02);
+    part(new THREE.BoxGeometry(0.012, 0.007, 0.03), 0.078, 0.018, 0.5);
+    part(new THREE.BoxGeometry(0.012, 0.007, 0.03), 0.042, 0.018, -0.5);
+    key.position.copy(P(LX0 + 0.95, FLOOR + 0.016, LD0 + 1.45));
+    key.rotation.y = 0.7;
+    group.add(key);
+    key.updateMatrixWorld(true);
+  }
+  const keyBox = new THREE.Box3().setFromObject(key).expandByScalar(0.18);
 
   // ── The side passage ────────────────────────────────────────────
   box(stone, [B0, BED - 0.3, T1], [B1, FLOOR, T1 + WALL]);
@@ -741,6 +771,8 @@ export function createSewer(at: THREE.Vector3): Sewer {
       },
       dispose() {},
     },
+    gates: sanctums.gates,
+    key: { box: keyBox, show(on) { key.visible = on; } },
     update(dt, eye, view) {
       swell.value += dt;
       sanctums.update(dt, eye ?? null);

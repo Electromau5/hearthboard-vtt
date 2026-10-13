@@ -111,6 +111,8 @@ type Target = {
   bed?: Bed;
   /** A light switch: E switches its room's lamps on or off. */
   lightSwitch?: LightSwitch;
+  /** The sanctums' gates, or the key to them (level.sewer.sanctumGate). */
+  seal?: 'gate' | 'key';
 };
 type Browsing = { target: Target; docs: ArchiveDoc[] | null; error: boolean };
 
@@ -143,6 +145,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   useEffect(() => { openLocksRef.current = openLocks; }, [openLocks]);
   // Safes gamelord has opened himself: open for him only, and only until he leaves the level.
   const gmOpenRef = useRef<LocksState>({});
+  const isGMRef = useRef(isGM);
+  useEffect(() => { isGMRef.current = isGM; }, [isGM]);
   const [shared, setShared] = useState<Set<string>>(() => new Set());
   const [sharedDocs, setSharedDocs] = useState<Set<string>>(() => new Set());
   // The reading card's skill panel, and every skill tried this visit, by "<object>/<skill>".
@@ -359,11 +363,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, []);
 
   // Collections, typewriters and map pins open their own panes, not the reading card.
-  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !t.pickup && !t.bed && !level.typewriters?.[t.id], [canCheck, level]);
+  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !t.pickup && !t.bed && t.seal !== 'key' && !level.typewriters?.[t.id]
+    && !(t.id === level.sewer?.shrineLock && level.sewer.shrineSealed && !isGamelord), [canCheck, level, isGamelord]);
 
   // Safes: which stand open, fetched when the level opens and again whenever one is tried.
   const fetchLocks = useCallback(() => {
-    if (!level.locks) return Promise.resolve(openLocksRef.current);
+    if (!level.locks && !level.sewer?.sanctumGate) return Promise.resolve(openLocksRef.current);
     return fetch(`/api/locks?level=${level.id}`)
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((shared: LocksState) => { const s = { ...shared, ...gmOpenRef.current }; openLocksRef.current = s; setOpenLocks(s); return s; })
@@ -377,20 +382,20 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     return lock ? { id: `${t.id}-inside`, entry: lock.opened, box: t.box } : null;
   }, [level]);
 
-  const setLock = useCallback((id: string, relock = false) => {
+  const setLock = useCallback((id: string, relock = false): Promise<void> => {
     // Open at once here; the server's answer settles it.
     if (!relock) {
       const next = { ...openLocksRef.current, [id]: { by: author, at: Date.now() } };
       openLocksRef.current = next;
       setOpenLocks(next);
       // gamelord's opening is never shared or kept: the safe is shut again next time he comes in.
-      if (isGamelord) { gmOpenRef.current = { ...gmOpenRef.current, [id]: next[id] }; return; }
+      if (isGamelord) { gmOpenRef.current = { ...gmOpenRef.current, [id]: next[id] }; return Promise.resolve(); }
     } else if (gmOpenRef.current[id]) {
       const rest = { ...gmOpenRef.current };
       delete rest[id];
       gmOpenRef.current = rest;
     }
-    fetch('/api/locks', {
+    return fetch('/api/locks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ level: level.id, id, relock }),
@@ -432,8 +437,41 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       document.exitPointerLock?.();
       return;
     }
+    // The sanctums' key and gates, on the party's latest word: E takes the key
+    // if it is still there; at a gate, E turns it if anyone has it, and reads
+    // the sealed gate if no one does. gamelord shuts open gates again.
+    const seal = level.sewer?.sanctumGate;
+    if (t.seal && seal) {
+      void fetchLocks().then(s => {
+        if (t.seal === 'key') {
+          if (s[seal.key]) { openReading({ ...t, id: `${t.id}-gone`, entry: { title: t.entry.title, text: 'Only its print is left in the silt at the bottom of the pool. Someone has taken it already.' } }); return; }
+          setLock(seal.key);
+          onShareRef.current(`found the ${t.entry.title.toLowerCase()} in the lair's pool`);
+          openReading(t);
+          return;
+        }
+        if (s[seal.gate]) {
+          // One after the other: the store is read, changed and written whole each time.
+          if (isGM) void setLock(seal.gate, true).then(() => setLock(seal.key, true));
+          return;
+        }
+        if (s[seal.key]) {
+          setLock(seal.gate);
+          const keyTitle = level.examinables[seal.key]?.title.toLowerCase() ?? 'key';
+          onShareRef.current(`turned the ${keyTitle} in the ${t.entry.title.toLowerCase()} — both gates swing open`);
+          return;
+        }
+        openReading(t);
+      });
+      return;
+    }
     // A safe: cracked open, E looks inside; still locked, E turns the dial —
     // unless someone else has opened it since, which the fresh state shows.
+    // The shrine door, while it is sealed: nothing to work, only the sealed door to look at (gamelord excepted).
+    if (t.id === level.sewer?.shrineLock && level.sewer.shrineSealed && !isGamelord) {
+      openReading({ ...t, id: `${t.id}-sealed`, entry: level.sewer.shrineSealed });
+      return;
+    }
     if (level.locks?.[t.id]) {
       const inside = insideOf(t)!;
       if (openLocksRef.current[t.id]) { openReading(inside); return; }
@@ -458,7 +496,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       docs => setBrowsing(b => (b?.target === t ? { ...b, docs } : b)),
       () => setBrowsing(b => (b?.target === t ? { ...b, error: true } : b)),
     );
-  }, [openReading, level, heldKey, insideOf, fetchLocks]);
+  }, [openReading, level, heldKey, insideOf, fetchLocks, setLock, isGM, isGamelord]);
 
   const closeInspect = useCallback(() => {
     setInspecting(null);
@@ -1358,11 +1396,24 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           const lockEntry = lockId ? level.examinables[lockId] : undefined;
           if (lockId && lockEntry && level.locks?.[lockId]) {
             const dm = sewer.door;
-            const k = openLocksRef.current[lockId] ? 1 : 0;
+            const k = openLocksRef.current[lockId] && !(level.sewer.shrineSealed && !unseenRef.current) ? 1 : 0;
             dm.set(k);
             if (!k) walls.push(...dm.blocking);
             doors.push({ id: lockId, lockId, hidesPeeper: false, model: dm, k, blocking: !k });
             targets.push({ id: lockId, entry: lockEntry, box: dm.lock });
+          }
+          // The sanctums' gates, sealed until the key from the lair turns in them.
+          const seal = level.sewer.sanctumGate;
+          const gateEntry = seal && level.examinables[seal.gate];
+          const keyEntry = seal && level.examinables[seal.key];
+          if (seal && gateEntry && keyEntry) {
+            const gm = sewer.gates;
+            const k = openLocksRef.current[seal.gate] ? 1 : 0;
+            gm.set(k);
+            if (!k) walls.push(...gm.blocking);
+            doors.push({ id: seal.gate, lockId: seal.gate, hidesPeeper: false, model: gm, k, blocking: !k });
+            for (const box of gm.locks) targets.push({ id: seal.gate, entry: gateEntry, box, seal: 'gate' });
+            targets.push({ id: seal.key, entry: keyEntry, box: sewer.key.box, seal: 'key' });
           }
         }
         // Where the rain cannot reach: over the architecture, cast down from above.
@@ -2661,7 +2712,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       // Doors swing over a second and a half. A shut door blocks once it is home;
       // an opening one stops blocking at once.
       for (const d of doors) {
-        const want = (d.lockId ? openLocksRef.current[d.lockId] : doorsOpenRef.current[d.id]) ? 1 : 0;
+        // A sealed shrine door stays shut for all but gamelord.
+        const sealed = d.lockId === level.sewer?.shrineLock && !!level.sewer?.shrineSealed && !unseenRef.current;
+        const want = !sealed && (d.lockId ? openLocksRef.current[d.lockId] : doorsOpenRef.current[d.id]) ? 1 : 0;
         if (d.k !== want) {
           d.k = want > d.k ? Math.min(1, d.k + dt / 1.5) : Math.max(0, d.k - dt / 1.5);
           d.model.set(d.k);
@@ -2673,6 +2726,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           else for (const b of d.model.blocking) walls.splice(walls.indexOf(b), 1);
         }
       }
+      if (sewer && level.sewer?.sanctumGate) sewer.key.show(!openLocksRef.current[level.sewer.sanctumGate.key]);
       sewer?.update(dt, camera.position, { camera, lit: torch.intensity > 0 || (woods?.power ?? 0) > 0.05 });
       // The Deep One: slide in behind the hole from one side, stare, withdraw —
       // unless the door it watches through stands open, and there is nothing there.
@@ -2750,8 +2804,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         ray.set(camera.position, lookDir);
         let best: Target | null = null;
         let bestD = REACH;
+        const seal = level.sewer?.sanctumGate;
         for (const tg of targets) {
           if (tg.uv && uvLightAt(uvLamps, tg.uv.point, tg.uv.normal) < UV_SEEN) continue;
+          // The key once taken; an open gate, for all but the GM, who can shut it again.
+          if (tg.seal && seal && openLocksRef.current[tg.seal === 'key' ? seal.key : seal.gate] && (tg.seal === 'key' || !isGMRef.current)) continue;
           const hit = ray.ray.intersectBox(tg.box, tmpV);
           if (!hit) continue;
           // A person wins over whatever they stand behind (the admissions counter, a desk).
@@ -3190,6 +3247,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Open {focus.entry.title}</>
               ) : level.typewriters?.[focus.id] ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Type at the {focus.entry.title}</>
+              ) : focus.seal === 'key' ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Take the {focus.entry.title.toLowerCase()}</>
+              ) : focus.seal && level.sewer?.sanctumGate && openLocks[level.sewer.sanctumGate.gate] ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Seal the gates again<span style={{ color: 'var(--ink-text-2)' }}> · GM · the key goes back to the lair</span></>
+              ) : focus.seal && level.sewer?.sanctumGate && openLocks[level.sewer.sanctumGate.key] ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Unlock the gates with the {level.examinables[level.sewer.sanctumGate.key]?.title.toLowerCase() ?? 'key'}</>
+              ) : focus.id === level.sewer?.shrineLock && level.sewer.shrineSealed && !isGamelord ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {level.sewer.shrineSealed.title}</>
               ) : level.locks?.[focus.id] ? (
                 openLocks[focus.id]
                   ? <><span style={{ color: 'var(--brass)' }}>[E]</span> {level.locks[focus.id].prompt?.open ?? `Look inside the ${focus.entry.title.toLowerCase()}`}</>
