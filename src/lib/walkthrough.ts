@@ -610,6 +610,8 @@ export type Performer = {
   turnDeg?: number;
   /** Uniform scale. Default 1. */
   scale?: number;
+  /** Seconds into the clip to start from, so figures sharing a clip don't move in step. */
+  phase?: number;
   /**
    * What it plays, heard from it: an audio file under public/ on a loop, kept
    * to broadcast time so everyone hears the same bar. `at` is where the sound

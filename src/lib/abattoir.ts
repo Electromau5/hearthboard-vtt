@@ -13,8 +13,9 @@
  * liquor cellar on the old rum tunnel, a counting room and the cold locker.
  *
  * Set after session 2: the party has drunk at this bar and delivered Miles's
- * envelope to Banks in his office. The only soul here is the pianist — Leroy
- * Pratt, by the bill on the stage wall — playing on at the upright; the model
+ * envelope to Banks in his office. The pianist — Leroy Pratt, by the bill on
+ * the stage wall — plays on at the upright, and guests sit talking in the hall
+ * (two couples at the round tables, Banks in his corner booth); the model
  * marks where the others will stand (`Npc_*`: Banks at his desk, the barman,
  * the butcher, the dealer, a slaughterman) for when they are added. As in the other levels the
  * text is physical description for the GM to build clues on; the stains, the
@@ -297,7 +298,7 @@ export const ABATTOIR_LEVEL: WalkthroughLevel = {
   errorText: 'The abattoir could not be loaded.',
   enterText: 'Click to step inside',
   leaveLabel: 'Leave by the shop',
-  credit: '"Antique Iron Safe" by pixelgrapher · "Dapper in a Black-Tie Tuxedo" by restore50 — CC BY 4.0',
+  credit: '"Antique Iron Safe" by pixelgrapher · "Dapper in a Black-Tie Tuxedo" by restore50 · MakeHuman clothes by Mindfront and Elvaerwyn — CC BY 4.0',
   examinables: EXAMINABLES,
   radios: RADIOS,
   uvStains: UV_STAINS,
@@ -307,7 +308,20 @@ export const ABATTOIR_LEVEL: WalkthroughLevel = {
   performers: [{
     model: '/avatars/pianist.glb', clip: 'Play', at: [-10.6, -5.15], y: STAGE_H, turnDeg: -90, scale: 0.95,
     sound: { src: '/late-night-blues.mp3', volume: 0.8, refDistance: 2.5, at: [0, 1.1, 0.8] },
-  }],
+  },
+  // Guests in the hall, talking over their drinks (Mixamo "Sitting Talking": the
+  // women cross-legged). Two couples at the round tables, each in a chair that
+  // faces the table, and Banks alone in his corner booth, facing the way in.
+  // Placed so the hips sit on the seat; phases keep the shared clips out of step.
+  ...([
+    ['industrialist', [-3.553, -1.704], -0.044, -147.3, 0],
+    ['cocktail-emerald', [-4.815, -2.362], -0.002, 92.7, 11],
+    ['old-gentleman', [-1.544, -2.649], -0.018, 155.4, 23],
+    ['cocktail-claret', [-0.388, -3.477], -0.009, -84.6, 31],
+    ['tyler-banks', [-9.068, 1.25], 0.028, 90, 7],
+  ] as const).map(([who, at, y, turnDeg, phase]) => ({
+    model: `/avatars/${who}.glb`, clip: 'Sit', at: [at[0], at[1]] as [number, number], y, turnDeg, phase,
+  }))],
   // In the corner of Banks's office, where he can watch it from his desk.
   placements: [{ asset: 'iron-safe', id: 'iron_safe', at: [11.55, -3.2], turnDeg: -90 }],
   // Cracked by the dial game (SafeCracker). What is inside is a placeholder for the GM.

@@ -41,7 +41,11 @@ const BANDS: [keyof Omit<Outfit, 'hat'>, number, number][] = [
 
 const MODEL_URL = '/avatars/investigator.glb';
 /** Investigators — and people in the levels (NpcSpot.outfit) — with a model of their own, at /avatars/<slug>.glb. */
-const DRESSED = new Set(['thomas-callahan', 'chief-attendant']);
+const DRESSED = new Set([
+  'thomas-callahan', 'chief-attendant',
+  // The Abattoir crowd: Banks, and evening dress for the speakeasy floor.
+  'tyler-banks', 'industrialist', 'old-gentleman', 'cocktail-emerald', 'cocktail-claret',
+]);
 const HEIGHT = 1.75;         // metres, crown to heel
 const CLIP: Record<Gait, string> = { idle: 'Idle', walk: 'Walk', run: 'Run' };
 

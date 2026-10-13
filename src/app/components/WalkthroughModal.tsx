@@ -2125,11 +2125,17 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         root.scale.setScalar(f.scale ?? 1);
         root.traverse(o => {
           const m = o as THREE.Mesh;
-          if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; }   // skinned bounds are the rest pose's
+          if (!m.isMesh) return;
+          m.castShadow = true;
+          m.frustumCulled = false;   // skinned bounds are the rest pose's
+          // MakeHuman hair, lashes and cloth edges are cut-outs: test alpha rather than blend (as avatars.ts does).
+          for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) {
+            if (mat.transparent) { mat.transparent = false; mat.alphaTest = 0.5; mat.depthWrite = true; }
+          }
         });
         const mixer = new THREE.AnimationMixer(root);
         const clip = (f.clip && gltf.animations.find(a => a.name === f.clip)) || gltf.animations[0];
-        if (clip) mixer.clipAction(clip).play();
+        if (clip) mixer.clipAction(clip).play().time = (f.phase ?? 0) % clip.duration;
         scene.add(root);
         performers.push({ root, mixer, spec: f, audio: null });
       }).catch(err => console.error('Performer failed to load:', f.model, err));

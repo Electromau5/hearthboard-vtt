@@ -42,3 +42,19 @@ pianist.glb
 late-night-blues.mp3 (public/)
   "Late-Night Blues", made with Suno and supplied by the GM; the pianist's tune in the Abattoir speakeasy.
   Changes: converted to mono MP3 (128 kb/s), metadata stripped.
+
+tyler-banks.glb, industrialist.glb, old-gentleman.glb, cocktail-emerald.glb, cocktail-claret.glb
+  Built in Blender with MPFB from MakeHuman assets (https://static.makehumancommunity.org/) by
+  my-summer-game tools/build_npc_avatars.py; clothing textures recoloured.
+  Animation: Idle, Walk and Run retargeted from thomas-callahan.glb (same skeleton); "Sit" is
+  Mixamo "Sitting Talking" (Adobe Mixamo) retargeted onto each — the cross-legged take for the women.
+  CC0: base bodies; skins "middleage caucasian male", "old caucasian male", "young caucasian female",
+       "middleage caucasian female"; eyes, eyebrows, eyelashes, teeth, tongue; hair "short01",
+       "short02", "short04"; "fedora_cocked".
+  CC0: by MRT — "Suit_Double_Breasted" (Banks), "Jacket_bowtie_Pants" (industrialist),
+       "Suit_Dinner_Jacket" (old gentleman), "dress_midi_halter" (emerald), and by MargaretToigo
+       "toigo_keyhole_neck_dress" (claret), from the dress01 pack.
+  CC BY 4.0: "Shoes_Oxford_male" by Mindfront (Sweden), fitted to the body.
+  CC BY: by Elvaerwyn — hair "elvs_wavy_bob" (recoloured platinum) and "elvs_50s_updo" (recoloured
+       auburn), shoes "elvs_flatshoe_pointy1" (recoloured).
+    https://creativecommons.org/licenses/by/4.0/
