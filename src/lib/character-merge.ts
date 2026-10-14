@@ -28,6 +28,7 @@ export function mergeCharacter(base: Character, overrides: Partial<Character>): 
 const DEFAULT_AVATARS: Record<string, string> = {
   "arthur-wright": "/portraits/arthur-wright.webp",
   "dr-alistair-finch": "/portraits/dr-alistair-finch.webp",
+  "thomas-callahan": "/portraits/thomas-callahan.webp",
 };
 
 /**
