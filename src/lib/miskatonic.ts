@@ -1,133 +1,224 @@
 /**
- * Miskatonic University, Arkham: the quadrangle. A first-person walkthrough
- * level (see walkthrough.ts) for the default map's Miskatonic pin. The model is
- * "University of Galway Quadrangle" by eileenMaKe (Sketchfab, CC BY 4.0), a
- * drone photogrammetry scan. ~/dev/my-summer-game `tools/build_miskatonic.py`
- * (Blender) stands it up, levels and crops it, and builds hidden collision from
- * it. `tools/export_miskatonic.sh` exports it to /miskatonic.glb.
+ * Miskatonic University, Arkham: the Orne Library, 1936. A first-person
+ * walkthrough level (see walkthrough.ts) for the default map's Miskatonic pin.
+ * ~/dev/my-summer-game `tools/build_library.py` (Blender) builds it from
+ * scratch — no source assets — and `tools/export_library.sh` exports it to
+ * /miskatonic-library.glb. `tools/render_library.py` renders check pictures.
  *
- * Coordinates are metres. The courtyard's centre is the origin, with the paving
- * at y ≈ 0. Lawns lie in four quarters about a cross of paths. The west range
- * (-X) has the gate under its tower, where the investigator comes in. The east
- * range (+X, x ≈ 17) has an ivy-covered gable whose red door is the Orne
- * Library's. The north range is at z ≈ -29 and the south at z ≈ +29. The
- * cloister arcades are solid in the scan, so they cannot be walked into.
+ * Coordinates are metres; north is -Z. The investigator comes in by the main
+ * doors at the south end of the entry hall (x -4..4, z 0..6, 4 m ceiling),
+ * past the loan desk and the card catalogue. North of the hall is the main
+ * reading room (x -8..8, z -10..0, 6 m), four long tables under green lamps,
+ * tall dark windows in its east wall. An enclosed stair on the hall's east
+ * side climbs to the gallery, a walkway at y 3 along the reading room's south
+ * side. West of the reading room are the stacks (x -20..-8, z -10..0): five
+ * double rows of shelves, a maze, one aisle blocked by a fallen shelf. The
+ * iron gate in the stacks' north wall (x -14.6..-13.4, z -10) shuts the
+ * restricted room (x -16.5..-11.5, z -15..-10), where the Necronomicon lies
+ * chained on a stone pedestal. gamelord opens the gate.
  *
- * The examinables are invisible boxes over features the scan has (`spots`),
- * plus a bench from the prop library. Their text is suggested description for
- * the GM to adjust.
+ * The text is suggested description for the GM to adjust.
  */
 
-import type { Examinable, WalkthroughLevel } from './walkthrough';
+import type { Examinable, GazeHazard, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
-  library_door: {
-    title: 'The Orne Library · East Door',
-    text: "A red-painted oak door under a gable smothered in ivy. A brass plate reads ORNE LIBRARY — READERS BY THE WEST STAIR. Below it a typed card has been tacked up: The Restricted Collection is closed to all readers save by the written leave of the Librarian, and then only in his presence. — H. Armitage. The door has two new bolts and a lock far newer than the hinges.",
+  front_desk: {
+    title: 'The Loan Desk',
+    text: "A high oak counter facing the doors, its top worn pale where a generation of elbows has leant on it. A green-shaded lamp, an inkwell, and the request ledger lying open. The night attendant's chair is pushed back as though he left in a hurry, and has not come back.",
     checks: [
       {
-        skill: 'Spot Hidden', action: 'Look over the lower panels',
-        success: 'The bottom of the door has been planed and repainted, but not well enough. Under the red there are deep gouges at knee height, many of them, all scored downward, as if something had been clawed from the inside.',
-        hard: 'Under the gouged paint the planed wood has a dark stain that soaked in too deep to plane out. It is not blood. It smells faintly, when you put your face to it, of something rotting that is not meat.',
-        failure: 'An old door, freshly painted. The ivy has been cut back from the frame.',
+        skill: 'Library Use', action: 'Read the request ledger',
+        success: 'Requests for the Restricted Collection run back years, each with "Dr. A." initialled in the margin, granted or refused. The last three this month are refused. One requester has signed with a single letter, W., and given no department.',
+        hard: 'Turning back a dozen pages: the summer of 1928, a long run of requests from one hand, all for the same volume and all refused, until the entries stop on a night in late summer. Somebody has drawn a neat line under the last one.',
+        failure: 'Names, dates, call numbers. The night attendant writes a poor hand.',
       },
       {
-        skill: 'Locksmith', action: 'Judge the new lock',
-        success: 'A good lever lock, fitted this year. From the play in the door there is a bar on the inside as well. Nobody is getting through here quietly by night.',
-        failure: 'A lock, fairly new. You cannot tell more without your tools out in full view of the windows.',
-      },
-      {
-        skill: 'Library Use', action: 'Read the hours card beside the door',
-        success: 'Reading-room hours, and in a smaller hand at the foot: Requests for the Restricted Collection are entered in the Librarian\'s book and answered within the week. Four names have been written in pencil on the card and rubbed out again.',
-        failure: 'Hours of opening, nine until six. Closed on the Sabbath.',
+        skill: 'Spot Hidden', action: 'Look behind the counter',
+        success: 'A key hook under the counter-top, numbered 1 to 12. Number 12 is empty, and the brass around it is scratched bright, as if it were taken down and hung back many times in a hurry. Number 12, by the tag on the board, is "R. Gate".',
+        failure: 'Pencils, a date stamp, a cold cup of tea.',
       },
     ],
   },
-  notice_case: {
-    title: 'The Notice Case in the Gate',
-    text: "A glazed case on the wall of the gate passage, full of university notices: lecture lists, a rowing fixture, a room to let on College Street. The oldest have curled and gone yellow behind the glass.",
+  card_catalog: {
+    title: 'The Card Catalogue',
+    text: 'A cabinet of seventy-two small drawers, each with a brass label frame and a typed card in it: Aa–Ab, Ab–Ac, on into the dark. Most of the drawers are stiff. A few slide easily, as though they are often used.',
     checks: [
       {
-        skill: 'Spot Hidden', action: 'Read down the notices',
-        success: "In a corner: DEPARTMENT OF BIOLOGY. Specimens of unusual marine or anatomical character, from any New England source, will be received and paid for at the Science Hall. Enquire of the Curator. Discretion assured. Somebody has written 'Innsmouth?' on the glass in grease pencil.",
-        hard: "Pinned behind the Biology notice and half hidden by it: a lecture card for Prof. Rice, 'Pre-Human Inscriptions of the Atlantic Seaboard'. The date has been struck through and CANCELLED written across it, in the same hand that signs the Librarian's notices.",
-        failure: 'Lectures, rooms, rowing. Nothing you need.',
+        skill: 'Library Use', action: 'Look up the Restricted Collection',
+        success: 'The restricted titles have cards like any other book, but the call numbers are all an R and a number, and each card is stamped APPLY TO THE LIBRARIAN. R-1 is "Alhazred, Abdul. Al Azif (the Necronomicon). Latin trans. O. Wormius. Folio, 1623. One vol., chained."',
+        hard: 'Behind R-1 there should be R-2 and R-3. Their cards are gone. Where they sat, the drawer has a pencilled note: withdrawn to the Librarian, 2.viii.28.',
+        failure: 'The drawers are in no order you can follow quickly. The cards smell of mould.',
+      },
+      {
+        skill: 'Spot Hidden', action: 'Find the drawers that slide easily',
+        success: 'The easy drawers are the "D" drawers: Dag–Dal, and one marked Dee–Del. The cards in Dag–Dal have been thumbed soft, Dagon above all: a sermon, a Phoenician gazetteer, and a pamphlet printed in Innsmouth.',
+        failure: 'The drawers stick and slide by turns. Damp, perhaps.',
       },
     ],
   },
-  science_door: {
-    title: 'The Science Hall · North Door',
-    text: 'An arched door in the north range, the steps worn into hollows. Through the glass there is a corridor of specimen cases and a smell of spirits and formalin that reaches you even out here.',
+  open_book: {
+    title: 'An Open Book on a Reading Table',
+    text: "Someone left a book open on the far table, under its lamp: a county history of Essex, its pages spotted brown. A sheaf of notes lies beside it, and an inkwell with the cap off. The ink in the pen has dried.",
     checks: [
       {
-        skill: 'Science (Biology)', action: 'Study the specimens in the corridor',
-        success: 'Most of the cases are ordinary: birds, a shark\'s jaw, a sunfish. The last one, nearest the door, is empty, and its label has been taken out. The dust on its shelf has the outline of a jar a foot and a half tall.',
-        hard: 'The empty case has a curator\'s slip left in the corner: Accession 1927/14. Received from Mr. ——, Newburyport. Not to be catalogued. Transferred to basement store by order. The donor\'s name has been inked out.',
-        failure: 'Glass cases and labels in Latin. The corridor is empty this late.',
+        skill: 'History', action: 'Read the open pages',
+        success: 'The chapter is on Innsmouth: the Marsh refinery, the fever of 1846 that halved the town, and the family of Captain Obed Marsh, who "removed from the town in the years following." It does not say where they went.',
+        failure: 'Fishing returns and a list of town selectmen. Dry going.',
+      },
+      {
+        skill: 'Spot Hidden', action: 'Read the notes beside it',
+        success: 'The notes are in pencil, a list of Marsh names, crossed out one by one. The last is not crossed out: "Eliza Marsh, m. 1891 — to Arkham? Ask at the Historical Society." Somebody in this town has been looking for the same family you are.',
+        hard: 'Pressed into the sheet beneath, from a page that was torn off: a street address on French Hill, and the words "she does not answer the door."',
+        failure: 'Scrawl, mostly names. None you know.',
       },
     ],
   },
-  archaeology_door: {
-    title: 'Archaeology & Ancient Languages · South Door',
-    text: 'A red door in the south range, set in a tower thick with ivy. A board beside it lists the department\'s rooms. Leaning in the porch is a crate stencilled FRAGILE — PLASTER, its lid prised up.',
+  fallen_shelf: {
+    title: 'A Fallen Shelf',
+    text: 'One bay of the stacks has come away from its row and fallen across the aisle, wedged against the shelves opposite. Its books lie spilled on the floor and nobody has picked them up. Beyond it the aisle runs on into the dark toward the north wall.',
     checks: [
       {
-        skill: 'History', action: 'Look into the crate',
-        success: 'Plaster casts of carved stone: glyphs in tight rows, worn almost smooth. Nobody has labelled them yet. They are not Egyptian or Mayan, nor any script you could put a name to.',
-        hard: 'One cast has a shipping tag: Boston Harbour, c/o Butler & Associates, for comparison. Somebody in this department is matching the Black Archive\'s pieces against the university\'s.',
-        failure: 'Plaster and straw. Casts of something carved.',
+        skill: 'Spot Hidden', action: 'Look at where it stood',
+        success: 'It did not tip on its own. The feet were screwed to the floor, and the screws have been torn out of the boards, splintering them, as if something heavy had pulled the bay out from the row.',
+        hard: 'Deep scratches run along the back of the bay, three and three, a hand-span apart. They are at shoulder height for a tall man, and they go through the varnish into the wood.',
+        failure: 'An old bay come loose. The stacks need work.',
       },
       {
-        skill: 'Architecture & Engineering', action: 'Read the angles of the glyph rows',
+        skill: 'Track', action: 'Read the dust on the floor',
+        success: 'There is a path worn in the dust of this aisle, but it stops at the fallen shelf. Somebody comes this way to the north wall by the long way round, through the west end of the stacks, often and recently.',
+        failure: 'Dust and fallen pages. Too many feet have been through here to read.',
+      },
+      {
+        skill: 'STR', action: 'Try to shift it',
         difficulty: 'Hard',
-        success: 'The rows are not straight. Each leans by the same small amount, and set end to end they would close into a curve far larger than any wall these casts came from. Your head aches when you try to hold the curve in your mind.',
-        failure: 'The carving is too worn to say how it was laid out.',
+        success: 'It rocks, and books slide off it, loud in the quiet. It will not go back by one pair of hands, and the noise carries.',
+        failure: 'It does not move. It is wedged fast against the far row.',
       },
     ],
   },
-  bench: {
-    title: 'A Bench by the Lawn',
-    text: 'A long bench on the path between the lawns. Someone has left an evening paper on it, the Arkham Advertiser, folded open at the second page.',
+  gallery_desk: {
+    title: "The Librarian's Desk in the Gallery",
+    text: "A writing desk up on the gallery, where whoever sits there can see the whole reading room and the doors. The lamp is still warm. Papers in a fine, careful hand, and a stack of books with slips of card marking places.",
     checks: [
       {
-        skill: 'Spot Hidden', action: 'Read the folded page',
-        success: 'A short column: LIBRARY HOUND PUT DOWN. The watchdog at the Orne Library, "a mastiff of uncertain temper," has been destroyed on the order of the University. The Librarian could not be reached. A student has written in the margin: he still walks it at night.',
-        failure: 'Shipping news, a bank failure in Salem, a column of small advertisements.',
+        skill: 'Library Use', action: 'Look over the marked books',
+        success: 'Every slip marks the same kind of passage: rites of binding and of sending back, in Latin, Greek and Arabic. The reader is comparing them, line by line. In the margins of one, in the careful hand: "the powder — 1928 — it was enough."',
+        failure: 'Scholarship, in three languages. Somebody is working late.',
+      },
+      {
+        skill: 'Psychology', action: 'Read the hand in the papers',
+        success: 'The writing is fine and controlled down each page, and then at the foot of one it breaks. The same line is written over and over, smaller and smaller: Lock the gate. Lock the gate. Lock the gate.',
+        failure: 'A scholar\'s notes. A careful man, by his hand.',
+      },
+      {
+        skill: 'Cthulhu Mythos', action: 'Follow the comparison',
+        difficulty: 'Hard',
+        success: 'He is not studying how to call anything. He is studying how to send something back, and he believes he will have to, soon.',
+        failure: 'The rites contradict each other, and the margins argue with them.',
+      },
+    ],
+  },
+  restricted_gate: {
+    title: 'The Iron Gate',
+    text: 'Black iron bars, floor to lintel, set in the north wall of the stacks. A heavy box lock, newer than the gate. Through the bars a small stone room, a pedestal in the middle of it, and on the pedestal a book under a chain. A card wired to the bars reads RESTRICTED COLLECTION — BY THE LIBRARIAN ONLY.',
+    checks: [
+      {
+        skill: 'Locksmith', action: 'Judge the lock',
+        success: 'A good lock, and a lever key, the kind that hangs on a board. You could pick it with time and quiet, which you will not get here. The key hook at the loan desk would be quicker.',
+        failure: 'A heavy lock. Not one to rush.',
+      },
+      {
+        skill: 'Spot Hidden', action: 'Look through the bars',
+        success: 'Two candle stands either side of the pedestal, burnt low and lately lit. A chair in the corner, set to face the book, not the door.',
+        failure: 'A dark room. A pedestal. A book.',
+      },
+    ],
+  },
+  necronomicon: {
+    title: 'The Necronomicon',
+    text: "A great folio in dark hide gone soft and cracked with age, its corners shod in tarnished brass, a strap and hasp across the fore-edge. On the front board a brass boss, a star of seven arms inside a ring of studs. An iron chain runs across it from one side of the pedestal to the other, padlocked. The room is cold, and colder near the book.",
+    checks: [
+      {
+        skill: 'Library Use', action: 'Read the spine and the shelf-mark',
+        success: 'A paper slip in the spine, in a librarian\'s hand: R-1. Al Azif, Latin, Olaus Wormius. Folio. Printed in Spain, 1623. Not to leave this room.',
+        failure: 'The lettering on the spine has worn away.',
+      },
+      {
+        skill: 'Locksmith', action: 'Work the padlock on the chain',
+        difficulty: 'Hard',
+        success: 'The padlock is old and simple next to the gate\'s lock. It opens. The chain is free, and so is the book.',
+        fumble: 'The pick snaps in the padlock. It will not open now without the key, and the broken pick is plain to anyone who looks.',
+        failure: 'The padlock does not give, and the chain rattles on the stone when you let go.',
+      },
+      {
+        skill: 'Occult', action: 'Study the boss on the cover',
+        success: 'The seven-armed star is not decoration. It is a seal, worked so that it presses on the book from outside. Somebody, long after it was bound, wanted it kept shut.',
+        failure: 'An old binder\'s ornament, a star in a ring.',
+      },
+      {
+        skill: 'Cthulhu Mythos', action: 'Open it',
+        success: 'You read a page before you mean to. The Latin is plain enough. What it describes is not, and you will not forget it.',
+        extreme: 'You find the page the gallery notes were circling: a rite of sending back, and a powder, and a list of what it needs. One ingredient has been underlined in pencil, recently.',
+        failure: 'The words swim. You close it, and find your hand is shaking.',
       },
     ],
   },
 };
 
+/** The book is hard to look at for long. */
+const GAZE_HAZARDS: Record<string, GazeHazard> = {
+  necronomicon: { angleDeg: 4, range: 3, maxBlurPx: 3, onsetSec: 7, recoverSec: 2.5 },
+};
+
 export const MISKATONIC_LEVEL: WalkthroughLevel = {
   id: 'miskatonic',
-  model: '/miskatonic.glb',
-  title: 'Miskatonic University · Arkham',
-  loadingText: 'Passing under the gate tower…',
-  errorText: 'The quadrangle could not be loaded.',
-  enterText: 'Click to walk the quadrangle',
-  leaveLabel: 'Leave the university',
-  credit: '"University of Galway Quadrangle" by eileenMaKe — CC BY 4.0',
+  model: '/miskatonic-library.glb',
+  title: 'The Orne Library · Miskatonic University',
+  loadingText: 'Signing the night register…',
+  errorText: 'The library could not be loaded.',
+  enterText: 'Click to enter the library',
+  leaveLabel: 'Leave the library',
   examinables: EXAMINABLES,
-  // Invisible boxes over doors and the notice case, which the scan has. x/z are
-  // metres from the courtyard's centre (see above); y is up from the paving.
+  gazeHazards: GAZE_HAZARDS,
+  // The gate is its own mesh (Gate_Iron), hinged on its west post. Its bars are
+  // too far apart to stop the walkthrough's wall rays, so Gate_Collider, a clear
+  // pane in the gate's plane, swings with it and does the stopping.
   spots: {
-    library_door: { min: [16.5, 0, -0.9], max: [17.4, 2.7, 0.9] },
-    notice_case: { min: [-16.3, 0.4, -1.4], max: [-15.6, 3.2, 1.2] },
-    science_door: { min: [1.2, 0, -29.6], max: [3.0, 2.7, -28.8] },
-    archaeology_door: { min: [0.3, 0, 28.4], max: [2.1, 2.7, 29.2] },
+    restricted_gate: { min: [-14.6, 0, -10.15], max: [-13.4, 2.4, -9.85] },
   },
-  placements: [{ asset: 'long-bench', id: 'bench', at: [-7, 2.6] }],
-  // Outdoors: the GM sets the time of day and the rain (`/admin/experience`); night is the atmosphere below.
-  weather: true,
-  // Four iron lamp posts about the cross of paths.
-  lamps: { color: 0xffc27a, intensity: 14, distance: 16 },
+  doors: {
+    restricted_gate: {
+      label: 'Restricted gate',
+      leaf: [
+        { mesh: 'Gate_Iron', min: [-14.7, -0.05, -10.12], max: [-13.3, 2.6, -9.88] },
+        { mesh: 'Gate_Collider', min: [-14.7, -0.05, -10.12], max: [-13.3, 2.6, -9.88] },
+      ],
+      // Swings north, into the restricted room.
+      hinge: [-14.6, 0, -10],
+      openDeg: 100,
+    },
+  },
+  // Green banker's lamps over the four tables (1-4), the loan desk (5), bare
+  // pendants in the stacks (6-7) and the hall (10), the one small lamp in the
+  // restricted room (8), the gallery desk (9).
+  lamps: {
+    color: 0xffc98a, intensity: 5, distance: 7,
+    only: {
+      Lamp_6: { intensity: 4, distance: 8 },
+      Lamp_7: { intensity: 3, distance: 7 },
+      Lamp_8: { color: 0xffa860, intensity: 2.5, distance: 5 },
+      Lamp_10: { intensity: 6, distance: 9 },
+    },
+  },
   atmosphere: {
-    background: 0x05070c,
-    fogColor: 0x080b12,
-    fogDensity: 0.022,
-    sky: 0x3d4a66,
+    background: 0x050505,
+    fogColor: 0x070605,
+    fogDensity: 0.035,
+    sky: 0x5c5446,
     ground: 0x0c0a08,
-    fill: 0.5,
-    moon: { color: 0x9fb2d4, intensity: 1.4, position: [-20, 34, 12] },
+    fill: 0.55,
+    // A little night through the tall east windows.
+    moon: { color: 0x8a9cc0, intensity: 0.6, position: [30, 14, -6] },
   },
 };

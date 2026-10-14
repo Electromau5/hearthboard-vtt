@@ -59,7 +59,7 @@ const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; a
   'loc-bellevue': { level: BELLEVUE_LEVEL, preview: '/bellevue-ward-preview.jpeg', alt: "Bellevue's admissions hall", cta: 'Enter the ward', hint: 'Click to sign in' },
   'loc-underworld': { level: ABATTOIR_LEVEL, preview: '/abattoir-preview.jpeg', alt: "The butcher's shop on Federal Hill", cta: 'Enter the butcher\'s', hint: 'Click to ring the shop bell' },
   'loc-inn-refinery': { level: REFINERY_LEVEL, preview: '/marsh-refinery-preview.jpeg', alt: "The Marsh Refinery's furnace hall", cta: 'Enter the refinery', hint: 'Click to force the doors' },
-  'loc-miskatonic': { level: MISKATONIC_LEVEL, preview: '/miskatonic-preview.jpeg', alt: "Miskatonic University's quadrangle", cta: 'Walk the quadrangle', hint: 'Click to pass under the gate' },
+  'loc-miskatonic': { level: MISKATONIC_LEVEL, preview: '/miskatonic-preview.jpeg', alt: "The Orne Library's reading room at night", cta: 'Enter the library', hint: 'Click to step through the doors' },
   'loc-downtown': { level: DOWNTOWN_LEVEL, preview: '/downtown-preview.jpeg', alt: 'A downtown street of brick shopfronts at night', cta: 'Walk downtown', hint: 'Click to walk the street' },
 };
 

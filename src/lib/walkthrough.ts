@@ -6,7 +6,8 @@
  * The model contract, shared by every level:
  *   * meshes under a node named "Architecture" are walked on and collided with;
  *     ones named "Collider*" there are hidden — simple stand-ins for a visual
- *     model too heavy to raycast (miskatonic.ts)
+ *     model too heavy to raycast, or invisible stops (the library gallery's
+ *     balustrade, miskatonic.ts)
  *   * each child of "Furniture" is an obstacle; one named "Examine_<id>" is
  *     examinable, its text looked up in `examinables[id]`
  *   * "PlayerStart" marks where the investigator enters, facing its -Z
