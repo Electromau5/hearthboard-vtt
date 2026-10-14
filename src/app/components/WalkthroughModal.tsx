@@ -1417,6 +1417,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
         const arch = model.getObjectByName('Architecture');
         arch?.traverse((o) => { if ((o as THREE.Mesh).isMesh) walls.push(o); });
+        // "Collider*" stand-ins for a model too heavy to raycast (a photogrammetry
+        // scan): walked on and run into, never drawn. Raycasts ignore visibility.
+        arch?.traverse((o) => { if (o.name.startsWith('Collider')) o.visible = false; });
         // Doors gamelord works: cut out of the walls, standing as the party last left them.
         for (const [id, door] of Object.entries(level.doors ?? {})) {
           const dm = createDoor(model, scene, door);

@@ -1,5 +1,14 @@
 3D models for the walkthrough levels in this folder
 
+miskatonic.glb
+  "University of Galway Quadrangle" by eileenMaKe — https://sketchfab.com/eileenMaKe
+  https://sketchfab.com/3d-models/university-of-galway-quadrangle-ddd2d528f28a47bfbcf8e5b3f6bf7d10
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: stood upright, levelled, scaled to metres and cropped to the quadrangle
+  (the surrounding roads and cars removed), decimated to 150k triangles, relit,
+  lamp posts added as Miskatonic University; texture resized to 4096 px WebP,
+  meshes meshopt-compressed.
+
 marsh-refinery.glb
   "Old Industrial Building" by Hrvoje Wächter — https://sketchfab.com/gazdahrco
   https://sketchfab.com/3d-models/old-industrial-building-0dafa7aaadfd4666bb4a32776c84b14e
