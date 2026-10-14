@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { readJSON, writeJSON } from "@/lib/redis-storage";
-import type { DoorsState } from "@/lib/walkthrough";
+import type { DoorsState, LocksState } from "@/lib/walkthrough";
+import { HOUSE_LEVEL } from "@/lib/innsmouth-house";
 
 /**
  * The doors gamelord opens and shuts in a walkthrough level — the derelict
@@ -21,18 +22,43 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(await readJSON<DoorsState>(statePath(level), {}));
 }
 
-/** POST { level, id, open } — gamelord only, not every admin. */
+/** Levels with a scripted ambush (WalkthroughLevel.ambush) that the party sets off. */
+const AMBUSHING = [HOUSE_LEVEL];
+
+/**
+ * POST { level, id, open } — gamelord only, not every admin.
+ * POST { level, id, ambush: true } — any investigator: sets off the level's
+ * ambush, once, and only after its item has been taken (Ambush.after).
+ */
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session || session.user.username !== "gamelord") {
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = (await req.json()) as { level?: unknown; id?: unknown; open?: unknown; ambush?: unknown };
+  if (body.ambush === true) return setOff(body.level, body.id, session.user.id);
+  if (session.user.username !== "gamelord") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const { level, id, open } = (await req.json()) as { level?: unknown; id?: unknown; open?: unknown };
+  const { level, id, open } = body;
   if (!validLevel(level) || !validId(id) || typeof open !== "boolean") {
     return NextResponse.json({ error: "Expected a level, a door id and open: true/false" }, { status: 400 });
   }
   const state = await readJSON<DoorsState>(statePath(level), {});
   state[id] = { open, setAt: Date.now(), setBy: session.user.id };
+  await writeJSON(statePath(level), state);
+  return NextResponse.json(state);
+}
+
+async function setOff(level: unknown, id: unknown, by: string) {
+  const ambush = AMBUSHING.find(l => l.id === level)?.ambush;
+  if (!validLevel(level) || !ambush || ambush.id !== id) {
+    return NextResponse.json({ error: "No such ambush" }, { status: 400 });
+  }
+  const state = await readJSON<DoorsState>(statePath(level), {});
+  // Once only: dismissed, it stays gone (gamelord can still set it off by hand).
+  if (state[ambush.id]) return NextResponse.json(state);
+  const taken = await readJSON<LocksState>(`locks/${ambush.after.level}.json`, {});
+  if (!taken[ambush.after.item]) return NextResponse.json({ error: "Not yet" }, { status: 409 });
+  state[ambush.id] = { open: true, setAt: Date.now(), setBy: by };
   await writeJSON(statePath(level), state);
   return NextResponse.json(state);
 }

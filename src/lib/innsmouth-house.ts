@@ -1079,6 +1079,27 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
     // Baked with the hunter's bake() — rebake if the sewer's tunnels change (sewer.ts).
     nav: '/sewer-nav.json',
   },
+  // Once the puzzle box is out of the trawler's safe (VESSEL_LEVEL, SafeItem puzzle_box) — which
+  // lets the Deep One out — the first investigator back up the sewer stairs into the house finds a
+  // cultist just inside the front door (build_house.gd: front door at z = 5, x = 0), gun levelled
+  // down the hall, and he says his piece to everyone in the house. gamelord dismisses him with the
+  // header button "Cultist" (or sets him off himself).
+  ambush: {
+    id: 'cultist_ambush',
+    label: 'Cultist',
+    after: { level: 'vessel', item: 'puzzle_box' },
+    trigger: { belowY: -1, aboveY: -0.3, insideZ: -4.8 },
+    figure: { asset: 'cultist', at: [0, 4.45], turnDeg: 180, clip: 'AimIdle' },
+    speech: {
+      src: '/cultist-speech-1.mp3', duration: 16.5,
+      lines: [
+        { t: 0, text: 'Hello.' },
+        { t: 0.86, text: 'I would strongly advise you not to move or do anything stupid.' },
+        { t: 5.4, text: 'I would like you to very slowly take the puzzle box, place on the floor and kick it towards me.' },
+        { t: 11.7, text: 'If you want to leave this place with your lives, please do as I say and I\'ll be on my way.' },
+      ],
+    },
+  },
   // The bedroom window has no furniture node of its own (the windows are part of the walls).
   spots: { bedroom_window: { min: [5.72, 0.85, -3.95], max: [5.93, 2.35, -2.85] } },
   atmosphere: {

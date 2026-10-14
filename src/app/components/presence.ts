@@ -34,7 +34,9 @@ export type HunterHit = { type: 'hunter-hit'; to: number };
 export type HunterShot = { type: 'hunter-shot'; by: number };
 /** gamelord changed the level's set dressing: everyone reads /api/dressing again. */
 export type DressingChanged = { type: 'dressing' };
-type LevelEvent = HunterHit | HunterShot | DressingChanged;
+/** The level's doors (or its ambush, kept with them) changed: everyone reads /api/doors again now, not at the next poll. */
+export type DoorsChanged = { type: 'doors' };
+type LevelEvent = HunterHit | HunterShot | DressingChanged | DoorsChanged;
 
 type Presence = { pose: Pose | null; prey?: Pose | null; hunter?: HunterSnapshot | null; hr?: boolean };
 type UserMeta = { id: string; info: { name: string; slug: string | null } };
@@ -62,6 +64,8 @@ export type LevelPresence = {
   sendShot: () => void;
   /** Tells the room the level's set dressing has changed. */
   sendDressing: () => void;
+  /** Tells the room the level's doors have changed. */
+  sendDoors: () => void;
   leave: () => void;
 };
 
@@ -89,7 +93,7 @@ function presenceEnabled() {
  * Joins the level's room if presence is set up. Until (or unless) it connects,
  * setPose is a no-op and onPeers is never called.
  */
-export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onHit?: () => void, onShot?: (by: number) => void, onDressing?: () => void): LevelPresence {
+export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onHit?: () => void, onShot?: (by: number) => void, onDressing?: () => void, onDoors?: () => void): LevelPresence {
   let live: { room: Room; leave: () => void; unsub: () => void } | null = null;
   let left = false;
   let last = '';
@@ -104,6 +108,7 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
       if (event?.type === 'hunter-hit' && event.to === room.getSelf()?.connectionId) onHit?.();
       if (event?.type === 'hunter-shot') onShot?.(event.by);
       if (event?.type === 'dressing') onDressing?.();
+      if (event?.type === 'doors') onDoors?.();
     });
     live = { room, leave, unsub: () => { unsubOthers(); unsubEvents(); } };
   });
@@ -150,6 +155,9 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
     },
     sendDressing() {
       live?.room.broadcastEvent({ type: 'dressing' });
+    },
+    sendDoors() {
+      live?.room.broadcastEvent({ type: 'doors' });
     },
     leave() {
       left = true;

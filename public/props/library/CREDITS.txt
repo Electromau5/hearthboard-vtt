@@ -8,6 +8,9 @@ barrel.glb
 candlestick.glb
   "Wooden Candlestick" by Josh Dean — https://polyhaven.com/a/wooden_candlestick (CC0)
 
+cultist.glb
+  "Cultist" by DJMaesen — https://sketchfab.com/3d-models/cultist-60f6f26ac2054b09a0b4757fbc771d18 (CC BY 4.0)
+
 iron-safe.glb
   "Antique Iron Safe" by pixelgrapher — https://sketchfab.com/3d-models/antique-iron-safe-196cf0d3d5094b50874dbf51064a7d3e (CC BY 4.0)
 

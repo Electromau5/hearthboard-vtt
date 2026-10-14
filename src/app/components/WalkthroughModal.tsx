@@ -7,7 +7,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
 import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, DressedProp, DressingState, NpcSpot, Passage, Performer, Pickup, Placement, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
 import { fileNote } from '@/lib/case-board';
-import { PROP_LIBRARY, type PropAssetId } from '@/lib/prop-library';
+import { PROP_LIBRARY, type LibraryProp, type PropAssetId } from '@/lib/prop-library';
 import { createDeepOneHead } from './deep-one';
 import { createHunter, type HunterSense } from './hunter';
 import { createPinboard } from './pinboard';
@@ -21,7 +21,7 @@ import { InspectViewer } from './InspectViewer';
 import { ModelBuilder } from './ModelBuilder';
 import { SafeCracker } from './SafeCracker';
 import { SetDressing } from './SetDressing';
-import { createDressing, type Dressing } from './set-dressing';
+import { cloneProp, createDressing, propBox, tickProps, type Dressing } from './set-dressing';
 import { createModelInLevel } from './model-pieces';
 import { createSewer } from './sewer';
 import { createShore } from './shore';
@@ -227,6 +227,14 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const doorsOpenRef = useRef<Record<string, boolean>>({});
   useEffect(() => { doorsOpenRef.current = doorsOpen; }, [doorsOpen]);
   const doorSetAt = useRef(0);
+  // The same doors in full: when each was last set (the ambush, kept with them, plays from then).
+  const doorsStateRef = useRef<DoorsState>({});
+  // Read the doors again now (the room says they changed), and tell the room we changed them.
+  const pollDoorsRef = useRef<(() => void) | null>(null);
+  const sendDoorsRef = useRef<(() => void) | null>(null);
+  // gamelord's private run of the level's ambush (see Ambush): when he pressed Preview, 0 when none.
+  // Nothing is saved or sent: only his own screen plays it, held and turned like an investigator.
+  const ambushPreviewRef = useRef(0);
   const [doorError, setDoorError] = useState(false);
   // Set dressing (/api/dressing): props gamelord has set down here from the library's
   // tray. Everyone sees them; only gamelord has the mode that places them.
@@ -682,7 +690,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // ── Doors ─────────────────────────────────────────────────────────
   // Polled every 5 s: a door is the way on, so the party should not wait long for it.
   useEffect(() => {
-    if (!level.doors && !level.sewer?.grate) return;
+    if (!level.doors && !level.sewer?.grate && !level.ambush) return;
     let cancelled = false;
     const poll = () => {
       if (document.hidden) return;
@@ -691,6 +699,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         .then(r => (r.ok ? r.json() : null))
         .then((s: DoorsState | null) => {
           if (cancelled || !s || sent < doorSetAt.current) return;
+          doorsStateRef.current = s;
           const open = Object.fromEntries(Object.entries(s).map(([id, d]) => [id, d.open]));
           doorsOpenRef.current = open;
           setDoorsOpen(open);
@@ -698,9 +707,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         .catch(() => {});
     };
     poll();
+    pollDoorsRef.current = poll;
     const timer = window.setInterval(poll, 5_000);
     document.addEventListener('visibilitychange', poll);
-    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
+    return () => { cancelled = true; pollDoorsRef.current = null; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
   }, [level]);
 
   // gamelord opens or shuts a door: it moves here at once, and goes back if it could not be saved.
@@ -708,6 +718,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const next = !doorsOpenRef.current[id];
     const apply = (open: boolean) => {
       doorsOpenRef.current = { ...doorsOpenRef.current, [id]: open };
+      doorsStateRef.current = { ...doorsStateRef.current, [id]: { open, setAt: Date.now(), setBy: 'gamelord' } };
       setDoorsOpen(doorsOpenRef.current);
     };
     doorSetAt.current = performance.now();
@@ -720,6 +731,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         body: JSON.stringify({ level: level.id, id, open: next }),
       });
       if (!r.ok) throw new Error(String(r.status));
+      sendDoorsRef.current?.();
     } catch (err) {
       console.error('Could not set the door:', err);
       apply(!next);
@@ -1373,6 +1385,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       if (!p) {
         p = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(PROP_LIBRARY[asset].model).then((gltf) => {
           gltf.scene.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          // A character's clips travel with its model; each copy plays its own (cloneProp).
+          gltf.scene.userData.clips = gltf.animations;
           return gltf.scene;
         });
         propModels.set(asset, p);
@@ -1916,7 +1930,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           return group;
         };
         const placeAsset = async (asset: PropAssetId, list: Placement[]) => {
-          const lib = PROP_LIBRARY[asset];
+          const lib: LibraryProp = PROP_LIBRARY[asset];
           const template = await loadProp(asset);
           if (disposed) return;
           const shape = new THREE.Box3().setFromObject(template);
@@ -1924,18 +1938,20 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           for (const pl of list) {
             const at = placementMatrix(pl);
             const solid = pl.solid ?? lib.solid;
-            if (!pl.id) {
+            // Plain copies of a still prop are instanced; a character's each need a skeleton of their own.
+            if (!pl.id && !lib.clips) {
               plain.push(at);
               if (solid) blockers.push(shape.clone().applyMatrix4(at));
               continue;
             }
-            const obj = template.clone();
+            const obj = cloneProp(asset, template);
             at.decompose(obj.position, obj.quaternion, obj.scale);
             scene.add(obj);
             propRoots.push(obj);
             obj.updateMatrixWorld(true);
-            const box = new THREE.Box3().setFromObject(obj);
+            const box = propBox(obj);
             if (solid) blockers.push(box);
+            if (!pl.id) continue;
             const entry = level.examinables[pl.id];
             if (entry) targets.push({ id: pl.id, entry, box, collection: level.collections?.[pl.id] });
             else console.warn('Placement has no examinable:', pl.id);
@@ -2284,6 +2300,155 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }).catch(err => console.error('Performer failed to load:', f.model, err));
     }
 
+    // ── The ambush (see Ambush) ─────────────────────────────────────
+    // Kept as a door (doorsOpenRef/doorsStateRef): while it is open the figure
+    // stands at its spot, turned on whoever is nearest, and its speech plays
+    // from the moment it was set off — for everyone, late comers part way in.
+    const ambush = level.ambush;
+    let ambushFig: { obj: THREE.Object3D; box: THREE.Box3; yaw: number } | null = null;
+    let ambushLoading = false;
+    let ambushVoice: { el: HTMLAudioElement; sound: THREE.PositionalAudio } | null = null;
+    let ambushHeard = 0;      // the setting-off (its setAt) whose speech has been played, or skipped, here
+    let ambushAsked = false;  // this investigator has asked the server to set it off
+    let ambushOurs = 0;       // the setting-off we caused: heard from the top, whatever our clock says
+    let cameUp = false;       // been below its trigger since the last time up
+    let faceHim = 0;          // seconds left of turning our view onto him, as he starts to speak
+    let previewing = false;   // gamelord is watching his own Preview: held and turned like an investigator
+    const ambushTarget = new THREE.Vector3();
+    /** In the house proper, not down in the sewer: where the ambush holds you and you hear him. */
+    const inAmbush = (y: number) => !!ambush && y > ambush.trigger.aboveY - 0.2;
+    const ambushSpeaking = () => !!ambushVoice && !ambushVoice.el.paused && !ambushVoice.el.ended;
+    const dropAmbushVoice = () => {
+      if (!ambushVoice) return;
+      ambushVoice.el.pause();
+      ambushVoice.sound.removeFromParent();
+      ambushVoice = null;
+    };
+    owned.push({ dispose: dropAmbushVoice });
+    const setOffAmbush = () => {
+      if (!ambush || ambushAsked) return;
+      ambushAsked = true;
+      fetch('/api/doors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: level.id, id: ambush.id, ambush: true }),
+      })
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then((s: DoorsState) => {
+          if (disposed) return;
+          ambushOurs = s[ambush.id]?.setAt ?? 0;
+          doorsStateRef.current = s;
+          const open = Object.fromEntries(Object.entries(s).map(([id, d]) => [id, d.open]));
+          doorsOpenRef.current = open;
+          setDoorsOpen(open);
+          sendDoorsRef.current?.();
+        })
+        // 409: the box is still in its safe. The next time up asks again.
+        .catch(() => { ambushAsked = false; });
+    };
+    const updateAmbush = (dt: number) => {
+      if (!ambush) return;
+      // Set off by coming up out of the sewer into the house (gamelord never sets it off by walking).
+      if (!unseenRef.current && !doorsStateRef.current[ambush.id]) {
+        if (feet.y < ambush.trigger.belowY) cameUp = true;
+        else if (cameUp && feet.y > ambush.trigger.aboveY && feet.z > ambush.trigger.insideZ) {
+          cameUp = false;
+          setOffAmbush();
+        }
+      }
+      // A preview runs the whole piece and a few seconds after, then he goes (unless he is really here).
+      const shared = !!doorsOpenRef.current[ambush.id];
+      if (ambushPreviewRef.current && Date.now() - ambushPreviewRef.current > (ambush.speech.duration + 4) * 1000) ambushPreviewRef.current = 0;
+      const preview = shared ? 0 : ambushPreviewRef.current;
+      previewing = !!preview;
+      const here = shared || previewing;
+      if (here && !ambushFig && !ambushLoading) {
+        ambushLoading = true;
+        loadProp(ambush.figure.asset).then(template => {
+          ambushLoading = false;
+          if (disposed || ambushFig || !(doorsOpenRef.current[ambush.id] || ambushPreviewRef.current)) return;
+          const obj = cloneProp(ambush.figure.asset, template, ambush.figure.clip);
+          const [x, z] = ambush.figure.at;
+          const y = ambush.figure.y ?? 0;
+          const yaw0 = THREE.MathUtils.degToRad(ambush.figure.turnDeg);
+          obj.position.set(x, y, z);
+          obj.rotation.y = yaw0;
+          scene.add(obj);
+          obj.updateMatrixWorld(true);
+          // Solid where he stands — not out to the end of the levelled barrel.
+          const box = new THREE.Box3(new THREE.Vector3(x - 0.3, y, z - 0.3), new THREE.Vector3(x + 0.3, y + 1.8, z + 0.3));
+          blockers.push(box);
+          // Whoever stands where he steps in is moved back, in front of him.
+          if (Math.hypot(feet.x - x, feet.z - z) < 0.8 && Math.abs(feet.y - y) < 1) {
+            feet.x = x + Math.sin(yaw0) * 1.3;
+            feet.z = z + Math.cos(yaw0) * 1.3;
+          }
+          ambushFig = { obj, box, yaw: yaw0 };
+        }).catch(err => { ambushLoading = false; console.error('The ambush figure failed to load:', err); });
+      }
+      if (!here && ambushFig) {
+        ambushFig.obj.removeFromParent();
+        const i = blockers.indexOf(ambushFig.box);
+        if (i >= 0) blockers.splice(i, 1);
+        ambushFig = null;
+        dropAmbushVoice();
+      }
+      if (!ambushFig) return;
+
+      // His piece, from when he was set off: heard once per setting-off, part way in if we came late.
+      const setAt = shared ? doorsStateRef.current[ambush.id]?.setAt ?? 0 : preview;
+      if (listener && setAt && ambushHeard !== setAt) {
+        ambushHeard = setAt;
+        const into = setAt === ambushOurs ? 0 : Math.max(0, (Date.now() - setAt) / 1000);
+        if (into < ambush.speech.duration - 0.5) {
+          dropAmbushVoice();
+          const el = new Audio(ambush.speech.src);
+          el.crossOrigin = 'anonymous';
+          const sound = new THREE.PositionalAudio(listener);
+          sound.setMediaElementSource(el);
+          sound.setRefDistance(3);
+          sound.setRolloffFactor(1);
+          sound.setVolume(ambush.speech.volume ?? 1);
+          sound.position.set(0, 1.6, 0.15);   // under the hood
+          ambushFig.obj.add(sound);
+          el.currentTime = into;
+          el.play().catch(err => console.error('The ambush speech failed to play:', err));
+          ambushVoice = { el, sound };
+          if (into < 2 && inAmbush(feet.y) && (!unseenRef.current || previewing)) faceHim = 1.1;
+        }
+      }
+
+      // Gun on whoever is nearest in the house.
+      const { obj } = ambushFig;
+      let best = 14;
+      let tx = 0, tz = 0;
+      const consider = (x: number, y: number, z: number) => {
+        if (!inAmbush(y)) return;
+        const d = Math.hypot(x - obj.position.x, z - obj.position.z);
+        if (d < best) { best = d; tx = x; tz = z; }
+      };
+      if (!unseenRef.current) consider(feet.x, feet.y, feet.z);
+      for (const { peer } of avatars.values()) if (peer.pose) consider(...peer.pose.p);
+      if (best < 14) {
+        const want = Math.atan2(tx - obj.position.x, tz - obj.position.z);
+        const turn = THREE.MathUtils.euclideanModulo(want - ambushFig.yaw + Math.PI, Math.PI * 2) - Math.PI;
+        ambushFig.yaw += THREE.MathUtils.clamp(turn, -2.5 * dt, 2.5 * dt);
+        obj.rotation.y = ambushFig.yaw;
+      }
+
+      // As he starts to speak, our view comes round onto him.
+      if (faceHim > 0) {
+        faceHim -= dt;
+        obj.getWorldPosition(ambushTarget);
+        const lookYaw = Math.atan2(-(ambushTarget.x - feet.x), -(ambushTarget.z - feet.z));
+        const turn = THREE.MathUtils.euclideanModulo(lookYaw - yaw + Math.PI, Math.PI * 2) - Math.PI;
+        yaw += turn * Math.min(1, dt * 4);
+        pitch += (0 - pitch) * Math.min(1, dt * 4);
+      }
+    };
+    /** Held at gunpoint: no walking while he speaks to the house. */
+    const heldByAmbush = () => ambushSpeaking() && (!unseenRef.current || previewing) && inAmbush(feet.y);
+
     // Something hunting the investigator (see Hunter). It walks by the same collision.
     const litChest = new THREE.Vector3();
     const toLamp = new THREE.Vector3();
@@ -2355,7 +2520,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       setCompanions(peers.filter(p => p.pose).map(p => p.name));
     };
     // A shot that struck the hunter: whoever leads it takes the wound.
-    const presence = joinLevel(level.id, onPeers, () => hunter?.hit(), by => { if (hunterLeads) hunter?.wound(by, null); }, () => refetchDressingRef.current?.());
+    const presence = joinLevel(level.id, onPeers, () => hunter?.hit(), by => { if (hunterLeads) hunter?.wound(by, null); }, () => refetchDressingRef.current?.(), () => pollDoorsRef.current?.());
+    sendDoorsRef.current = () => presence.sendDoors();
+    owned.push({ dispose: () => { sendDoorsRef.current = null; } });
     sendDressingRef.current = () => presence.sendDressing();
     const lastFeet = new THREE.Vector3().copy(feet);
     const tmpFeet = new THREE.Vector3();
@@ -2490,6 +2657,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
         if (keys.has('KeyD')) s += 1;
         if (keys.has('KeyA')) s -= 1;
+        // At gunpoint: stand still while he speaks.
+        if (heldByAmbush()) { f = 0; s = 0; jumpAsked = false; }
         // On a ladder: W climbs, S climbs down, and no falling. Only at its
         // head or foot can you step off (or on).
         const ladderAt = () => sewer?.ladders.find(l =>
@@ -2648,6 +2817,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (peer.pose) avatar.setTarget(tmpFeet.fromArray(peer.pose.p), peer.pose.yaw, peer.pose.gait, !!peer.pose.crouch);
         avatar.update(dt);
       }
+      tickProps(scene, dt);
+      updateAmbush(dt);
       for (const f of performers) {
         f.mixer.update(dt);
         if (f.spec.sound && !f.audio && listener) startPerformerSound(f, listener);
@@ -2678,6 +2849,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         const pleaLines = level.hunter?.cage?.plea?.lines;
         if (plea && pleaLines && !plea.el.paused && !plea.el.ended) {
           for (const l of pleaLines) if (l.t <= plea.el.currentTime) line = l.text;
+        }
+        // The ambush's speech, for whoever is up in the house with him.
+        if (ambush && ambushVoice && ambushSpeaking() && (inAmbush(feet.y) || unseenRef.current)) {
+          for (const l of ambush.speech.lines) if (l.t <= ambushVoice.el.currentTime) line = l.text;
         }
         say(line);
       }
@@ -3226,17 +3401,23 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             </div>
           )}
           {/* gamelord opens and shuts the level's doors here, for everyone in it. */}
-          {(level.doors || level.sewer?.grate) && isGamelord && (
+          {(level.doors || level.sewer?.grate || level.ambush) && isGamelord && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: (level.weather && isGM) || level.lamps ? 0 : 'auto', marginRight: 12 }}>
               {doorError && (
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--blood)' }}>Not saved</span>
               )}
-              {[...Object.entries(level.doors ?? {}), ...(level.sewer?.grate ? [[level.sewer.grate, { label: 'Grate' }] as const] : [])].map(([id, door]) => (
+              {[
+                ...Object.entries(level.doors ?? {}),
+                ...(level.sewer?.grate ? [[level.sewer.grate, { label: 'Grate' }] as const] : []),
+                ...(level.ambush ? [[level.ambush.id, { label: level.ambush.label }] as const] : []),
+              ].map(([id, door]) => (
                 <button
                   key={id}
                   onClick={() => void toggleDoor(id)}
                   aria-pressed={!!doorsOpen[id]}
-                  title={`Open or shut the ${door.label.toLowerCase()}, for everyone`}
+                  title={id === level.ambush?.id
+                    ? `Set off the ${door.label.toLowerCase()}'s ambush, or dismiss him, for everyone`
+                    : `Open or shut the ${door.label.toLowerCase()}, for everyone`}
                   style={{
                     fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
                     padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
@@ -3245,9 +3426,22 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                     color: doorsOpen[id] ? 'var(--brass)' : 'var(--ink-text-2)',
                   }}
                 >
-                  {door.label} {doorsOpen[id] ? 'open' : 'shut'}
+                  {door.label} {id === level.ambush?.id ? (doorsOpen[id] ? 'here' : 'gone') : doorsOpen[id] ? 'open' : 'shut'}
                 </button>
               ))}
+              {level.ambush && (
+                <button
+                  onClick={() => { ambushPreviewRef.current = Date.now(); }}
+                  title={`Play the ${level.ambush.label.toLowerCase()}'s ambush on your screen only — nobody else sees it, and nothing is saved`}
+                  style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
+                    padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                    background: 'transparent', border: '1px dashed var(--brass-dim)', color: 'var(--ink-text-2)',
+                  }}
+                >
+                  Preview {level.ambush.label.toLowerCase()}
+                </button>
+              )}
             </div>
           )}
           {/* gamelord dresses the level with props from the library, for everyone. */}

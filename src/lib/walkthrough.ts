@@ -719,6 +719,32 @@ export type Hunter = {
   scent?: number;
 };
 
+/**
+ * A scripted moment: once `after`'s item has been taken from its safe (in any
+ * level), the first investigator to come up out of the level's underground
+ * (from below `belowY` to above `aboveY`, past `inside`) sets it off for
+ * everyone in the level. A figure from the prop library stands at `at` and
+ * holds them at gunpoint, turning to whoever is nearest, and says its piece:
+ * heard from it, subtitled, from the same moment for everyone (late comers
+ * join it part way). Investigators in the house are held still while it
+ * speaks. It is kept as the door `id` (see /api/doors) — open while the
+ * figure is there — so gamelord dismisses it, or sets it off himself, with
+ * the header's door buttons. It goes off once; dismissed, it stays gone.
+ */
+export type Ambush = {
+  id: string;
+  /** The header button's name. */
+  label: string;
+  /** The SafeItem that must have been taken first, and the level whose safe held it. */
+  after: { level: string; item: string };
+  /** What sets it off: coming up from below `belowY` to above `aboveY` with feet past z `insideZ`. */
+  trigger: { belowY: number; aboveY: number; insideZ: number };
+  /** The figure: a rigged prop-library asset, where it stands, which way it faces at first (0 = +Z), the clip it holds. */
+  figure: { asset: PropAssetId; at: [number, number]; y?: number; turnDeg: number; clip: string };
+  /** What it says: a recording under public/, its length in seconds, and subtitles from `t` seconds in. */
+  speech: { src: string; duration: number; volume?: number; lines: { t: number; text: string }[] };
+};
+
 export type WalkthroughLevel = {
   /** Stable name for the level's live-presence room — investigators in the same level see each other. */
   id: string;
@@ -761,6 +787,8 @@ export type WalkthroughLevel = {
   performers?: Performer[];
   /** Something that hunts the investigators. */
   hunter?: Hunter;
+  /** A scripted moment that the party sets off and gamelord dismisses (see Ambush). */
+  ambush?: Ambush;
   /** Stains for the Wood's lamp to find. A level without them has no lamp to draw. */
   uvStains?: UvStain[];
   /** Safes to crack, keyed by examinable id. */

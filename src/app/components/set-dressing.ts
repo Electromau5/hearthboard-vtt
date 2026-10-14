@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { PROP_LIBRARY, type PropAssetId } from '@/lib/prop-library';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { PROP_LIBRARY, type LibraryProp, type PropAssetId } from '@/lib/prop-library';
 import type { DressedProp } from '@/lib/walkthrough';
 
 /**
@@ -37,6 +38,47 @@ type Ghost = { asset: PropAssetId; turnDeg: number; obj: THREE.Object3D | null; 
 
 const UP = new THREE.Vector3(0, 1, 0);
 const OK_TINT = new THREE.Color(0x3a8f4a);
+
+// ── Rigged library props (a character, `clips` in the catalog) ──────────
+// Each copy gets its own skeleton and plays the asset's first clip on a loop;
+// still props are plain clones. The level ticks them all with `tickProps`.
+const mixers = new Set<THREE.AnimationMixer>();
+
+/** One copy of a library prop's loaded model (its glTF clips on `userData.clips`), playing `clip` or the asset's first. */
+export function cloneProp(asset: PropAssetId, template: THREE.Object3D, clipName?: string): THREE.Object3D {
+  const clips = (template.userData.clips ?? []) as THREE.AnimationClip[];
+  if (!clips.length) return template.clone();
+  const obj = SkeletonUtils.clone(template);
+  // Skinned bounds are the bind pose, not where the bones have moved the mesh.
+  obj.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.frustumCulled = false; });
+  const lib: LibraryProp = PROP_LIBRARY[asset];
+  const clip = clips.find(c => c.name === (clipName ?? lib.clips?.[0])) ?? clips[0];
+  const mixer = new THREE.AnimationMixer(obj);
+  const action = mixer.clipAction(clip).play();
+  // Copies side by side should not move in step.
+  action.time = Math.random() * clip.duration;
+  mixer.update(0);
+  obj.updateMatrixWorld(true);
+  mixers.add(mixer);
+  return obj;
+}
+
+/** Bounds of a prop as it stands: a character's posed vertices, not its T-posed bind. */
+export function propBox(obj: THREE.Object3D, box = new THREE.Box3()) {
+  let skinned = false;
+  obj.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) skinned = true; });
+  return box.setFromObject(obj, skinned);
+}
+
+/** Advances every animated prop standing in `scene`; ones taken out of it are let go. */
+export function tickProps(scene: THREE.Scene, dt: number) {
+  for (const m of mixers) {
+    let top = m.getRoot() as THREE.Object3D;
+    while (top.parent) top = top.parent;
+    if (top !== scene) { mixers.delete(m); continue; }
+    m.update(dt);
+  }
+}
 const BAD_TINT = new THREE.Color(0xa83232);
 
 /** Where a dressed prop stands and how it is turned and leaned. */
@@ -85,7 +127,7 @@ export function createDressing(opts: {
   const refreshOutline = () => {
     const s = selected ? shown.get(selected) : undefined;
     outline.visible = !!s && selected !== lifted;
-    if (s) outline.box.setFromObject(s.obj).expandByScalar(0.02);
+    if (s) propBox(s.obj, outline.box).expandByScalar(0.02);
   };
 
   const show = (items: DressedProp[]) => {
@@ -98,7 +140,7 @@ export function createDressing(opts: {
         if (JSON.stringify(next) === JSON.stringify(s.item)) continue;
         s.item = next;
         standAt(s.obj, next);
-        s.box?.setFromObject(s.obj);
+        if (s.box) propBox(s.obj, s.box);
         continue;
       }
       // Gone, or something else now: taken away (set down afresh below).
@@ -111,12 +153,12 @@ export function createDressing(opts: {
       load(item.asset).then((template) => {
         // A later call has taken over, or this one went up in the meantime.
         if (disposed || gen !== generation || shown.has(item.key)) return;
-        const obj = template.clone();
+        const obj = cloneProp(item.asset, template);
         obj.userData.dressKey = item.key;
         standAt(obj, item);
         obj.visible = item.key !== lifted;
         group.add(obj);
-        const box = PROP_LIBRARY[item.asset].solid ? new THREE.Box3().setFromObject(obj) : null;
+        const box = PROP_LIBRARY[item.asset].solid ? propBox(obj) : null;
         if (box && obj.visible) blockers.push(box);
         shown.set(item.key, { item, obj, box });
         if (item.key === selected) refreshOutline();
@@ -141,7 +183,7 @@ export function createDressing(opts: {
     ghost = g;
     load(asset).then((template) => {
       if (disposed || ghost !== g) return;
-      const obj = template.clone();
+      const obj = cloneProp(asset, template);
       obj.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;

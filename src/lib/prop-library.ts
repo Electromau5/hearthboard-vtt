@@ -15,6 +15,8 @@ export type LibraryProp = {
   credit: string;
   /** A 128 px thumbnail, for the set-dressing tray. */
   preview: string;
+  /** A rigged character: its animation clips, the first looping wherever it stands. */
+  clips?: readonly string[];
 };
 
 export const PROP_LIBRARY = {
@@ -35,6 +37,16 @@ export const PROP_LIBRARY = {
     solid: false,
     credit: "\"Wooden Candlestick\" by Josh Dean — https://polyhaven.com/a/wooden_candlestick (CC0)",
     preview: '/props/library/previews/candlestick.webp',
+  },
+  'cultist': {
+    model: '/props/library/cultist.glb',
+    name: "Cultist",
+    catalog: 'Characters/Cultists',
+    size: [2.084, 1.8, 0.531],
+    solid: true,
+    credit: "\"Cultist\" by DJMaesen — https://sketchfab.com/3d-models/cultist-60f6f26ac2054b09a0b4757fbc771d18 (CC BY 4.0)",
+    preview: '/props/library/previews/cultist.webp',
+    clips: ['Idle', 'Walk', 'Walk2', 'Jog', 'Run', 'Run2', 'AimWalk', 'AimStrafeRight', 'AimStrafeLeft', 'AimWalkRight', 'AimWalkLeft', 'AimIdle', 'Fire', 'Lower', 'LookAround', 'Charge'],
   },
   'iron-safe': {
     model: '/props/library/iron-safe.glb',
