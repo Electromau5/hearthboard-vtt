@@ -22,8 +22,18 @@ export function mergeCharacter(base: Character, overrides: Partial<Character>): 
 }
 
 /**
+ * Default avatars: portraits rendered from the investigator's walkthrough model
+ * (my-summer-game tools/render_portraits.py). An uploaded avatar still wins.
+ */
+const DEFAULT_AVATARS: Record<string, string> = {
+  "arthur-wright": "/portraits/arthur-wright.webp",
+  "dr-alistair-finch": "/portraits/dr-alistair-finch.webp",
+};
+
+/**
  * As `mergeCharacter`, but swaps the internal avatar storage URL for the
- * client-safe proxy route. Use for anything sent to the browser.
+ * client-safe proxy route, or falls back to the default portrait. Use for
+ * anything sent to the browser.
  */
 export function mergeCharacterForClient(
   base: Character,
@@ -31,5 +41,6 @@ export function mergeCharacterForClient(
 ): Character {
   const merged = mergeCharacter(base, overrides);
   if (merged.avatar) merged.avatar = `/api/characters/${merged.slug}/avatar`;
+  else if (DEFAULT_AVATARS[merged.slug]) merged.avatar = DEFAULT_AVATARS[merged.slug];
   return merged;
 }
