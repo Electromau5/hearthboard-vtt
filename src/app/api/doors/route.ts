@@ -43,7 +43,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Expected a level, a door id and open: true/false" }, { status: 400 });
   }
   const state = await readJSON<DoorsState>(statePath(level), {});
-  state[id] = { open, setAt: Date.now(), setBy: session.user.id };
+  // Bringing an ambush in once its item is out is the real thing; before that it's a rehearsal.
+  const ambush = AMBUSHING.find(l => l.id === level)?.ambush;
+  const fired = !!state[id]?.fired
+    || (open && ambush?.id === id && !!(await readJSON<LocksState>(`locks/${ambush.after.level}.json`, {}))[ambush.after.item]);
+  state[id] = { open, setAt: Date.now(), setBy: session.user.id, ...(fired && { fired: true }) };
   await writeJSON(statePath(level), state);
   return NextResponse.json(state);
 }
@@ -54,11 +58,12 @@ async function setOff(level: unknown, id: unknown, by: string) {
     return NextResponse.json({ error: "No such ambush" }, { status: 400 });
   }
   const state = await readJSON<DoorsState>(statePath(level), {});
-  // Once only: dismissed, it stays gone (gamelord can still set it off by hand).
-  if (state[ambush.id]) return NextResponse.json(state);
+  // Once only: dismissed, it stays gone (gamelord can still set it off by hand). Only a real
+  // setting-off counts — gamelord's here/gone before the item was taken doesn't use it up.
+  if (state[ambush.id]?.fired || state[ambush.id]?.open) return NextResponse.json(state);
   const taken = await readJSON<LocksState>(`locks/${ambush.after.level}.json`, {});
   if (!taken[ambush.after.item]) return NextResponse.json({ error: "Not yet" }, { status: 409 });
-  state[ambush.id] = { open: true, setAt: Date.now(), setBy: by };
+  state[ambush.id] = { open: true, setAt: Date.now(), setBy: by, fired: true };
   await writeJSON(statePath(level), state);
   return NextResponse.json(state);
 }

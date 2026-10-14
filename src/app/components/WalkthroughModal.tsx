@@ -2349,7 +2349,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const updateAmbush = (dt: number) => {
       if (!ambush) return;
       // Set off by coming up out of the sewer into the house (gamelord never sets it off by walking).
-      if (!unseenRef.current && !doorsStateRef.current[ambush.id]) {
+      // Not while he's already there, nor once it has really happened (see DoorsState.fired).
+      if (!unseenRef.current && !doorsStateRef.current[ambush.id]?.fired && !doorsOpenRef.current[ambush.id]) {
         if (feet.y < ambush.trigger.belowY) cameUp = true;
         else if (cameUp && feet.y > ambush.trigger.aboveY && feet.z > ambush.trigger.insideZ) {
           cameUp = false;

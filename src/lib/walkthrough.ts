@@ -470,8 +470,12 @@ export type LevelDoor = {
   hidesPeeper?: boolean;
 };
 
-/** What `/api/doors` keeps for a level: the doors standing open, by id. Unset means shut. */
-export type DoorsState = Record<string, { open: boolean; setAt: number; setBy: string }>;
+/**
+ * What `/api/doors` keeps for a level: the doors standing open, by id. Unset means shut.
+ * An ambush is kept here too; `fired` marks one that has really happened (after its item
+ * was taken), so gamelord showing and dismissing it beforehand doesn't use it up.
+ */
+export type DoorsState = Record<string, { open: boolean; setAt: number; setBy: string; fired?: boolean }>;
 
 /**
  * Something lying on a piece of furniture that can be carried in the hand:
