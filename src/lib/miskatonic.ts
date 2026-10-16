@@ -17,6 +17,9 @@
  * restricted room (x -16.5..-11.5, z -15..-10), where the Necronomicon lies
  * chained on a stone pedestal. gamelord opens the gate.
  *
+ * The GM sets the time of day (`weather`): it shows in the east windows, and
+ * at dawn the sun comes in through them across the reading room.
+ *
  * The text is suggested description for the GM to adjust.
  */
 
@@ -181,6 +184,9 @@ export const MISKATONIC_LEVEL: WalkthroughLevel = {
   leaveLabel: 'Leave the library',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
+  // The GM sets the time of day; the dark east windows light up with it.
+  weather: true,
+  windowGlass: 'Dark_Glass',
   // The gate is its own mesh (Gate_Iron), hinged on its west post. Its bars are
   // too far apart to stop the walkthrough's wall rays, so Gate_Collider, a clear
   // pane in the gate's plane, swings with it and does the stopping.

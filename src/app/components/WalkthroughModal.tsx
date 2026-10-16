@@ -2,7 +2,8 @@
 
 import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
 import type { ArchiveDoc, Bed, Collection, DoorsState, Examinable, GazeHazard, Inspectable, LightSwitch, LocksState, DressedProp, DressingState, NpcSpot, Passage, Performer, Pickup, Placement, RadioSet, WalkthroughLevel } from '@/lib/walkthrough';
@@ -1177,6 +1178,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     // The sea is built near-black for night, with nothing to reflect: by day it
     // takes on the sky's horizon colour instead (found once the level loads).
     let sea: { mat: THREE.MeshStandardMaterial; night: THREE.Color } | null = null;
+    // Window glass built dark for night (`level.windowGlass`): by day it glows
+    // with the sky, and lets the sun through.
+    let panes: { mat: THREE.MeshStandardMaterial; night: THREE.Color; meshes: THREE.Mesh[] } | null = null;
 
     // The investigator's flashlight rides on the camera.
     const torch = new THREE.SpotLight(0xffe0b0, 40, 16, 0.52, 0.55, 2);
@@ -2278,10 +2282,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       f.root.add(sound);
       f.voice = { el, sound, armed: true };
     };
+    // Each model loads once; figures sharing one (a congregation) are clones of it.
+    const performerModels = new Map<string, Promise<GLTF>>();
     for (const f of level.performers ?? []) {
-      new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(f.model).then(gltf => {
+      if (!performerModels.has(f.model)) performerModels.set(f.model, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(f.model));
+      performerModels.get(f.model)!.then(gltf => {
         if (disposed) return;
-        const root = gltf.scene;
+        const root = cloneSkinned(gltf.scene);
         root.position.set(f.at[0], f.y ?? 0, f.at[1]);
         root.rotation.y = THREE.MathUtils.degToRad(f.turnDeg ?? 0);
         root.scale.setScalar(f.scale ?? 1);
@@ -2619,6 +2626,25 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           });
         }
         if (sea) sea.mat.color.copy(sea.night).lerp(goal.copy(sky.horizon).multiplyScalar(0.32), 1 - sky.stars);
+        if (model && !panes && level.windowGlass) {
+          const meshes: THREE.Mesh[] = [];
+          let mat: THREE.MeshStandardMaterial | null = null;
+          model.traverse(o => {
+            const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+            if (m && m.name === level.windowGlass && m.isMeshStandardMaterial) { mat = m; meshes.push(o as THREE.Mesh); }
+          });
+          if (mat) {
+            // Daylight in the glass is not lost in the room's haze.
+            (mat as THREE.MeshStandardMaterial).fog = false;
+            (mat as THREE.MeshStandardMaterial).needsUpdate = true;
+            panes = { mat, night: (mat as THREE.MeshStandardMaterial).emissive.clone(), meshes };
+          }
+        }
+        if (panes) {
+          const daylight = 1 - sky.stars;
+          panes.mat.emissive.copy(panes.night).lerp(goal.copy(sky.horizon), daylight);
+          for (const m of panes.meshes) m.castShadow = daylight < 0.5;
+        }
       }
       flock?.update(dt, Date.now(), weatherRef.current, RAIN_SPECS[rainRef.current].grounded);
 

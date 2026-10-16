@@ -312,7 +312,7 @@ export const ABATTOIR_LEVEL: WalkthroughLevel = {
   errorText: 'The abattoir could not be loaded.',
   enterText: 'Click to step inside',
   leaveLabel: 'Leave by the shop',
-  credit: '"Antique Iron Safe" by pixelgrapher · "Dapper in a Black-Tie Tuxedo" by restore50 · MakeHuman clothes by Mindfront and Elvaerwyn — CC BY 4.0',
+  credit: '"Antique Iron Safe" by pixelgrapher · "Dapper in a Black-Tie Tuxedo" by restore50 · "Luiz H. C. Nobre" by nobre.lh · MakeHuman clothes by Mindfront and Elvaerwyn — CC BY 4.0',
   examinables: EXAMINABLES,
   radios: RADIOS,
   uvStains: UV_STAINS,
@@ -323,6 +323,9 @@ export const ABATTOIR_LEVEL: WalkthroughLevel = {
     model: '/avatars/pianist.glb', clip: 'Play', at: [-10.6, -5.15], y: STAGE_H, turnDeg: -90, scale: 0.95,
     sound: { src: '/late-night-blues.mp3', volume: 0.8, refDistance: 2.5, at: [0, 1.1, 0.8] },
   },
+  // The bartender behind the bar, between the counter and the back bar, facing the
+  // room (Mixamo "Bartending": he works the counter in front of him).
+  { model: '/avatars/bartender.glb', clip: 'Bartend', at: [-3.5, -7.0] },
   // Guests in the hall, talking over their drinks (Mixamo "Sitting Talking": the
   // women cross-legged). Two couples at the round tables, each in a chair that
   // faces the table, and Banks alone in his corner booth, facing the way in.

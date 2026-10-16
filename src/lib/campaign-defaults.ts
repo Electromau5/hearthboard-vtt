@@ -43,4 +43,11 @@ export const CAMPAIGN_LOCATIONS: Location[] = [
       "A federal quarantine facility on the docks, ostensibly for disease control but rumoured to detain individuals with unusual physiological traits.",
     attachments: [],
   },
+  {
+    id: "loc-inn-waterfront",
+    name: "The Waterfront, Innsmouth",
+    description:
+      "Innsmouth's harbour from the Federal Quarantine Docks, where hybrids were caged in the 1928 raids, past the rotting breakwater and the fish sheds of the reef, to the mud flats where the basalt pylon and its carved Tide-Gate stand bare at the lowest tides of a spring new moon.",
+    attachments: [],
+  },
 ];

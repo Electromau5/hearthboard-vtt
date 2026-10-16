@@ -41,6 +41,14 @@ pianist.glb
   and black emissive map dropped; base colour and roughness at 2048 px WebP; meshopt-compressed.
   Animation: Mixamo "Piano Playing" (Adobe Mixamo), retargeted to the fitted skeleton and baked ("Play").
 
+bartender.glb
+  "Luiz H. C. Nobre" by nobre.lh — https://sketchfab.com/nobre.lh
+  https://sketchfab.com/3d-models/luiz-h-c-nobre-2e7e51026187435f80a4927879bd6327
+  Licence: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+  Changes: Avaturn bones renamed to the Mixamo names; textures at 1024 px WebP.
+  Animation: Mixamo "Bartending" (Adobe Mixamo), retargeted by my-summer-game
+  tools/build_bartender.py and baked ("Bartend").
+
 late-night-blues.mp3 (public/)
   "Late-Night Blues", made with Suno and supplied by the GM; the pianist's tune in the Abattoir speakeasy.
   Changes: converted to mono MP3 (128 kb/s), metadata stripped.
@@ -76,3 +84,12 @@ arthur-wright.glb (Arjun Sahi), dr-alistair-finch.glb (Dr. Alissa Finch)
        (Finch, recoloured).
   CC BY: by Elvaerwyn — "elvs_male_flat_cap1" (Sahi, recoloured), hair "elvs_braid_bun" (Finch, recoloured).
     https://creativecommons.org/licenses/by/4.0/
+
+cultist-praying.glb (the ten cultists before the Tide-Gate, innsmouth-waterfront)
+  The prop library's cultist (public/props/library/cultist.glb) without his gun, kneeling in
+  prayer: Mixamo "Praying" retargeted by my-summer-game tools/build_cultist_praying.py
+  (tools/export_cultist_praying.sh).
+  CC BY 4.0: "Cultist" by DJMaesen —
+    https://sketchfab.com/3d-models/cultist-60f6f26ac2054b09a0b4757fbc771d18
+    https://creativecommons.org/licenses/by/4.0/
+  Animation: Mixamo (Adobe), used under the Mixamo terms.

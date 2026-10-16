@@ -853,6 +853,11 @@ export type WalkthroughLevel = {
   pickups?: PickupTable[];
   /** The GM can set the time of day here (src/lib/weather.ts); night is `atmosphere` as built. List the id in WEATHER_LEVELS too. */
   weather?: boolean;
+  /**
+   * With `weather`: the material of window glass built dark for night. By day
+   * it glows with the sky, and stops casting shadow so the sun comes through.
+   */
+  windowGlass?: string;
   birds?: Birds;
   /** Beds to sleep in, keyed by examinable id. */
   beds?: Record<string, Bed>;

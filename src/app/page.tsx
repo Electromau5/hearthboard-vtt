@@ -15,6 +15,7 @@ import { ABATTOIR_LEVEL } from '@/lib/abattoir';
 import { DOWNTOWN_LEVEL } from '@/lib/downtown';
 import { MISKATONIC_LEVEL } from '@/lib/miskatonic';
 import { REFINERY_LEVEL } from '@/lib/marsh-refinery';
+import { WATERFRONT_LEVEL } from '@/lib/innsmouth-waterfront';
 import { INNSMOUTH_SCENES } from '@/lib/innsmouth-scenes';
 import type { WalkthroughLevel } from '@/lib/walkthrough';
 import { InnsmouthTown3D } from './components/InnsmouthTown3D';
@@ -58,6 +59,7 @@ const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; a
   'loc-blackarchive': { level: ARCHIVE_LEVEL, preview: '/black-archive-preview.jpeg', alt: "The Black Archive's warehouse floor", cta: 'Enter the archive', hint: 'Click to step inside' },
   'loc-bellevue': { level: BELLEVUE_LEVEL, preview: '/bellevue-ward-preview.jpeg', alt: "Bellevue's admissions hall", cta: 'Enter the ward', hint: 'Click to sign in' },
   'loc-underworld': { level: ABATTOIR_LEVEL, preview: '/abattoir-preview.jpeg', alt: "The butcher's shop on Federal Hill", cta: 'Enter the butcher\'s', hint: 'Click to ring the shop bell' },
+  'loc-inn-waterfront': { level: WATERFRONT_LEVEL, preview: '/innsmouth-waterfront-preview.jpeg', alt: 'The Tide-Gate glowing in the basalt pylon on the mud flats', cta: 'Walk the waterfront', hint: 'Click to walk down to the harbour' },
   'loc-inn-refinery': { level: REFINERY_LEVEL, preview: '/marsh-refinery-preview.jpeg', alt: "The Marsh Refinery's furnace hall", cta: 'Enter the refinery', hint: 'Click to force the doors' },
   'loc-miskatonic': { level: MISKATONIC_LEVEL, preview: '/miskatonic-preview.jpeg', alt: "The Orne Library's reading room at night", cta: 'Enter the library', hint: 'Click to step through the doors' },
   'loc-downtown': { level: DOWNTOWN_LEVEL, preview: '/downtown-preview.jpeg', alt: 'A downtown street of brick shopfronts at night', cta: 'Walk downtown', hint: 'Click to walk the street' },
@@ -1552,7 +1554,7 @@ export default function HearthboardPage() {
               const isBellevue = scene?.locationId === 'loc-bellevue';
               const isMiskatonic = scene?.locationId === 'loc-miskatonic';
               const isBlackArchive = scene?.locationId === 'loc-blackarchive';
-              const isInnsmouthDocks = scene?.locationId === 'loc-inn-docks';
+              const isInnsmouthDocks = scene?.locationId === 'loc-inn-waterfront';
               const walk = scene ? WALKTHROUGHS[scene.locationId] : undefined;
               const oldManBriefing = BRIEFINGS.find(b => b.id === 'old-man');
               const residentBriefing = BRIEFINGS.find(b => b.id === 'innsmouth-resident');

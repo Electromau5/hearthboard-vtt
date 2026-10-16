@@ -705,15 +705,24 @@ const LOCATION_SUMMARIES: Record<string, string> = {
   i8: 'A district blacked out on every copy of this chart. No explanation has been given.',
 };
 
-/** Pinned on the chart but not a board location: the vault the government went after. */
-const EXTRA_PINS: MapPin[] = [{
-  id: 'vault', u: 0.621, v: 0.54, title: 'Black Archive Vault',
-  text: 'Its name is redacted on the chart. It was targeted by government torpedoes, and unmapped submerged tunnels run out from it under the harbour.',
-}];
+/**
+ * Pinned on the chart but not their own board pins: the vault the government
+ * went after, and the reef and the Tide-Gate, which the board now reaches
+ * through the waterfront pin (i4) with the docks.
+ */
+const EXTRA_PINS: MapPin[] = [
+  {
+    id: 'vault', u: 0.621, v: 0.54, title: 'Black Archive Vault',
+    text: 'Its name is redacted on the chart. It was targeted by government torpedoes, and unmapped submerged tunnels run out from it under the harbour.',
+  },
+  { id: 'i6', u: 0.46, v: 0.83, title: 'Decrepit Coastal Reef & Breakwater', text: LOCATION_SUMMARIES.i6 },
+  { id: 'i7', u: 0.72, v: 0.72, title: 'Submerged Basalt Pylon / Tide-Gate', text: LOCATION_SUMMARIES.i7 },
+];
 
 const MAP_PINS: MapPin[] = [
   ...INNSMOUTH_SCENES.filter(s => LOCATION_SUMMARIES[s.id]).map(s => ({
-    id: s.id, u: s.mapX / 100, v: s.mapY / 100, title: s.name, text: LOCATION_SUMMARIES[s.id],
+    // The chart's own label for the docks, not the board's waterfront pin name.
+    id: s.id, u: s.mapX / 100, v: s.mapY / 100, title: s.id === 'i4' ? 'Federal Quarantine Docks' : s.name, text: LOCATION_SUMMARIES[s.id],
   })),
   ...EXTRA_PINS,
 ];
