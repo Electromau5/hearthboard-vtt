@@ -345,9 +345,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // An item struck off the sheet since it was taken in hand is gone from the hand too.
   const heldItem = held && items.includes(held) ? held : null;
   useEffect(() => { heldItemRef.current = heldItem; }, [heldItem]);
-  // A gun in hand that fires (the AK-74u, the Tommy, the revolver): clicks fire it rather than examine.
+  // A gun in hand that fires (the AK-74u, the Tommy, the revolver, the shotgun): clicks fire it rather than examine.
   const gunView = gunOf(level, carried, heldItem, lampOut);
-  const fires = !!(gunView?.arms || gunView?.revolver);
+  const fires = !!(gunView?.arms || gunView?.revolver || gunView?.shotgun);
 
   // Takes an item in hand, or puts it away; remembered per investigator across levels.
   const holdItem = useCallback((item: string) => {
@@ -905,7 +905,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       // With a gun that reloads in hand, R reloads it (skills are still on the open card).
       if (e.code === 'KeyR' && !e.repeat && !readingRef.current && !browsingRef.current) {
         const gun = gunOf(level, carriedRef.current, heldItemRef.current, lampOutRef.current);
-        if (gun?.reload || gun?.arms || gun?.revolver) { reloadRef.current?.(); return; }
+        if (gun?.reload || gun?.arms || gun?.revolver || gun?.shotgun) { reloadRef.current?.(); return; }
       }
       // V turns a gun with arms over in the hands, to look it over.
       if (e.code === 'KeyV' && !e.repeat && !readingRef.current && !browsingRef.current) inspectRef.current?.();
@@ -2177,7 +2177,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       pitch = Math.max(-1.35, Math.min(1.35, pitch - dy * LOOK * 1.6));
     };
     // A gun with arms in hand: left button fires, right aims, and a click examines nothing.
-    const armed = () => { const gun = gunOf(level, carriedRef.current, heldItemRef.current, lampOutRef.current); return !!(gun?.arms || gun?.revolver); };
+    const armed = () => { const gun = gunOf(level, carriedRef.current, heldItemRef.current, lampOutRef.current); return !!(gun?.arms || gun?.revolver || gun?.shotgun); };
     const onCanvasClick = () => {
       if (needsEar) ensureListener();
       if (readingRef.current || browsingRef.current || typingRef.current || invOpenRef.current || inspectingRef.current) return;
@@ -2998,7 +2998,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       if (fired.dry) gunSounds?.fire('dry');
       // Spent cases: from the hands' view into the level, then onto the floor.
-      for (const c of fired.cases) shells.throw(c.at.applyMatrix4(camera.matrixWorld), c.dir.applyMatrix4(new THREE.Matrix4().extractRotation(camera.matrixWorld)), c.shell, c.drop);
+      for (const c of fired.cases) shells.throw(c.at.applyMatrix4(camera.matrixWorld), c.dir.applyMatrix4(new THREE.Matrix4().extractRotation(camera.matrixWorld)), c.shell, c.drop, c.color);
       shells.update(dt, () => feet.y, loud => gunSounds?.fire('tink', 0.25 + loud * 0.5));
       if (muzzleFlash > 0) {
         torch.intensity = Math.max(torch.intensity, muzzleFlash * 90);

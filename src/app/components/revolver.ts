@@ -528,7 +528,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 const smooth = (u: number) => { const k = THREE.MathUtils.clamp(u, 0, 1); return k * k * (3 - 2 * k); };
 
-function setWorld(o: THREE.Object3D, world: THREE.Matrix4) {
+export function setWorld(o: THREE.Object3D, world: THREE.Matrix4) {
   o.parent!.updateWorldMatrix(true, false);
   const local = new THREE.Matrix4().copy(o.parent!.matrixWorld).invert().multiply(world);
   local.decompose(o.position, o.quaternion, o.scale);
@@ -551,7 +551,7 @@ function swing(o: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3) {
  * Two-bone IK: the upper arm and forearm turned so the wrist reaches `at`,
  * the elbow bending out toward `pole`, then the hand turned to `q` (world).
  */
-function reach(upper: THREE.Object3D, fore: THREE.Object3D, hand: THREE.Object3D, at: THREE.Vector3, q: THREE.Quaternion, pole: THREE.Vector3) {
+export function reach(upper: THREE.Object3D, fore: THREE.Object3D, hand: THREE.Object3D, at: THREE.Vector3, q: THREE.Quaternion, pole: THREE.Vector3) {
   upper.updateWorldMatrix(true, true);
   const s = upper.getWorldPosition(new THREE.Vector3());
   const e = fore.getWorldPosition(new THREE.Vector3());

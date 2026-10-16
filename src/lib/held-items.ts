@@ -15,6 +15,7 @@
  *  - "Tommy Gun" by lokeig (sketchfab.com/lokeig), CC-BY-NC-4.0 (non-commercial)
  *  - "AK74U | FREE ANIMATION." by BURNER (sketchfab.com/Alexander_Ovelar), CC-BY-4.0
  *  - "SNIPER FPS ANIMATION" by BURNER (sketchfab.com/Alexander_Ovelar), CC-BY-4.0
+ *  - "Remington 870" by ivanugaj121 (sketchfab.com/ivanugaj121), CC-BY-4.0
  * Also in public/props/CREDITS.txt.
  */
 
@@ -42,6 +43,8 @@ export type HeldModel = {
   arms?: ArmsRig;
   /** A revolver in borrowed arms, posed rather than played (see RevolverRig). */
   revolver?: RevolverRig;
+  /** A pump shotgun in borrowed arms, posed rather than played (see ShotgunRig). */
+  shotgun?: ShotgunRig;
 };
 
 type V3 = [number, number, number];
@@ -76,6 +79,53 @@ export type RevolverRig = {
   aimFov: number;
   /** A spent case: radius and length. */
   shell: [number, number];
+};
+
+/**
+ * A pump-action shotgun worked by another rig's arms (the AK-74u's), its own gun
+ * hidden (see shotgun.ts): posed like the revolver, the right hand on the wrist
+ * of the stock and the left on the fore-end, which it pumps back and forward
+ * after each shot, and which it leaves to thumb shells one at a time up into the
+ * magazine through the loading port under the receiver.
+ *
+ * "Gun frame" is the shotgun's own, as `prepareHeldModel` lays it out: metres,
+ * the grip at the origin, the barrel along -Z, +Y up, its right side toward +X.
+ */
+export type ShotgunRig = {
+  /** The glb with the arms, its gun's materials (left out), and the clip to breathe with. */
+  rig: string;
+  hide: string[];
+  idle: string;
+  /** Where the eye sits in the rig as made (metres; it looks along -Z). */
+  eye: V3;
+  /** The rig's gun bone, and where on it (rig as made, at rest) its right hand closes. */
+  gunBone: string;
+  mount: V3;
+  /** Upper arm, forearm and hand bones; and the left thumb and index tips, which hold a shell. */
+  arms: { right: [string, string, string]; left: [string, string, string]; leftTips: [string, string] };
+  /**
+   * The left shoulder brought forward and in (metres, the hands' camera space):
+   * the borrowed arms were made for a carbine and fall short of a fore-end
+   * this far out. Down the sights, where the gun comes in, it eases back so
+   * the arm does not cross the view.
+   */
+  shoulder: V3;
+  /** The fore-end's node in the gun's model, and how far back it slides (m). Gun-frame measures here are for the model as made, 1.0 m long; they scale with `length`. */
+  forend: string;
+  stroke: number;
+  /** The grip in view at the hip: camera space (metres) and turn (radians). Down the sights the receiver's back is `sightAt` ahead of the eye. */
+  hold: { pos: V3; rot: V3 };
+  sightAt: number;
+  /** The left hand on the fore-end, forward: the wrist, which way its fingers run and its palm faces. */
+  support: { at: V3; fingers: V3; palm: V3 };
+  /** Points on the gun: muzzle (on the bore), the bead and the back of the receiver's top (the sight line), the ejection port, the loading port. */
+  points: { muzzle: V3; bead: V3; rear: V3; ejection: V3; loading: V3 };
+  /** The hands' field of view (degrees) at the hip and down the sights. */
+  fov: number;
+  aimFov: number;
+  /** A shell: radius and length; and how many the magazine tube holds (one more goes in the chamber). */
+  shell: [number, number];
+  tube: number;
 };
 
 /**
@@ -293,6 +343,45 @@ export const HELD_MODELS = {
     model: '/props/ak74u.glb', orient: [0, 0, 0], length: 0.66,
     gripAt: [0.5, 0.4, 0.6], ...SMG_POSE, hand: false,
     arms: AK_ARMS,
+  },
+  // Remington 870 pump shotgun, 12 gauge, 20-inch barrel: made in metres (1.0 m),
+  // muzzle along -Z, its fore-end a node of its own (my-summer-game
+  // tools/export_remington.sh). Drawn a little under size, as first-person guns
+  // are, so the borrowed arms reach its fore-end. Held in the AK-74u's arms (its gun hidden), pumped
+  // after every shot and loaded a shell at a time (shotgun.ts).
+  remington870: {
+    model: '/props/remington-870.glb', orient: [0, 0, 0], length: 0.85,
+    gripAt: [0.5, 0.551, 0.69], supportAt: [0.5, 0.77, 0.27], ...RIFLE_POSE, hand: false,
+    shotgun: {
+      rig: '/props/ak74u.glb',
+      hide: ['Krinkov', 'Magazine', 'Null.001'],
+      idle: 'IDLE',
+      eye: [0, 1.6, 0.04],
+      gunBone: 'Bone_043',
+      mount: [0.072, 1.452, -0.155],
+      arms: {
+        right: ['mixamorig7RightArm_021', 'mixamorig7RightForeArm_022', 'mixamorig7RightHand_023'],
+        left: ['mixamorig7LeftArm_03', 'mixamorig7LeftForeArm_04', 'mixamorig7LeftHand_05'],
+        leftTips: ['mixamorig7LeftHandThumb3_08', 'mixamorig7LeftHandIndex3_010'],
+      },
+      shoulder: [0.1, 0, -0.14],
+      forend: 'Forend',
+      stroke: 0.085,
+      hold: { pos: [0.13, -0.2, -0.27], rot: [0.04, 0.14, 0.1] },
+      sightAt: 0.16,
+      support: { at: [-0.03, -0.05, -0.36], fingers: [0.35, 0.15, -0.92], palm: [0.45, 0.9, 0] },
+      points: {
+        muzzle: [0, 0.066, -0.69],
+        bead: [0, 0.082, -0.685],
+        rear: [0, 0.0815, -0.13],
+        ejection: [0.018, 0.062, -0.174],
+        loading: [0, 0.02, -0.174],
+      },
+      fov: 64,
+      aimFov: 50,
+      shell: [0.0105, 0.07],      // 12 gauge, 2¾ inch
+      tube: 4,
+    },
   },
   // A scoped bolt-action rifle with its own arms and clips; muzzle along -Z.
   sniper: {

@@ -754,7 +754,7 @@ const BEDS: Record<string, Bed> = {
 };
 
 /**
- * The armory workbench: six guns to pick up and carry (E), and put back (E on
+ * The armory workbench: seven guns to pick up and carry (E), and put back (E on
  * the empty place). They replace the stand-in rifle the level was built with.
  * The bench's top is 1.2 m (X) by 2.4 m (Z); the vice is at its north end and
  * the brass and ammunition box at its south end, so the long guns lie along it
@@ -770,6 +770,7 @@ const WORKBENCH: PickupTable = {
     { id: 'revolver', title: 'revolver', view: HELD_MODELS.detectiveSpecial, at: [0.02, 0.42], turnDeg: 80 },
     { id: 'ak74u', title: 'AK-74u', view: HELD_MODELS.ak74u, at: [-0.38, -0.8], turnDeg: 0 },
     { id: 'sniper', title: 'sniper rifle', view: HELD_MODELS.sniper, at: [0.13, 0.7], turnDeg: 0 },
+    { id: 'shotgun', title: 'Remington 870', view: HELD_MODELS.remington870, at: [-0.06, -0.6], turnDeg: 0 },
   ],
 };
 

@@ -24,6 +24,13 @@ ak74u.glb
   Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
   Changes: textures resized to 1024 px WebP, meshopt-compressed; arms and animations kept as made.
 
+remington-870.glb
+  "Remington 870" by ivanugaj121 — https://sketchfab.com/ivanugaj121
+  https://sketchfab.com/3d-models/remington-870-2708a60a37d94b4298bb410f68fdc4c4
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: the fore-end cut out into a part of its own so it can slide, turned and
+  scaled to metres, textures resized to 1024 px WebP, meshopt-compressed.
+
 sniper.glb
   "SNIPER FPS ANIMATION" by BURNER — https://sketchfab.com/Alexander_Ovelar
   https://sketchfab.com/3d-models/sniper-fps-animation-f5174e499bff4d96b528c891b08c2015

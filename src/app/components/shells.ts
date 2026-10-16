@@ -11,8 +11,8 @@ const GRAVITY = 9.8;
 const UP = new THREE.Vector3(0, 1, 0);
 
 export type Shells = {
-  /** A case leaving `at` (world) along `dir`, `shell` its radius and length; `drop`ped (a revolver's, off the ejector) rather than flung from a port. */
-  throw: (at: THREE.Vector3, dir: THREE.Vector3, shell: [number, number], drop?: boolean) => void;
+  /** A case leaving `at` (world) along `dir`, `shell` its radius and length; `drop`ped (a revolver's, off the ejector) rather than flung from a port; `color` other than brass (a shotgun's paper hull). */
+  throw: (at: THREE.Vector3, dir: THREE.Vector3, shell: [number, number], drop?: boolean, color?: number) => void;
   /** `floorAt` gives the floor's height under a point; `onTink` is called on a case's first few bounces. */
   update: (dt: number, floorAt: (x: number, z: number) => number, onTink: (loud: number) => void) => void;
   dispose: () => void;
@@ -22,13 +22,21 @@ export function createShells(scene: THREE.Scene): Shells {
   // A unit case, standing along Y: scaled to each calibre.
   const geo = new THREE.CylinderGeometry(1, 1, 1, 10);
   const mat = new THREE.MeshStandardMaterial({ color: 0xc09040, metalness: 0.45, roughness: 0.35 });
+  // Other colours (a shotgun's hulls), made once each.
+  const mats = new Map<number, THREE.Material>();
+  const matFor = (color?: number) => {
+    if (color === undefined) return mat;
+    let m = mats.get(color);
+    if (!m) { m = new THREE.MeshStandardMaterial({ color, roughness: 0.7 }); mats.set(color, m); }
+    return m;
+  };
   const pool: { mesh: THREE.Mesh; vel: THREE.Vector3; spin: THREE.Vector3; resting: boolean; bounces: number; radius: number }[] = [];
   let next = 0;
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
 
   return {
-    throw(at, dir, [radius, length], drop) {
+    throw(at, dir, [radius, length], drop, color) {
       let c = pool[next];
       if (!c) {
         c = { mesh: new THREE.Mesh(geo, mat), vel: new THREE.Vector3(), spin: new THREE.Vector3(), resting: false, bounces: 0, radius };
@@ -37,6 +45,7 @@ export function createShells(scene: THREE.Scene): Shells {
         pool[next] = c;
       }
       next = (next + 1) % MAX;
+      c.mesh.material = matFor(color);
       c.mesh.position.copy(at);
       c.mesh.scale.set(radius, length, radius);
       c.mesh.quaternion.setFromEuler(e.set(0, 0, Math.PI / 2));
@@ -86,6 +95,7 @@ export function createShells(scene: THREE.Scene): Shells {
       for (const c of pool) if (c) scene.remove(c.mesh);
       geo.dispose();
       mat.dispose();
+      for (const m of mats.values()) m.dispose();
     },
   };
 }

@@ -7,6 +7,7 @@ import type { ArmsRig, HeldModel } from '@/lib/held-items';
 import { rigReload, type ReloadRig } from './reloads';
 import type { GunSound, GunSounds } from './gun-sounds';
 import { createRevolver, type Revolver } from './revolver';
+import { createShotgun } from './shotgun';
 
 /**
  * The inventory item in the investigator's right hand, first-person, for the
@@ -103,7 +104,7 @@ export function prepareHeldModel(model: THREE.Object3D, view: HeldModel): { root
 }
 
 /** A case thrown from the ejection port (or `drop`ped from a revolver's chambers): where and which way, in the hands' camera space, and its size. */
-export type SpentCase = { at: THREE.Vector3; dir: THREE.Vector3; shell: [number, number]; drop?: boolean };
+export type SpentCase = { at: THREE.Vector3; dir: THREE.Vector3; shell: [number, number]; drop?: boolean; color?: number };
 
 export type HeldViewmodel = {
   /** Render after the level: `renderer.clearDepth()` then this. */
@@ -339,7 +340,7 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
   const build = (view: HeldModel) => {
     let p = built.get(view.model);
     if (!p) {
-      const rigUrl = view.revolver?.rig ?? view.arms?.rig;
+      const rigUrl = view.revolver?.rig ?? view.shotgun?.rig ?? view.arms?.rig;
       const borrowed = rigUrl ? loader.loadAsync(rigUrl) : Promise.resolve(null);
       p = Promise.all([loader.loadAsync(view.model), borrowed]).then(([gltf, rigGltf]) => {
         if (view.revolver && rigGltf) {
@@ -356,6 +357,22 @@ export function createHeldViewmodel(renderer: THREE.WebGLRenderer, aspect: numbe
           rev.item.visible = false;
           rig.add(rev.item);
           return rev.item;
+        }
+        // The shotgun is posed the same way, and kept with the revolvers: in hand they behave alike.
+        if (view.shotgun && rigGltf) {
+          const sg = createShotgun(
+            view as HeldModel & { shotgun: NonNullable<HeldModel['shotgun']> }, gltf.scene, rigGltf, prepareHeldModel, camera,
+            own(new THREE.SpriteMaterial({ map: flashTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })),
+            {
+              shot: () => { shotsOut++; report = 'shotgun'; revFlash = 0.06; },
+              dry: () => { dryOut++; },
+              drop: c => { casesOut.push(c); },
+            },
+          );
+          revolvers.set(sg.item, sg);
+          sg.item.visible = false;
+          rig.add(sg.item);
+          return sg.item;
         }
         if (view.arms) {
           const item = buildArms(view as HeldModel & { arms: ArmsRig }, gltf, rigGltf);

@@ -3,13 +3,14 @@
  * a shot or a dry click from a gun that fires (`fire`).
  * All made with Web Audio except two recordings: the wheel-lock's spanning
  * ratchet (public/sounds/ratchet.mp3, CC0) and the revolver's report, slowed
- * for the sniper's (public/sounds/revolver-shot.mp3, a real handgun shot, CC BY-SA 4.0 — see
+ * for the sniper's and the shotgun's (public/sounds/revolver-shot.mp3, a real handgun shot, CC BY-SA 4.0 — see
  * public/props/CREDITS.txt). Each reload plays through its own bus, so putting
  * the gun down mid-reload silences what is still to come.
  */
 
 export type GunSound = 'latch' | 'scrape' | 'clack' | 'boltBack' | 'boltHome' | 'pour' | 'rod' | 'thunk' | 'ratchet' | 'click' | 'shot' | 'dry' | 'tink'
-  | 'revolver' | 'rifle' | 'crane' | 'eject' | 'round' | 'index' | 'close' | 'spin';
+  | 'revolver' | 'rifle' | 'crane' | 'eject' | 'round' | 'index' | 'close' | 'spin'
+  | 'shotgun' | 'pumpBack' | 'pumpHome' | 'load';
 
 export type GunSounds = {
   /** Plays `cues` (seconds after now) on a fresh bus; call the returned function to cut them off. */
@@ -141,6 +142,20 @@ export function createGunSounds(ctx: AudioContext, out: AudioNode): GunSounds {
     index: (bus, at) => { burst(bus, at, 4200, 8, 0.18, 0.018); tone(bus, at, 3900, 0.025, 0.03); },
     // The cylinder snapped home into the frame and the latch catching it.
     close: (bus, at) => { burst(bus, at, 2000, 2.5, 0.85, 0.05); tone(bus, at, 210, 0.4, 0.09); burst(bus, at + 0.025, 3600, 6, 0.4, 0.03); },
+    // A 12-gauge indoors: the recording slowed right down, a deep boom in the
+    // chest under it, a wide burst of blast and the room ringing on.
+    shotgun: (bus, at) => {
+      playRecording(report, bus, at, 0.62 + Math.random() * 0.05, 1.6);
+      tone(bus, at, 55, 1.1, 0.35, 'triangle');
+      burst(bus, at, 1500, 0.4, 1.3, 0.12);
+      burst(bus, at + 0.04, 700, 0.4, 0.3, 1.0, 300);
+    },
+    // The fore-end racked back: the action bars sliding, the empty hull kicked out.
+    pumpBack: (bus, at) => { burst(bus, at, 1300, 2, 0.5, 0.09, 2400); burst(bus, at + 0.08, 2900, 5, 0.6, 0.04); tone(bus, at + 0.08, 260, 0.25, 0.06); },
+    // And driven home: the bolt closing on the fresh shell with a hard clack.
+    pumpHome: (bus, at) => { burst(bus, at, 2400, 2, 0.45, 0.07, 1400); burst(bus, at + 0.07, 2200, 3, 1.0, 0.05); tone(bus, at + 0.07, 170, 0.55, 0.11); },
+    // A shell thumbed up past the carrier into the magazine: a scuff of paper and the follower's click.
+    load: (bus, at) => { burst(bus, at, 2600, 2, 0.16, 0.09, 1800); burst(bus, at + 0.08, 3800, 6, 0.3, 0.025); tone(bus, at + 0.08, 3300, 0.04, 0.04); },
     // Spun freely: its pawl ticking over the ratchet, slowing to a stop.
     spin: (bus, at) => {
       let t = at;
