@@ -471,6 +471,12 @@ export type LevelDoor = {
   fallen?: { size: Vec3; at: [number, number, number][] };
   /** The level's peeper looks through this door: while it stands open, there is nothing there. */
   hidesPeeper?: boolean;
+  /**
+   * The id (in `examinables` and `locks`) of the lock keeping it shut. Such a
+   * door is not gamelord's to work: it swings open, for everyone, once the lock
+   * is cracked (`/api/locks`), and shuts again when the GM relocks it.
+   */
+  lock?: string;
 };
 
 /**

@@ -89,6 +89,11 @@ const LAMP_POOL = 6;       // ceiling lamps lit at once, nearest first (each cos
  * test can't leave a browser stuck on the Godot level, which still lacks the
  * three.js one's lamp, torch and clues. Clears the old remembered opt-in.
  */
+/** Whether the level has anything for gamelord's door buttons: a door of his (not one a lock keeps), the grate, an ambush. */
+function hasGmDoors(level: WalkthroughLevel) {
+  return Object.values(level.doors ?? {}).some(d => !d.lock) || !!level.sewer?.grate || !!level.ambush;
+}
+
 function pickGodot(level: WalkthroughLevel): string | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -691,7 +696,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // ── Doors ─────────────────────────────────────────────────────────
   // Polled every 5 s: a door is the way on, so the party should not wait long for it.
   useEffect(() => {
-    if (!level.doors && !level.sewer?.grate && !level.ambush) return;
+    if (!hasGmDoors(level)) return;
     let cancelled = false;
     const poll = () => {
       if (document.hidden) return;
@@ -1428,10 +1433,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         for (const [id, door] of Object.entries(level.doors ?? {})) {
           const dm = createDoor(model, scene, door);
           if (!dm) continue;
-          const k = doorsOpenRef.current[id] ? 1 : 0;
+          const k = (door.lock ? openLocksRef.current[door.lock] : doorsOpenRef.current[id]) ? 1 : 0;
           dm.set(k);
           if (!k) walls.push(...dm.blocking);
-          doors.push({ id, hidesPeeper: !!door.hidesPeeper, model: dm, k, blocking: !k });
+          doors.push({ id, lockId: door.lock, hidesPeeper: !!door.hidesPeeper, model: dm, k, blocking: !k });
           owned.push(dm);
         }
         // The sewer behind the house's back door, solid underfoot like the rest.
@@ -3431,13 +3436,13 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             </div>
           )}
           {/* gamelord opens and shuts the level's doors here, for everyone in it. */}
-          {(level.doors || level.sewer?.grate || level.ambush) && isGamelord && (
+          {hasGmDoors(level) && isGamelord && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: (level.weather && isGM) || level.lamps ? 0 : 'auto', marginRight: 12 }}>
               {doorError && (
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--blood)' }}>Not saved</span>
               )}
               {[
-                ...Object.entries(level.doors ?? {}),
+                ...Object.entries(level.doors ?? {}).filter(([, d]) => !d.lock),
                 ...(level.sewer?.grate ? [[level.sewer.grate, { label: 'Grate' }] as const] : []),
                 ...(level.ambush ? [[level.ambush.id, { label: level.ambush.label }] as const] : []),
               ].map(([id, door]) => (
@@ -3484,7 +3489,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
               style={{
                 fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
                 padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: loaded ? 'pointer' : 'default', marginRight: 12,
-                marginLeft: (level.weather && isGM) || level.lamps || level.doors || level.sewer?.grate ? 0 : 'auto',
+                marginLeft: (level.weather && isGM) || level.lamps || hasGmDoors(level) ? 0 : 'auto',
                 background: dressing ? 'rgba(201,148,79,0.18)' : 'transparent',
                 border: `1px solid ${dressing ? 'var(--brass)' : 'var(--line)'}`,
                 color: dressing ? 'var(--brass)' : 'var(--ink-text-2)', opacity: loaded ? 1 : 0.5,

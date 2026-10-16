@@ -9,9 +9,10 @@ import type { Pool } from './sewer';
  * and one through its far, each climbing three steps up out of the brine to a
  * dry chamber hewn deeper into the rock:
  *
- * - to the north, the Black Goat: Shub-Niggurath on a plinth, roots hanging
- *   from the roof as if the woods had come underground, sigils and smeared
- *   hands in dried blood on every wall, a ring of skulls, black candles;
+ * - to the north, the Black Goat's: an empty plinth (her statue was moved to
+ *   the hidden chamber under the Cellars — src/lib/innsmouth-cellars.ts), roots
+ *   hanging from the roof as if the woods had come underground, sigils and
+ *   smeared hands in dried blood on every wall, a ring of skulls, black candles;
  * - to the south, Bokrug, the great water-lizard of Ib, whose idols were sea-
  *   green stone: verdigris glyphs of the doom of Sarnath on the walls, a pale
  *   phosphorescent circle on the floor, a basin of glowing brine, and candles
@@ -53,7 +54,7 @@ export type Sanctums = {
   pools: Pool[];
   /** Places the skulls once the bone kit (public/props/bones.glb) is in. */
   withBones: (kit: Map<string, THREE.BufferGeometry>) => void;
-  /** Loads the statues; `keep` collects what must be disposed of. */
+  /** Loads the statue (Bokrug's; the Black Goat's plinth stands empty); `keep` collects what must be disposed of. */
   load: (loader: GLTFLoader, keep: (o: THREE.Object3D) => void, gone: () => boolean) => void;
   /** Candles flicker; Bokrug watches `eye` (world). */
   update: (dt: number, eye: THREE.Vector3 | null) => void;
@@ -233,6 +234,7 @@ export function buildSanctums(k: SanctumKit): Sanctums {
   };
 
   // ── The Black Goat, north ───────────────────────────────────────
+  // Her plinth stands empty: the statue is in the hidden chamber under the Cellars now.
   const N0 = near - 7.4, N1 = near - 3.0;  // the room, d (8.65 … 13.05)
   passage(near, N1);
   room(N0, N1, N1);
@@ -338,17 +340,6 @@ export function buildSanctums(k: SanctumKit): Sanctums {
   const rest = BOKRUG_GAZE;
   const look = { yaw: 0, pitch: 0 };
   const load: Sanctums['load'] = (loader, keep, gone) => {
-    loader.load('/props/shub-niggurath-statue.glb', (gltf) => {
-      if (gone()) return;
-      const idol = gltf.scene;
-      stone(idol, 0x47423d);
-      idol.scale.setScalar(1.35);
-      // The model faces +X; turned to face +d, out of her room toward the way in.
-      idol.rotation.y = Math.PI / 2;
-      idol.position.copy(P(goat.x, SF + 0.42, goat.d));
-      group.add(idol);
-      keep(idol);
-    });
     loader.load('/props/bokrug-statue.glb', (gltf) => {
       if (gone()) return;
       const idol = gltf.scene;

@@ -990,7 +990,7 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
   errorText: 'The house could not be loaded.',
   enterText: 'Click to step inside',
   leaveLabel: 'Leave the house',
-  credit: '"Antique Iron Safe" by pixelgrapher · "Dagon - Lovecraft lore" and "Shub-Niggurath - Lovecraft lore" by CMBC · "Iguana sculpture" by Loïc Norgeot · "Skeleton" by Huargenn — CC BY 4.0',
+  credit: '"Antique Iron Safe" by pixelgrapher · "Dagon - Lovecraft lore" by CMBC · "Iguana sculpture" by Loïc Norgeot · "Skeleton" by Huargenn — CC BY 4.0',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   radios: RADIOS,
