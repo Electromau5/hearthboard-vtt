@@ -57,6 +57,8 @@ export type Sewer = {
   grate: { blocking: THREE.Mesh[]; set: (k: number) => void; dispose: () => void };
   /** The gates sealing the inner sanctums (sanctums.ts). */
   gates: SanctumGates;
+  /** The idols, to examine by: Dagon on his plinth in the shrine, Bokrug in his sanctum. */
+  idols: { dagon: THREE.Box3; bokrug: THREE.Box3 };
   /** Their key, lying in the lair's pool: `box` to take it by, `show` while no one has. */
   key: { box: THREE.Box3; show: (on: boolean) => void };
   /**
@@ -808,6 +810,10 @@ export function createSewer(at: THREE.Vector3): Sewer {
       dispose() {},
     },
     gates: sanctums.gates,
+    idols: {
+      dagon: new THREE.Box3().setFromPoints([P(IDOL[0] - 1.0, DEEP, IDOL[1] - 1.0), P(IDOL[0] + 1.0, DEEP + 3.6, IDOL[1] + 1.0)]),
+      bokrug: sanctums.idol,
+    },
     key: { box: keyBox, show(on) { key.visible = on; } },
     outfall: {
       box: new THREE.Box3().setFromPoints([P(OX - 0.7, FLOOR, OD1 - 0.6), P(OX + 0.7, FLOOR + 1.6, OD1 + WALL)]),

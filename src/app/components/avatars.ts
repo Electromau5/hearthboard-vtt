@@ -45,6 +45,8 @@ const DRESSED = new Set([
   'thomas-callahan', 'arthur-wright', 'dr-alistair-finch', 'chief-attendant',
   // The Abattoir crowd: Banks, and evening dress for the speakeasy floor.
   'tyler-banks', 'industrialist', 'old-gentleman', 'cocktail-emerald', 'cocktail-claret',
+  // A 1930s Jamaican gangster: chalk-stripe double-breasted suit, fedora, round black shades.
+  'jamaican-gangster',
 ]);
 const HEIGHT = 1.75;         // metres, crown to heel
 const CLIP: Record<Gait, string> = { idle: 'Idle', walk: 'Walk', run: 'Run' };

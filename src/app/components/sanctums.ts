@@ -60,6 +60,8 @@ export type Sanctums = {
   update: (dt: number, eye: THREE.Vector3 | null) => void;
   /** The gates sealing both rooms, which one key opens together. */
   gates: SanctumGates;
+  /** Bokrug on his plinth, to examine by (world). */
+  idol: THREE.Box3;
 };
 
 /**
@@ -301,6 +303,7 @@ export function buildSanctums(k: SanctumKit): Sanctums {
   const lizard = { x: MX, d: S1 - 1.0 };
   box(greenStone, [lizard.x - 0.8, SF, lizard.d - 0.75], [lizard.x + 0.8, SF + 0.4, lizard.d + 0.75], 0.6);
   box(greenStone, [lizard.x - 0.9, SF + 0.4, lizard.d - 0.85], [lizard.x + 0.9, SF + 0.48, lizard.d + 0.85], 0.6);
+  const bokrug = new THREE.Box3().setFromPoints([P(lizard.x - 0.9, SF, lizard.d - 0.85), P(lizard.x + 0.9, SF + 2.8, lizard.d + 0.85)]);
   // A basin of brine before him, glowing like the cistern's sump, in a low stone kerb.
   const basinD = lizard.d - 1.9;
   box(greenStone, [lizard.x - 0.75, SF, basinD - 0.55], [lizard.x + 0.75, SF + 0.22, basinD - 0.45], 0.5);
@@ -504,7 +507,7 @@ export function buildSanctums(k: SanctumKit): Sanctums {
     dispose() {},
   };
 
-  return { pools, withBones, load, update, gates };
+  return { pools, withBones, load, update, gates, idol: bokrug };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────

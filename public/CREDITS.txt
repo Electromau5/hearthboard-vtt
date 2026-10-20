@@ -65,3 +65,13 @@ props/bones.glb — the bones covering the shrine's floor:
   Changes: separated into sixteen loose bones (skull, jaw, long bones, ribs, hip,
   sacrum, scapula, clavicle, sternum), scaled to life size, decimated, textures and
   UVs removed; scattered by the hundred in the walkthrough.
+
+props/dagon-giant.glb — Dagon, hauling himself out of the sea off the Innsmouth waterfront:
+  "Dagon - Lovecraft lore" by Brian Trepanier (CMBC) — https://sketchfab.com/CMBC
+  https://sketchfab.com/3d-models/dagon-lovecraft-lore-2d96cd1308de4e2e8f0b1413e26a5448
+  Licence: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/)
+  Changes: eleven pieces joined and decimated from 1.1 M to 60 k faces, turned and
+  re-centred on his feet, rigged to a Mixamo skeleton (fingers removed, a tail
+  added) and animated with a Mixamo climb, faces that stretch in it cut; texture
+  resized to 2048 px WebP, meshopt-compressed; scaled to 57 m in the walkthrough.
+  props/dagon-rocks.glb, the stacks he grips, is built from scratch.

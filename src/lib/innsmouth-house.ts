@@ -456,6 +456,17 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Thing Behind the Grate',
     text: 'Knee-deep in the outfall channel, behind iron bars as thick as your wrist, a Deep One stands and watches you, its grey-green hands round the bars. It does not lunge. It waits for you to come closer.',
   },
+  // The shrine's idols: each has one interaction, its Boon (placeholder text for the GM to replace).
+  dagon_boon: {
+    title: 'Boon',
+    text: 'Dagon\'s boon. (Placeholder — what the god grants is still to be written.)',
+    boon: true,
+  },
+  bokrug_boon: {
+    title: 'Boon',
+    text: 'Bokrug\'s boon. (Placeholder — what the god grants is still to be written.)',
+    boon: true,
+  },
   sanctum_key: {
     title: 'Green-Black Key',
     text: 'It lay in the glowing pool, where nothing that lives in this lair would ever have to stoop for it. A key as long as your hand, cast in a green-black metal that is cold through your glove and stays cold. Its bow is a ring of webbed fingers closed round nothing, and its bit forks like a claw. Everything else down here is scabbed with rust. This is not.',
@@ -1042,6 +1053,8 @@ export const HOUSE_LEVEL: WalkthroughLevel = {
     at: [0, 0, -5.075], shrineLock: 'shrine_padlock', grate: 'sewer_grate',
     // Shub-Niggurath's and Bokrug's rooms off the shrine stay sealed until someone brings the key from the lair.
     sanctumGate: { gate: 'sanctum_gate', key: 'sanctum_key' },
+    // Dagon in the shrine and Bokrug in his sanctum, each with its Boon.
+    idols: { dagon: 'dagon_boon', bokrug: 'bokrug_boon' },
     // The outfall tunnel lets out on the beach by the wrecked trawler (VESSEL_LEVEL.shore).
     outfall: { examine: 'outfall_tunnel', to: 'vessel', arrive: 'culvert', prompt: 'Follow the tunnel out to the shore' },
     // Sealed for now: the shrine of Dagon stays shut to the party. Remove this to let them work the padlock again.

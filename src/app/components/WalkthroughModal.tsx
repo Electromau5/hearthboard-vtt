@@ -89,9 +89,9 @@ const LAMP_POOL = 6;       // ceiling lamps lit at once, nearest first (each cos
  * test can't leave a browser stuck on the Godot level, which still lacks the
  * three.js one's lamp, torch and clues. Clears the old remembered opt-in.
  */
-/** Whether the level has anything for gamelord's door buttons: a door of his (not one a lock keeps), the grate, an ambush. */
+/** Whether the level has anything for gamelord's door buttons: a door of his (not one a lock keeps), the grate, an ambush, a summoning. */
 function hasGmDoors(level: WalkthroughLevel) {
-  return Object.values(level.doors ?? {}).some(d => !d.lock) || !!level.sewer?.grate || !!level.ambush;
+  return Object.values(level.doors ?? {}).some(d => !d.lock) || !!level.sewer?.grate || !!level.ambush || !!level.summon;
 }
 
 function pickGodot(level: WalkthroughLevel): string | null {
@@ -390,7 +390,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, []);
 
   // Collections, typewriters and map pins open their own panes, not the reading card.
-  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.collection && !t.pinHead && !t.npc && !t.inspect && !t.pickup && !t.bed && t.seal !== 'key' && !level.typewriters?.[t.id]
+  const canUseSkillOn = useCallback((t: Target) => canCheck && !t.entry.boon && !t.collection && !t.pinHead && !t.npc && !t.inspect && !t.pickup && !t.bed && t.seal !== 'key' && !level.typewriters?.[t.id]
     && !(t.id === level.sewer?.shrineLock && level.sewer.shrineSealed && !isGamelord), [canCheck, level, isGamelord]);
 
   // Safes: which stand open, fetched when the level opens and again whenever one is tried.
@@ -745,6 +745,36 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     }
   }, [level]);
 
+  // The summoning is gamelord's scene: it lasts while he runs it. Coming in, or
+  // going, he sends it back under, so the level always starts with it down.
+  useEffect(() => {
+    const summon = level.summon;
+    if (!summon || !isGamelord) return;
+    const sendDown = (keepalive: boolean) => fetch('/api/doors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: level.id, id: summon.id, open: false }),
+      keepalive,
+    });
+    let cancelled = false;
+    fetch(`/api/doors?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then((s: DoorsState | null) => {
+        if (cancelled || !s?.[summon.id]?.open) return;
+        // Down at once here (no sinking: he was never seen to be up), then for everyone.
+        doorSetAt.current = performance.now();
+        doorsOpenRef.current = { ...doorsOpenRef.current, [summon.id]: false };
+        doorsStateRef.current = { ...doorsStateRef.current, [summon.id]: { open: false, setAt: 0, setBy: 'gamelord' } };
+        setDoorsOpen(doorsOpenRef.current);
+        return sendDown(false).then(r => { if (r.ok) sendDoorsRef.current?.(); });
+      })
+      .catch(err => console.error('Could not send the summoning down:', err));
+    return () => {
+      cancelled = true;
+      if (doorsOpenRef.current[summon.id]) sendDown(true).catch(() => {});
+    };
+  }, [level, isGamelord]);
+
   // ── Set dressing ──────────────────────────────────────────────────
   // Read when the level opens, and again whenever gamelord says (over the
   // room) that it changed — never polled.
@@ -895,6 +925,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (readingRef.current) closeReading();
         else if (browsingRef.current) closeBrowsing();
         else if (target && level.radios?.[target.id]) toggleRadioRef.current?.(target.id);
+        // gamelord calls the level's summoning up, or sends it back down; everyone else examines the spot.
+        else if (target && isGamelord && target.id === level.summon?.spot) void toggleDoor(level.summon.id);
         else if (target) openTarget(target);
       }
       // , and . turn a wireless's dial down and up the band (held, they sweep).
@@ -939,7 +971,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     keyRef.current = onKey;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect, onShare, isGamelord, togglePower, godot, toggleDressing]);
+  }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect, onShare, isGamelord, togglePower, godot, toggleDressing, toggleDoor]);
 
   // ── Weather ───────────────────────────────────────────────────────
   // Every 10 s while the level is open and the tab is showing — gentle on the
@@ -1481,6 +1513,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             for (const box of gm.locks) targets.push({ id: seal.gate, entry: gateEntry, box, seal: 'gate' });
             targets.push({ id: seal.key, entry: keyEntry, box: sewer.key.box, seal: 'key' });
           }
+          // The idols, each with its Boon: Dagon in the shrine, Bokrug in his sanctum.
+          for (const which of ['dagon', 'bokrug'] as const) {
+            const id = level.sewer.idols?.[which];
+            const entry = id ? level.examinables[id] : undefined;
+            if (id && entry) targets.push({ id, entry, box: sewer.idols[which] });
+          }
         }
         // The penned hunter's bars, from just in front of them to the back of its pen.
         const cage = level.hunter?.cage;
@@ -1597,6 +1635,11 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           start.getWorldPosition(feet);
           const q = start.getWorldQuaternion(new THREE.Quaternion());
           yaw = new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+        }
+        // The level's own way in, where the model's is not where the party should start.
+        if (level.start) {
+          feet.set(...level.start.at);
+          yaw = THREE.MathUtils.degToRad(level.start.yawDeg);
         }
         // Come in from another level: where that way in lets out.
         const arrival = arrive ? arrivals.get(arrive) : undefined;
@@ -2462,6 +2505,252 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         pitch += (0 - pitch) * Math.min(1, dt * 4);
       }
     };
+
+    // ── The summoning (see Summon) ──────────────────────────────────
+    // gamelord calls it up out of the sea at E on its spot, and sends it down
+    // again; it is kept with the doors, so it moves for everyone, from when he
+    // did it. It comes up climbing, hauls itself half out, and looks.
+    const summon = level.summon;
+    type Summoned = {
+      root: THREE.Object3D; mixer: THREE.AnimationMixer; action: THREE.AnimationAction;
+      neck?: THREE.Bone; head?: THREE.Bone; hips?: THREE.Bone; faceLocal: THREE.Vector3 | null;
+      u: number; gaze: number;
+    };
+    let summoned: Summoned | null = null;
+    // The roar, then the rise, climbing all the way up to where it holds.
+    const summonLead = summon?.delaySec ?? 0;
+    const summonTotal = summon ? summonLead + summon.riseSec : 0;
+    if (summon) {
+      renderer.localClippingEnabled = true;
+      const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+      loader.loadAsync(summon.model).then(gltf => {
+        if (disposed) return;
+        const root = gltf.scene;
+        root.scale.setScalar(summon.scale);
+        root.rotation.y = THREE.MathUtils.degToRad(summon.turnDeg);
+        // Only what is out of the water is drawn.
+        const sea = [new THREE.Plane(new THREE.Vector3(0, 1, 0), -summon.waterline)];
+        const fogScale = (summon.fog ?? 1).toFixed(3);
+        let neck: THREE.Bone | undefined;
+        let head: THREE.Bone | undefined;
+        let hips: THREE.Bone | undefined;
+        root.traverse(o => {
+          if ((o as THREE.Bone).isBone) {
+            if (/Hips$/.test(o.name)) hips = o as THREE.Bone;
+            if (/Neck$/.test(o.name)) neck = o as THREE.Bone;
+            if (/Head$/.test(o.name)) head = o as THREE.Bone;
+          }
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          m.frustumCulled = false;   // skinned bounds are the rest pose's
+          m.castShadow = false;
+          for (const mat of [m.material].flat()) {
+            mat.clippingPlanes = sea;
+            // Less of the mist reaches it than reaches the rest of the harbour.
+            mat.onBeforeCompile = shader => {
+              shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <fog_fragment>',
+                `#ifdef USE_FOG
+                  float summonFogDepth = vFogDepth * ${fogScale};
+                  #ifdef FOG_EXP2
+                    float summonFog = 1.0 - exp( - fogDensity * fogDensity * summonFogDepth * summonFogDepth );
+                  #else
+                    float summonFog = smoothstep( fogNear, fogFar, summonFogDepth );
+                  #endif
+                  gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, summonFog );
+                #endif`,
+              );
+            };
+            mat.customProgramCacheKey = () => `summon-fog-${fogScale}`;
+          }
+        });
+        const mixer = new THREE.AnimationMixer(root);
+        const clip = gltf.animations.find(a => a.name === summon.clip) ?? gltf.animations[0];
+        const action = mixer.clipAction(clip);
+        action.setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true;
+        action.play();
+        action.paused = true;   // its time is set by hand, from the shared state
+        root.visible = false;
+        scene.add(root);
+        owned.push({ dispose: () => { mixer.stopAllAction(); root.removeFromParent(); } });
+        // A late comer finds it as far up (or down) as it has got by now.
+        const d = doorsStateRef.current[summon.id];
+        const since = d ? (Date.now() - d.setAt) / 1000 : Infinity;
+        const u = d?.open
+          ? Math.min(summonTotal, since)
+          : summonTotal * Math.max(0, 1 - since / summon.sinkSec);
+        summoned = { root, mixer, action, neck, head, hips, faceLocal: null, u, gaze: u >= summonTotal ? 1 : 0 };
+      }).catch(err => console.error('The summoning failed to load:', summon.model, err));
+    }
+    let summonFar = false;
+    // The quake: how hard it shakes now (0..1, eased), felt in the view and seen in the sea.
+    let summonShake = 0;
+    let summonSeen = 0;          // the call (its setAt) this screen has caught up with
+    let roarHeard = 0;           // the call whose roar has been played, or skipped, here
+    let roar: { el: HTMLAudioElement; sound: THREE.PositionalAudio; fading: boolean } | null = null;
+    const dropRoar = () => {
+      if (!roar) return;
+      roar.el.pause();
+      roar.sound.removeFromParent();
+      roar = null;
+    };
+    owned.push({ dispose: dropRoar });
+    let waterObj: THREE.Object3D | null | undefined;   // the level's Water, found once
+    let waterY = 0;
+    // Swells running out from him across the water as he comes up.
+    const swells: { mesh: THREE.Mesh; age: number }[] = [];
+    let swellDue = 0;
+    const swellGeo = new THREE.RingGeometry(0.86, 1, 72).rotateX(-Math.PI / 2);
+    owned.push({ dispose: () => { for (const w of swells) w.mesh.removeFromParent(); swellGeo.dispose(); } });
+    const gazeAt = new THREE.Vector3();
+    const gazeFrom = new THREE.Vector3();
+    const gazeFace = new THREE.Vector3();
+    const gazeQ = new THREE.Quaternion();
+    const gazeParent = new THREE.Quaternion();
+    const gazeTurn = new THREE.Quaternion();
+    const noTurn = new THREE.Quaternion();
+    /** Turn a bone, `w` of the way, so its face looks at `gazeAt` (faceLocal: which way the face is, in its own frame). */
+    const turnBone = (bone: THREE.Bone, faceLocal: THREE.Vector3, w: number) => {
+      bone.getWorldQuaternion(gazeQ);
+      bone.getWorldPosition(gazeFrom);
+      gazeFace.copy(faceLocal).applyQuaternion(gazeQ);
+      gazeTurn.setFromUnitVectors(gazeFace, gazeFrom.subVectors(gazeAt, gazeFrom).normalize());
+      gazeQ.premultiply(noTurn.identity().slerp(gazeTurn, w));
+      bone.parent!.getWorldQuaternion(gazeParent);
+      bone.quaternion.copy(gazeParent.invert().multiply(gazeQ));
+      bone.updateMatrixWorld(true);
+    };
+    const updateSummon = (dt: number, t: number) => {
+      if (!summon || !summoned) return;
+      const s = summoned;
+      const up = !!doorsOpenRef.current[summon.id];
+      const call = doorsStateRef.current[summon.id];
+      // A call heard late (the poll, the room) starts where the caller's screen has got to.
+      if (call && call.setAt !== summonSeen) {
+        summonSeen = call.setAt;
+        if (up && s.u === 0) s.u = Math.min(summonTotal, Math.max(0, (Date.now() - call.setAt) / 1000));
+      }
+      if (up) s.u = Math.min(summonTotal, s.u + dt);
+      else s.u = Math.max(0, s.u - dt * summonTotal / summon.sinkSec);
+
+      // The roar: from the moment he is called, from out in the water, for everyone at once.
+      if (summon.roar && listener && up && call && roarHeard !== call.setAt) {
+        roarHeard = call.setAt;
+        const into = Math.max(0, (Date.now() - call.setAt) / 1000);
+        if (into < summon.roar.duration - 0.5) {
+          dropRoar();
+          const el = new Audio(summon.roar.src);
+          el.crossOrigin = 'anonymous';
+          const sound = new THREE.PositionalAudio(listener);
+          sound.setMediaElementSource(el);
+          sound.setRefDistance(35);
+          sound.setRolloffFactor(0.6);
+          sound.setVolume(summon.roar.volume ?? 1);
+          sound.position.set(summon.at[0], 4, summon.at[1]);
+          scene.add(sound);
+          el.currentTime = into;
+          el.play().catch(err => console.error('The roar failed to play:', err));
+          roar = { el, sound, fading: false };
+        }
+      }
+      // Sent back down: the roar dies away.
+      if (roar && !up) roar.fading = true;
+      if (roar?.fading) {
+        const v = roar.sound.getVolume() - dt * (summon.roar?.volume ?? 1) / 1.5;
+        if (v <= 0) dropRoar();
+        else roar.sound.setVolume(v);
+      }
+      if (roar && roar.el.ended) dropRoar();
+
+      // The quake: building with the roar and while he comes up underneath, at its
+      // worst as he breaks the water, easing as he hauls himself out, gone once he
+      // holds; less going down.
+      const ru = s.u - summonLead;
+      const surface = summon.riseSec / 2;
+      let want = 0;
+      if (up) {
+        if (ru < 0) want = 0.35 * s.u / Math.max(0.01, summonLead);
+        else if (ru < surface) want = 0.35 + 0.65 * ru / surface;
+        else if (s.u < summonTotal) want = 1 - 0.85 * (ru - surface) / (summon.riseSec - surface);
+      } else if (s.u > 0) want = 0.5;
+      summonShake += (want - summonShake) * (1 - Math.exp(-dt / 0.5));
+      // The sea heaves with it.
+      if (waterObj === undefined) {
+        waterObj = scene.getObjectByName('Water') ?? null;
+        waterY = waterObj?.position.y ?? 0;
+      }
+      if (waterObj) waterObj.position.y = waterY + summonShake * (0.22 * Math.sin(t * 2.3) + 0.1 * Math.sin(t * 5.7 + 1.3));
+      // Swells run out from him while it's at its worst.
+      swellDue -= dt;
+      if (summonShake > 0.3 && ru > surface - 0.5 && swellDue <= 0) {
+        swellDue = 1.1;
+        const mesh = new THREE.Mesh(swellGeo, new THREE.MeshBasicMaterial({
+          color: 0x9fb8b0, transparent: true, opacity: 0, depthWrite: false,
+        }));
+        // From where he comes through the water: his hips, or his place before he's up.
+        if (s.hips && s.root.visible) s.hips.getWorldPosition(gazeFrom);
+        else gazeFrom.set(summon.at[0], 0, summon.at[1]);
+        mesh.position.set(gazeFrom.x, 0.06, gazeFrom.z);
+        scene.add(mesh);
+        swells.push({ mesh, age: 0 });
+      }
+      for (let i = swells.length - 1; i >= 0; i--) {
+        const w = swells[i];
+        w.age += dt;
+        const a = w.age / 6;
+        if (a >= 1) {
+          w.mesh.removeFromParent();
+          (w.mesh.material as THREE.Material).dispose();
+          swells.splice(i, 1);
+          continue;
+        }
+        w.mesh.scale.setScalar(8 + 52 * a);
+        w.mesh.position.y = (waterObj?.position.y ?? 0) + 0.06;
+        (w.mesh.material as THREE.MeshBasicMaterial).opacity = 0.32 * Math.sin(Math.PI * Math.min(1, a * 1.6)) * (1 - a);
+      }
+
+      const show = s.u > summonLead;
+      s.root.visible = show;
+      // He stands well beyond what the camera usually draws.
+      if (show !== summonFar) {
+        summonFar = show;
+        camera.far = show ? 160 : 60;
+        camera.updateProjectionMatrix();
+      }
+      if (!show) return;
+      // Up out of the deep, climbing as he comes: half the climb is done as he breaks the water.
+      const r = Math.min(1, ru / summon.riseSec);
+      const k = r * r * (3 - 2 * r);
+      const yaw = THREE.MathUtils.degToRad(summon.turnDeg);
+      const away = summon.back * (1 - k);
+      // Looking on, once he holds: he breathes.
+      const held = up && s.u >= summonTotal;
+      s.gaze = THREE.MathUtils.clamp(s.gaze + (held ? dt : -dt * 2) / 2.5, 0, 1);
+      const g = s.gaze * s.gaze * (3 - 2 * s.gaze);
+      s.root.position.set(
+        summon.at[0] - Math.sin(yaw) * away,
+        summon.y - summon.deep * (1 - k) + Math.sin(t * 0.35) * 0.35 * g,
+        summon.at[1] - Math.cos(yaw) * away,
+      );
+      s.action.time = Math.max(0, r) * summon.holdAt;
+      s.mixer.update(0);
+      s.root.updateMatrixWorld(true);
+      // His head comes round to look down at them.
+      if (s.head && s.neck) {
+        if (!s.faceLocal && s.u >= summonTotal) {
+          // As he holds (the clip's pose, before any turn), he looks straight ahead: that is where his face is.
+          s.head.getWorldQuaternion(gazeQ);
+          s.faceLocal = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).applyQuaternion(gazeQ.invert());
+        }
+        if (g > 0 && s.faceLocal) {
+          gazeAt.set(...summon.lookAt);
+          turnBone(s.neck, s.faceLocal.clone().applyQuaternion(
+            s.head.quaternion.clone()), 0.4 * g);
+          turnBone(s.head, s.faceLocal, g);
+        }
+      }
+    };
     /** Held at gunpoint: no walking while he speaks to the house. */
     const heldByAmbush = () => ambushSpeaking() && (!unseenRef.current || previewing) && inAmbush(feet.y);
 
@@ -2746,6 +3035,17 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
 
       camera.position.set(feet.x, feet.y + eye + Math.sin(t * 1.3) * 0.004, feet.z);
       camera.rotation.set(pitch, yaw, 0);
+      // The ground shakes as the summoning comes up: hardest near it.
+      if (summon?.quake && summonShake > 0.002) {
+        const { strength, near, far } = summon.quake;
+        const d = Math.hypot(feet.x - summon.at[0], feet.z - summon.at[1]);
+        const q = summonShake * strength * THREE.MathUtils.clamp(1 - (d - near) / (far - near), 0.25, 1);
+        camera.position.x += q * (Math.sin(t * 23.1) * 0.6 + Math.sin(t * 37.9) * 0.4);
+        camera.position.y += q * (Math.sin(t * 29.3 + 1.1) * 0.7 + Math.sin(t * 13.7) * 0.3);
+        camera.position.z += q * (Math.sin(t * 19.7 + 2.3) * 0.6 + Math.sin(t * 41.3) * 0.4);
+        camera.rotation.x += q * 0.12 * Math.sin(t * 17.3 + 0.7);
+        camera.rotation.z += q * 0.18 * Math.sin(t * 11.9 + 2.1);
+      }
       // Lying down, sleeping, getting up: ease between standing and lying, and fade.
       if (sleep) {
         if (sleep.phase === 'lying') {
@@ -2854,6 +3154,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       }
       tickProps(scene, dt);
       updateAmbush(dt);
+      updateSummon(dt, t);
       for (const f of performers) {
         f.mixer.update(dt);
         if (f.spec.sound && !f.audio && listener) startPerformerSound(f, listener);
@@ -3445,6 +3746,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 ...Object.entries(level.doors ?? {}).filter(([, d]) => !d.lock),
                 ...(level.sewer?.grate ? [[level.sewer.grate, { label: 'Grate' }] as const] : []),
                 ...(level.ambush ? [[level.ambush.id, { label: level.ambush.label }] as const] : []),
+                ...(level.summon ? [[level.summon.id, { label: level.summon.name }] as const] : []),
               ].map(([id, door]) => (
                 <button
                   key={id}
@@ -3452,7 +3754,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                   aria-pressed={!!doorsOpen[id]}
                   title={id === level.ambush?.id
                     ? `Set off the ${door.label.toLowerCase()}'s ambush, or dismiss him, for everyone`
-                    : `Open or shut the ${door.label.toLowerCase()}, for everyone`}
+                    : id === level.summon?.id
+                      ? `Call ${door.label} up out of the sea, or send him back down, for everyone (or E at the gate)`
+                      : `Open or shut the ${door.label.toLowerCase()}, for everyone`}
                   style={{
                     fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase',
                     padding: '4px 8px', borderRadius: 'var(--r-sm)', cursor: 'pointer',
@@ -3461,7 +3765,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                     color: doorsOpen[id] ? 'var(--brass)' : 'var(--ink-text-2)',
                   }}
                 >
-                  {door.label} {id === level.ambush?.id ? (doorsOpen[id] ? 'here' : 'gone') : doorsOpen[id] ? 'open' : 'shut'}
+                  {door.label} {id === level.ambush?.id ? (doorsOpen[id] ? 'here' : 'gone') : id === level.summon?.id ? (doorsOpen[id] ? 'risen' : 'below') : doorsOpen[id] ? 'open' : 'shut'}
                 </button>
               ))}
               {level.ambush && (
@@ -3593,6 +3897,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Seal the gates again<span style={{ color: 'var(--ink-text-2)' }}> · GM · the key goes back to the lair</span></>
               ) : focus.seal && level.sewer?.sanctumGate && openLocks[level.sewer.sanctumGate.key] ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Unlock the gates with the {level.examinables[level.sewer.sanctumGate.key]?.title.toLowerCase() ?? 'key'}</>
+              ) : isGamelord && level.summon && focus.id === level.summon.spot ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> {doorsOpen[level.summon.id] ? `Send ${level.summon.name} back down` : `Call up ${level.summon.name}`}<span style={{ color: 'var(--ink-text-2)' }}> · GM · click to examine</span></>
               ) : focus.id === level.sewer?.shrineLock && level.sewer.shrineSealed && !isGamelord ? (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {level.sewer.shrineSealed.title}</>
               ) : level.locks?.[focus.id]?.item && openLocks[focus.id] ? (
@@ -3614,6 +3920,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
                   <span style={{ color: 'var(--ink-text-2)' }}> · click to examine</span>
                   {level.radios[focus.id].dial && <RadioDial set={level.radios[focus.id]} kc={radioDial[focus.id] ?? level.radios[focus.id].dial!.at} />}
                 </>
+              ) : focus.entry.boon ? (
+                <><span style={{ color: 'var(--brass)' }}>[E]</span> Boon</>
               ) : (
                 <><span style={{ color: 'var(--brass)' }}>[E]</span> Examine {focus.entry.title}</>
               )}

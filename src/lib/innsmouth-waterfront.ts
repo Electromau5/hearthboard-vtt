@@ -18,6 +18,7 @@
  * x 26.8. South are the flats: a stair in the sea wall at z 29.5..31 goes down to
  * a plank walk across the mud to the pylon at (14, 32), the Tide-Gate carved in
  * its west face at x 11.2. Ten cultists kneel in the mud before it, praying.
+ * gamelord can call Dagon up out of the sea beyond it (`summon`).
  *
  * The text is suggested description for the GM to adjust.
  */
@@ -269,6 +270,7 @@ export const WATERFRONT_LEVEL: WalkthroughLevel = {
   errorText: 'The waterfront could not be loaded.',
   enterText: 'Click to walk down to the water',
   leaveLabel: 'Leave the waterfront',
+  credit: '"Dagon - Lovecraft lore" by CMBC — CC BY 4.0',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
   uvStains: UV_STAINS,
@@ -290,6 +292,31 @@ export const WATERFRONT_LEVEL: WalkthroughLevel = {
     scale: [1, 0.96, 1.03, 0.98, 1.04, 0.97, 1.01, 0.95, 1.02, 0.99][i],
     phase: (i * 0.73) % 2,
   })),
+  // Dagon, called up out of the sea by gamelord at the Tide-Gate (E) and sent
+  // back down the same way: he roars, then comes up behind the pylon, already
+  // climbing (the Mixamo climb, to frame 52): the first half of it under the
+  // water, the second half as he breaks the surface and hauls himself half out.
+  // Then he turns his head down to look at the kneeling congregation. Nothing
+  // more. Below the water nothing of him is drawn. (`deep` puts the top of him
+  // at the waterline halfway up.)
+  // ("Dagon - Lovecraft lore", CMBC, CC BY: my-summer-game tools/export_dagon_giant.sh,
+  // whose PLACE must match at/y/turnDeg/scale/holdAt here.)
+  summon: {
+    id: 'dagon', spot: 'tide_gate', name: 'Dagon',
+    model: '/props/dagon-giant.glb', clip: 'Climb', holdAt: 52 / 30,
+    at: [35.7, 21.6], y: -33.3, turnDeg: -90, scale: 30,
+    lookAt: [8.5, 0.4, 32],
+    deep: 57.5, back: 7, riseSec: 14, sinkSec: 12, waterline: -0.6, fog: 0.45,
+    // He roars from the deep first ("Colossal Ocean God Emergence"), breaks the
+    // water about eight seconds in and holds as it ends; the ground and the sea shake.
+    delaySec: 1,
+    roar: { src: '/sounds/dagon-roar.mp3', duration: 14, volume: 1 },
+    quake: { strength: 0.07, near: 30, far: 110 },
+  },
+
+  // Everyone comes in on the flats in front of the pylon, at the back of the
+  // kneeling congregation, at the end of the plank walk, facing the Tide-Gate.
+  start: { at: [5.6, 0.42, 32], yawDeg: -90 },
   // The GM sets the time of day and the rain; all of it is out in the weather.
   weather: true,
   // Gulls over the harbour by day.

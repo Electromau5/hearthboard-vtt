@@ -48,6 +48,11 @@ export type Examinable = {
   };
   /** Skill attempts the object rewards. Hidden among all the others in the skill panel — the players must find them. */
   checks?: ObjectCheck[];
+  /**
+   * A shrine's idol, whose one interaction is its Boon (a placeholder for now):
+   * E reads `text` under the title "Boon", and no skill can be tried on it.
+   */
+  boon?: true;
 };
 
 /**
@@ -758,6 +763,59 @@ export type Ambush = {
   speech: { src: string; duration: number; volume?: number; lines: { t: number; text: string }[] };
 };
 
+/**
+ * Something vast that gamelord calls up out of the sea and sends back down —
+ * Dagon off the waterfront. E at the `spot` (a `spots` box, or an examinable)
+ * works it, for gamelord only; everyone else there still examines the spot. It
+ * is kept as the door `id` (see /api/doors), open while it is up, so it rises
+ * and sinks for everyone, and a late comer finds it part way up.
+ *
+ * It is rigged: it plays its `clip` to `holdAt` while it comes up out of the
+ * deep — the first half of the clip still under the water, the second half as
+ * it breaks the surface and hauls itself out — then stays there, its head
+ * turned to `lookAt`. Sent down, it plays it all backwards and sinks. Called,
+ * it roars first (`roar`, `delaySec`), and the ground and the water shake while
+ * it rises (`quake`). Everything below `waterline` is cut away, so only the part
+ * out of the water is ever seen. `deep` is set so it breaks the surface halfway
+ * up, as the clip reaches its middle (my-summer-game tools/export_dagon_giant.sh
+ * places it: change `at`, `y`, `turnDeg`, `scale` or `holdAt` there too).
+ */
+export type Summon = {
+  id: string;
+  /** The spot (or examinable) whose E calls it up and sends it down. */
+  spot: string;
+  /** What it is, for gamelord's prompt: "Call up Dagon". */
+  name: string;
+  /** The rigged model under public/ and its clip. */
+  model: string;
+  clip: string;
+  /** Seconds into the clip where it stops climbing and stays: the clip runs from 0 to here over `riseSec`. */
+  holdAt: number;
+  /** Where its root stands once up [x, z], how high, which way it faces (0 = +Z), and its scale. */
+  at: [number, number];
+  y: number;
+  turnDeg: number;
+  scale: number;
+  /** What it turns its head to look at, once up. */
+  lookAt: Vec3;
+  /** How far below its place it starts, and how far back from it (metres). */
+  deep: number;
+  back: number;
+  /** Seconds after the call before it starts up from the deep: the roar comes first. */
+  delaySec?: number;
+  /** Its roar, under public/: played from the moment it is called, for everyone, from there in the water. */
+  roar?: { src: string; duration: number; volume?: number };
+  /** How hard the ground and the sea shake at the worst of it (camera metres), and how far off it is felt fully. */
+  quake?: { strength: number; near: number; far: number };
+  /** Seconds to come all the way up, climbing as it comes, and to go all the way back down. */
+  riseSec: number;
+  sinkSec: number;
+  /** Nothing of it is drawn below this height: the sea. */
+  waterline: number;
+  /** How much of the fog reaches it (1 = all, as anything else): less, so mist doesn't swallow it whole. */
+  fog?: number;
+};
+
 export type WalkthroughLevel = {
   /** Stable name for the level's live-presence room — investigators in the same level see each other. */
   id: string;
@@ -802,6 +860,14 @@ export type WalkthroughLevel = {
   hunter?: Hunter;
   /** A scripted moment that the party sets off and gamelord dismisses (see Ambush). */
   ambush?: Ambush;
+  /** Something gamelord calls up out of the sea (see Summon). */
+  summon?: Summon;
+  /**
+   * Where everyone comes in, in place of the model's PlayerStart (an arrival
+   * through a Passage still wins). `yawDeg` is the view's turn: 0 looks north
+   * (-Z), -90 east (+X). The feet are stood on whatever ground is under `at`.
+   */
+  start?: { at: Vec3; yawDeg: number };
   /** Stains for the Wood's lamp to find. A level without them has no lamp to draw. */
   uvStains?: UvStain[];
   /** Safes to crack, keyed by examinable id. */
@@ -836,6 +902,8 @@ export type WalkthroughLevel = {
      * the key back) with E on an open gate.
      */
     sanctumGate?: { gate: string; key: string };
+    /** The idols E reaches for their Boon (examinable ids): Dagon in the shrine, Bokrug in his sanctum. */
+    idols?: { dagon?: string; bokrug?: string };
     /** The end of the outfall tunnel (sewer.ts): out to the shore by the wreck. Arriving back here is `'outfall'`. */
     outfall?: Passage;
   };

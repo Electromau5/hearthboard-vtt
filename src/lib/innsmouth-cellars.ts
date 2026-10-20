@@ -19,12 +19,12 @@
  * foundation steps down to the chamber (x -8.6..-5.0, z -0.6..3.0, floor
  * y -0.36): Shub-Niggurath on her plinth at the west end, moved here from the
  * sewer's sanctum, the altar before her, a ring of black candles, roots through
- * the roof, a shackle in the south wall.
+ * the roof, a shackle in the south wall. Only she is interactive there: her Boon.
  *
  * The text is suggested description for the GM to adjust.
  */
 
-import type { Examinable, SafeLock, UvStain, WalkthroughLevel } from './walkthrough';
+import type { Examinable, SafeLock, WalkthroughLevel } from './walkthrough';
 
 const EXAMINABLES: Record<string, Examinable> = {
   // ── The shop's back room ────────────────────────────────────────
@@ -139,59 +139,11 @@ const EXAMINABLES: Record<string, Examinable> = {
     ],
   },
   // ── The chamber ─────────────────────────────────────────────────
+  // Her one interaction is her Boon (placeholder text for the GM to replace).
   shub_idol: {
-    title: 'The Black Goat',
-    text: 'At the far end of the chamber, on a plinth of black stone, a figure taller than a man: a mass of thick, coiling limbs heaving up out of itself, mouths and hooves half-formed in the tangle, all of it carved from one dark stone that seems to swallow the candlelight. The roots that come through the roof droop toward it as if they were growing there on purpose.',
-    checks: [
-      {
-        skill: 'Occult', action: 'Name what it is',
-        success: 'Shub-Niggurath, the Black Goat of the Woods with a Thousand Young. She is a fertility, and not a kind one. Her cults are country cults, of groves and standing stones. One under an Innsmouth fish shop is a long way from any wood.',
-        failure: 'A god of some kind. Not one with a church.',
-      },
-      {
-        skill: 'Spot Hidden', action: 'Look at the plinth',
-        success: 'Fresh chisel marks where the statue\'s base was dressed to fit it, and grit in the joint. She has not stood here long. Someone brought her down here, and that took a block and tackle and a dozen men.',
-        failure: 'Old stone, and newer blood dried on its front.',
-      },
-      {
-        skill: 'Cthulhu Mythos', action: 'Understand her',
-        difficulty: 'Hard',
-        success: 'The young she bears are not born in any way a doctor would know. They are taken in: offered, and kept, and changed. The shackle in the wall is part of the rite.',
-        failure: 'You look too long. For a moment one of the limbs is not where it was.',
-      },
-    ],
-  },
-  chamber_altar: {
-    title: 'The Altar',
-    text: 'A block of rough stone before the plinth. On it a goat\'s skull, horns swept back, its sockets painted red; four black candles burning down; a clay bowl with a dark crust in the bottom; a knife with a bone handle. Old blood has run down the front of the block and dried.',
-    checks: [
-      {
-        skill: 'Medicine', action: 'Look at the bowl',
-        success: 'Blood, and human: it has clotted the way a man\'s does, not a goat\'s. A cupful, no more. Given, not taken: there is a clean cut in the bottom of the bowl\'s crust where a palm was pressed into it.',
-        failure: 'Something dark and dried.',
-      },
-      {
-        skill: 'Spot Hidden', action: 'Look round the candles',
-        success: 'The black candles are the only new things here apart from the padlock. They have been lit and relit many times; the wax round them is layered like rings in a tree. Someone tends this altar every few days.',
-        failure: 'Candle grease, and plenty of it.',
-      },
-    ],
-  },
-  chamber_shackle: {
-    title: 'The Shackle',
-    text: 'An iron ring-bolt leaded into the south wall at knee height, a chain from it lying across the floor, and at the end of the chain a shackle hanging open. The earth round it is worn smooth in an arc, the reach of the chain, by something that paced it for a long time.',
-    checks: [
-      {
-        skill: 'Spot Hidden', action: 'Look at the shackle',
-        success: 'Its pin has not been drawn. It has been bent open, the iron stretched. Caught in the hinge are a few scales, grey-green, set in a shred of skin.',
-        failure: 'Old iron, opened.',
-      },
-      {
-        skill: 'Track', action: 'Read the worn earth',
-        success: 'Bare feet, a man\'s at first, then longer, the toes spreading. Whoever was kept here was kept for months. The newest prints are not a man\'s at all.',
-        failure: 'Trodden earth.',
-      },
-    ],
+    title: 'Boon',
+    text: 'The Black Goat\'s boon. (Placeholder — what she grants is still to be written.)',
+    boon: true,
   },
 };
 
@@ -208,33 +160,6 @@ const LOCKS: Record<string, SafeLock> = {
   },
 };
 
-/**
- * Stains for the Wood's lamp: something heavy was dragged out of the chamber to
- * the shelf door, and a hand pressed to the chamber wall beside the way out.
- */
-const UV_STAINS: UvStain[] = [
-  {
-    id: 'uv_drag', kind: 'blood', mark: 'drag',
-    floor: [[-5.8, 1.2], [-5.2, 1.2], [-4.8, 1.2], [-4.3, 1.2], [-3.6, 1.2], [-2.9, 1.35]],
-    floorY: [-0.36, -0.36, -0.18, 0, 0, 0],
-    title: 'A Drag Mark',
-    text: 'A broad smear glowing on the floor, from the foot of the altar up the steps and through the doorway into the cellar, where it is lost under the scrape of the shelf door. Something was carried out of the chamber, bleeding, and at the end it could not be carried and was dragged.',
-    checks: [
-      {
-        skill: 'Medicine', action: 'Judge the bleeding',
-        success: 'Steady, and heavy, all the way. Whatever was dragged was alive at the start, and probably at the end.',
-        failure: 'A lot of blood, once.',
-      },
-    ],
-  },
-  {
-    id: 'uv_chamber_hand', kind: 'blood', mark: 'handprint',
-    wall: { from: [-5.35, 1.2, 0.4], toward: [1, 0, 0], size: [0.35, 0.45] },
-    title: 'A Hand by the Way Out',
-    text: 'A hand pressed flat to the rock beside the passage, at shoulder height, and dragged down it. The fingers are too long, and there is too much space between them.',
-  },
-];
-
 export const CELLARS_LEVEL: WalkthroughLevel = {
   id: 'innsmouth-cellars',
   model: '/innsmouth-cellars.glb',
@@ -246,13 +171,11 @@ export const CELLARS_LEVEL: WalkthroughLevel = {
   credit: '"Shub-Niggurath - Lovecraft lore" by CMBC — CC BY 4.0',
   examinables: EXAMINABLES,
   locks: LOCKS,
-  uvStains: UV_STAINS,
   // Examinables that are part of the architecture, not furniture: an invisible box each.
   spots: {
     // At the free edge of the shelf door, behind the salt crock.
     shelf_padlock: { min: [-3.32, 0.85, 1.64], max: [-3.1, 1.2, 1.84] },
     trapdoor: { min: [2.4, 2.6, -0.72], max: [2.52, 3.6, 2.14] },
-    chamber_shackle: { min: [-6.35, -0.36, 2.45], max: [-5.5, 0.55, 3.0] },
   },
   doors: {
     // The bay of preserve shelving that is a door: cut out of the level by its
