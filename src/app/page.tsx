@@ -12,7 +12,6 @@ import { VESSEL_LEVEL } from '@/lib/fishing-vessel';
 import { ARCHIVE_LEVEL } from '@/lib/black-archive';
 import { BELLEVUE_LEVEL } from '@/lib/bellevue';
 import { ABATTOIR_LEVEL } from '@/lib/abattoir';
-import { DOWNTOWN_LEVEL } from '@/lib/downtown';
 import { MISKATONIC_LEVEL } from '@/lib/miskatonic';
 import { REFINERY_LEVEL } from '@/lib/marsh-refinery';
 import { WATERFRONT_LEVEL } from '@/lib/innsmouth-waterfront';
@@ -50,7 +49,6 @@ const SCENES = [
   { id: 's3', locationId: 'loc-underworld', name: 'Underworld Abattoir & Speakeasy',      short: 'Abattoir',   mapX: 49, mapY: 52 },
   { id: 's4', locationId: 'loc-blackarchive', name: 'Black Archives',                     short: 'Black Archives', mapX: 65, mapY: 47 },
   { id: 's5', locationId: 'loc-docks',      name: 'Federal Quarantine Docks',             short: 'Fed. Docks', mapX: 70, mapY: 18 },
-  { id: 's6', locationId: 'loc-downtown',   name: 'Downtown',                             short: 'Downtown',   mapX: 66, mapY: 32 },
 ];
 
 /** Locations whose info panel opens a first-person walkthrough, keyed by locationId. */
@@ -64,17 +62,20 @@ const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; a
   'loc-inn-cellars': { level: CELLARS_LEVEL, preview: '/innsmouth-cellars-preview.jpeg', alt: 'The Black Goat in candlelight beyond the open shelf door', cta: 'Go down to the cellar', hint: 'Click to lift the trapdoor' },
   'loc-inn-refinery': { level: REFINERY_LEVEL, preview: '/marsh-refinery-preview.jpeg', alt: "The Marsh Refinery's furnace hall", cta: 'Enter the refinery', hint: 'Click to force the doors' },
   'loc-miskatonic': { level: MISKATONIC_LEVEL, preview: '/miskatonic-preview.jpeg', alt: "The Orne Library's reading room at night", cta: 'Enter the library', hint: 'Click to step through the doors' },
-  'loc-downtown': { level: DOWNTOWN_LEVEL, preview: '/downtown-preview.jpeg', alt: 'A downtown street of brick shopfronts at night', cta: 'Walk downtown', hint: 'Click to walk the street' },
 };
 
 /**
  * Board backdrops, each with its own set of scenes (top-bar chips and map pins).
  * `model3d` is an optional 3D version of the map — a Summer-built .glb whose
  * `Pin_<sceneId>` nodes sit at the same spots as the 2D pins.
+ * `locked` maps open for gamelord only; everyone else sees a locked chip.
+ * Dunwich and Oklahoma are placeholders — no backdrop or scenes yet.
  */
 const MAPS = [
-  { id: 'default',   label: 'Default',   src: '/map-v1.jpeg',         alt: 'Campaign map',  scenes: SCENES,           model3d: null },
-  { id: 'innsmouth', label: 'Innsmouth', src: '/innsmouth-map.jpeg', alt: 'Innsmouth map', scenes: INNSMOUTH_SCENES, model3d: '/innsmouth-town.glb' },
+  { id: 'default',   label: 'Default',   src: '/map-v1.jpeg',         alt: 'Campaign map',  scenes: SCENES,           model3d: null, locked: false },
+  { id: 'innsmouth', label: 'Innsmouth', src: '/innsmouth-map.jpeg', alt: 'Innsmouth map', scenes: INNSMOUTH_SCENES, model3d: '/innsmouth-town.glb', locked: false },
+  { id: 'dunwich',   label: 'Dunwich',   src: null,                   alt: 'Dunwich map',   scenes: [],               model3d: null, locked: true },
+  { id: 'oklahoma',  label: 'Oklahoma',  src: null,                   alt: 'Oklahoma map',  scenes: [],               model3d: null, locked: true },
 ] as const;
 type MapId = typeof MAPS[number]['id'];
 const ALL_SCENES = MAPS.flatMap(m => m.scenes);
@@ -492,6 +493,7 @@ export default function HearthboardPage() {
   // The location carousel's arrows wrap: past the last location is the first.
   const stepScene = (dir: 1 | -1) => {
     const scenes = activeMap.scenes;
+    if (scenes.length === 0) return;
     const i = scenes.findIndex(s => s.id === currentSceneId);
     const next = scenes[((i < 0 ? 0 : i + dir) + scenes.length) % scenes.length];
     setCurrentSceneId(next.id);
@@ -1316,57 +1318,62 @@ export default function HearthboardPage() {
 
       {/* ============ GAME / VTT VIEW ============ */}
       <div className={`view${view === 'game' ? ' active' : ''}`} id="view-game">
-        <div className="game-topbar">
-          <button className="btn btn-ghost btn-sm" onClick={backToDashboard}>← Dashboard</button>
-          <span className="gt-title">{currentGame?.name ?? '—'}</span>
-          <span className="gt-sys">{currentGame?.system ?? '—'}</span>
-          <button
-            className={`scene-chip${boardView === 'board' ? ' active' : ''}`}
-            style={{ marginLeft: 16, borderColor: boardView === 'board' ? 'var(--brass)' : undefined, color: boardView === 'board' ? 'var(--brass)' : undefined }}
-            onClick={() => setBoardView(v => v === 'map' ? 'board' : 'map')}
-            title="Toggle case investigation board"
-          >
-            ⬡ Case Board
-          </button>
-          <div className="scene-switch" style={{ marginLeft: 8 }} title="Switch map">
-            {MAPS.map(m => (
-              <button
-                key={m.id}
-                className={`scene-chip${m.id === activeMapId ? ' active' : ''}`}
-                onClick={() => {
+        <div className="game-main">
+          {/* Left rail */}
+          <div className="left-rail">
+            {/* What used to be the top bar: back, campaign, case board, maps, 2D/3D, invite */}
+            <div className="rail-section rail-head">
+              <button className="btn btn-ghost btn-sm" onClick={backToDashboard}>← Dashboard</button>
+              <div className="gt-title">{currentGame?.name ?? '—'}</div>
+              <span className="gt-sys">{currentGame?.system ?? '—'}</span>
+            </div>
+            <div className="rail-section">
+              <div className="rail-title">Maps</div>
+              <select
+                className="rail-select"
+                aria-label="Switch map"
+                value={activeMapId}
+                onChange={e => {
+                  const m = MAPS.find(x => x.id === e.target.value);
+                  if (!m || (m.locked && !isGamelord)) return;
                   setActiveMapId(m.id);
-                  setCurrentSceneId(m.scenes[0].id);
+                  // An empty map has no scenes yet; give it its own bucket for tokens and notes.
+                  setCurrentSceneId(m.scenes[0]?.id ?? `map-${m.id}`);
                   setMapZoomedTo(null);
                   setSelectedTokenId(null);
                   setBoardView('map');
                 }}
               >
-                {m.label}
+                {MAPS.map(m => (
+                  <option key={m.id} value={m.id} disabled={m.locked && !isGamelord}>
+                    {m.locked ? `🔒 ${m.label}` : m.label}
+                  </option>
+                ))}
+              </select>
+              {activeMap.model3d && (
+                <div className="rail-chips" style={{ marginTop: 8 }} title="Flat map or 3D town">
+                  {(['2d', '3d'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      className={`scene-chip${mapMode === mode ? ' active' : ''}`}
+                      onClick={() => { setMapMode(mode); setBoardView('map'); }}
+                    >
+                      {mode.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                className={`scene-chip rail-wide${boardView === 'board' ? ' active' : ''}`}
+                style={{ borderColor: boardView === 'board' ? 'var(--brass)' : undefined, color: boardView === 'board' ? 'var(--brass)' : undefined }}
+                onClick={() => setBoardView(v => v === 'map' ? 'board' : 'map')}
+                title="Toggle case investigation board"
+              >
+                ⬡ Case Board
               </button>
-            ))}
-          </div>
-          {activeMap.model3d && (
-            <div className="scene-switch" style={{ marginLeft: 8 }} title="Flat map or 3D town">
-              {(['2d', '3d'] as const).map(mode => (
-                <button
-                  key={mode}
-                  className={`scene-chip${mapMode === mode ? ' active' : ''}`}
-                  onClick={() => { setMapMode(mode); setBoardView('map'); }}
-                >
-                  {mode.toUpperCase()}
-                </button>
-              ))}
             </div>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={() => showToast('Invite link copied')}>
-            Invite players
-          </button>
-        </div>
-
-        <div className="game-main">
-          {/* Left rail */}
-          <div className="left-rail">
-            <div className="rail-section">
+            {/* Tools are hidden for now — the board stays on Select. */}
+            <div className="rail-section" hidden>
               <div className="rail-title">Tools</div>
               <div className="tool-row">
                 {[
@@ -1438,6 +1445,11 @@ export default function HearthboardPage() {
               </div>
               <div className="tray-hint">Drag a token onto the map to place it. Drag placed tokens to move them.</div>
             </div>
+            <div className="rail-section rail-foot">
+              <button className="btn btn-ghost btn-sm rail-wide" onClick={() => showToast('Invite link copied')}>
+                Invite players
+              </button>
+            </div>
           </div>
 
           {/* Case board — replaces map when toggled */}
@@ -1489,13 +1501,19 @@ export default function HearthboardPage() {
                   transform: mapZoomedTo ? 'scale(2.5)' : 'scale(1)',
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={activeMap.src}
-                  alt={activeMap.alt}
-                  className="map-bg-img"
-                  draggable={false}
-                />
+                {activeMap.src ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={activeMap.src}
+                    alt={activeMap.alt}
+                    className="map-bg-img"
+                    draggable={false}
+                  />
+                ) : (
+                  <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'var(--ink)', color: 'var(--ink-text-2)', fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    {activeMap.label} — no map yet
+                  </div>
+                )}
                 {activeMap.scenes.map(s => (
                   <button
                     key={s.id}

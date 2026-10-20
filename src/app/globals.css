@@ -190,11 +190,6 @@ input, textarea, select { font-family: inherit; }
 
 /* ===================== GAME VIEW ===================== */
 #view-game { background: var(--ink); }
-.game-topbar {
-  height: 52px; flex: 0 0 auto; border-bottom: 1px solid var(--line);
-  display: flex; align-items: center; padding: 0 14px; gap: 14px; background: var(--surface);
-  z-index: 6;
-}
 .gt-title { font-family: var(--font-display); font-size: 16px; font-weight: 600; white-space: nowrap; }
 .gt-sys {
   font-family: var(--font-mono); font-size: 10.5px; color: var(--brass);
@@ -219,6 +214,17 @@ input, textarea, select { font-family: inherit; }
   display: flex; flex-direction: column; overflow-y: auto;
 }
 .rail-section { padding: 14px 14px 6px; }
+.rail-head { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.rail-head .gt-title { white-space: normal; line-height: 1.25; }
+.rail-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rail-select {
+  width: 100%; background: var(--surface-2); color: var(--parchment); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 7px 8px; font-family: var(--font-mono); font-size: 12px; cursor: pointer;
+}
+.rail-select:hover, .rail-select:focus { border-color: var(--brass-dim); outline: none; }
+.rail-select option:disabled { color: var(--ink-text-2); }
+.rail-wide { width: 100%; margin-top: 10px; justify-content: center; }
+.rail-foot { margin-top: auto; padding-bottom: 14px; }
 .rail-title {
   font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase;
   color: var(--ink-text-2); margin-bottom: 10px;
@@ -637,7 +643,7 @@ input, textarea, select { font-family: inherit; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 @media (max-width: 900px) {
-  .left-rail { width: 0; overflow: hidden; border: none; }
+  .left-rail { width: 190px; }
   .right-panel { width: 280px; }
 }
 

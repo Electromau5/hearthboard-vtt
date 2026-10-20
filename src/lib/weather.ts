@@ -54,7 +54,6 @@ export const RAIN_SPECS: Record<Rain, RainSpec> = {
 /** Levels whose time of day the GM can set, for the admin panel (ids match `WalkthroughLevel.id`). */
 export const WEATHER_LEVELS: { id: string; title: string }[] = [
   { id: 'vessel', title: 'The Esther Gilman · Innsmouth Reef' },
-  { id: 'downtown', title: 'Downtown · Boston' },
   { id: 'marsh-refinery', title: 'The Marsh Refinery · Innsmouth' },
   { id: 'innsmouth-waterfront', title: 'The Waterfront · Innsmouth' },
   { id: 'miskatonic', title: 'The Orne Library · Miskatonic University' },

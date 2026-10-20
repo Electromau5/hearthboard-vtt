@@ -126,7 +126,6 @@ src/
     dialogue/                     # NPC Dialogue System (spec v1.0): types.ts schema, engine.ts rules (pure), director.ts state owner (redis-storage dialogue/save.json), registry.ts + npcs/*.json + facts.json — server-only, answers never reach the browser
     bellevue.ts                   # BELLEVUE_LEVEL — the two-storey Bellevue ward: Admissions, the Lower Block (Cells 63–66), the ward upstairs
     abattoir.ts                   # ABATTOIR_LEVEL — the Underworld Abattoir & Speakeasy (Providence): butcher's shop front, icebox false shelf into the speakeasy, Banks's office; slaughterhouse down the back stairs (killing floor, pens, interrogation, rendering, rum tunnel, counting room, cold locker). No NPCs yet — Npc_* markers only
-    downtown.ts                   # DOWNTOWN_LEVEL — the default map's Downtown street (Sketchfab asset, wrapped in my-summer-game)
     miskatonic.ts                 # MISKATONIC_LEVEL — the university quadrangle (CC-BY drone photogrammetry scan, credit in public/CREDITS.txt); built in Blender (my-summer-game tools/build_miskatonic.py); the scan never collides — hidden Collider_* meshes under Architecture do
     innsmouth-cellars.ts          # CELLARS_LEVEL — the Innsmouth map's Cellars pin: a bootlegger's cellar under a shuttered Marsh fish shop (still, barrel rack, bottling table), built in Blender (my-summer-game tools/build_cellars.py); a bay of the preserve shelves is a door (`doors.shelf_door`, `lock: 'shelf_padlock'`) that swings open once its dial padlock is cracked, onto the hidden chamber where Shub-Niggurath stands
     marsh-refinery.ts             # REFINERY_LEVEL — the Innsmouth map's Marsh Refinery: a furnace hall (CC-BY Sketchfab shell, credit in public/CREDITS.txt)
@@ -384,7 +383,6 @@ A federal quarantine facility ostensibly maintained for disease control and insp
 | Abattoir | Underworld Abattoir & Speakeasy | 49% | 52% |
 | Black Archives | Black Archives | 65% | 47% |
 | Fed. Docks | Federal Quarantine Docks | 70% | 18% |
-| Downtown | Downtown (3D walkthrough) | 66% | 32% |
 
 ---
 
