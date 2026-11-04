@@ -51,6 +51,75 @@ const SCENES = [
   { id: 's5', locationId: 'loc-docks',      name: 'Federal Quarantine Docks',             short: 'Fed. Docks', mapX: 70, mapY: 18 },
 ];
 
+/**
+ * A marker on a backdrop map. x/y are percentages of the image itself, not the
+ * board — the pins sit in a box shaped like the image, so cropping can't move them.
+ */
+type BackdropPin = { id: string; name: string; label: string; x: number; y: number; text: string };
+
+/** K'n-yan's markers, placed on the numbered places of /oklahoma-map.jpeg. */
+const KNYAN_PINS: BackdropPin[] = [
+  { id: 'kn-descent', name: 'The Descent', label: 'Paso de Descenso', x: 36, y: 29,
+    text: "The guarded entrance passage from the mound. The book says every approach to K'n-yan was blocked or watched — this is the team's only way in." },
+  { id: 'kn-plain', name: 'The Deserted Plain', label: 'Llano Desierto', x: 28, y: 39,
+    text: "Empty ruined towns. On it, B'graa — the largest of the old towns, a marvel of worked gold, tall thin towers with many pinnacles, its walls levelled from the old wars when Tsath conquered the plain." },
+  { id: 'kn-black-temple', name: 'The Black Temple', label: 'Templo Negro', x: 52, y: 37,
+    text: "A squat temple of black basalt on a side path, no carvings, holding an empty onyx pedestal. It was built for the toad-idol Tsathoggua, copied from temples in the vaults of Zin. A holy ruin, even to the K'n-yans." },
+  { id: 'kn-mountains', name: 'The Mountain Range', label: 'Cadena de Montañas', x: 52, y: 44.5,
+    text: 'One pass through. The river runs beside the road and falls into a deep chasm at the pass.' },
+  { id: 'kn-farms', name: 'The Farm Plain', label: 'Llanura de Labranza', x: 39.5, y: 54,
+    text: 'Trees planted like a chessboard, straight irrigation canals cut from the river, and a wide straight road of gold and basalt blocks running to the city.' },
+  { id: 'kn-temples', name: 'The Roadside Temples', label: 'Templos', x: 36, y: 63,
+    text: 'Five temples in groves along the road — coiled serpent (Yig), octopus head (Tulu), the twins (Nug and Yeb), one with the idol left blank (the Not-to-Be-Named One), and one more shrine. In the book these were still in active use, with riders coming and going.' },
+  { id: 'kn-tsath', name: 'Tsath', label: 'Gran Ciudad de Tsath', x: 51, y: 73,
+    text: 'The capital — heaven-high spires and golden minarets under a grey haze, basalt tower blocks, and tunnel mouths at its base (the old tunnel network, now used on foot). The upper towers stand empty; the people have spread out to the lower edges.' },
+  { id: 'kn-gate', name: 'The Sealed Gate', label: 'Puerta Sellada', x: 51, y: 88,
+    text: 'Stairs down out of the blue light, red glow below. The way to Yoth.' },
+];
+
+/** Yoth's markers, placed on the numbered places of /yoth-map.jpeg. */
+const YOTH_PINS: BackdropPin[] = [
+  { id: 'yo-gate', name: 'The Stair and Broken Gate', label: 'Escalera y Puerta Rota', x: 50, y: 30,
+    text: "The descent from K'n-yan. The gate at the bottom stands broken — what broke it, and from which side, the map does not say. The team should note that." },
+  { id: 'yo-ruins', name: 'The Cyclopean Ruins', label: 'Ruinas Ciclópeas', x: 24.5, y: 44.5,
+    text: 'Fallen blocks and a serpent-carved arch, spread across the red plain. The builders were the four-footed reptile people. Their cities stand empty — nothing here is maintained, and nothing is guarded.' },
+  { id: 'yo-city', name: 'The Great Ruined City', label: 'Ciudad Ruinosa', x: 52.5, y: 50,
+    text: 'The largest city of Yoth: a walled temple platform with toad idols scattered across it. Those idols are Tsathoggua images, and the book says they all came up out of black N\'kai below — this city was a holy place long before it was a ruin.' },
+  { id: 'yo-zin', name: 'The Vaults of Zin', label: 'Bóvedas de Zin', x: 48.5, y: 69,
+    text: "Drawn as a cutaway under the great city: arched chambers, scrolls in niches, an empty pedestal. The few manuscripts and carvings found here are how the K'n-yans learned anything about the Yoth people at all — and the toad-idol that named Tsath was found in Yoth, in a place made in these vaults' image. For the team, this is the archive of the whole descent: how the Yoth people lived, and what they knew about the way down." },
+  { id: 'yo-beasts', name: 'The Horned Beasts', label: 'Bestias Cornudas', x: 80, y: 55,
+    text: "Wild horned four-footed beasts roam the ruins — the stock the K'n-yans later crossed to breed the gyaa-yothn. Not people, not tame. A hazard of the open plain." },
+  { id: 'yo-abyss', name: "The Abyss to N'kai", label: "Abismo a N'kai", x: 32, y: 80.5,
+    text: 'Rough stairs cut into the chasm wall, going down into full blackness — no light below at all. In the book this is "the ultimate abyss," and Zamacona\'s open curiosity about it is part of what got him watched and, in the end, taken.' },
+];
+
+/** N'Kai's markers, placed on the labelled places of /nkai-map.jpeg. */
+const NKAI_PINS: BackdropPin[] = [
+  { id: 'nk-stair', name: 'The Stair from Yoth', label: 'Escalera de Yoth · Borde quebrado', x: 49, y: 30.5,
+    text: 'It ends at a broken ledge (Borde quebrado) above the floor. The way down is damaged before the team even starts.' },
+  { id: 'nk-channels', name: 'The Stone Channels', label: 'Canales de piedra', x: 31, y: 40,
+    text: 'A grid of straight channels cut into the floor crosses the whole land — labeled "caminos ciegos," blind roads. In the book, the dwellers of N\'kai ooze along these channels. They are the land\'s true map: whatever moves here, moves along them.' },
+  { id: 'nk-city', name: 'The Ruined City', label: 'Ciudad en ruinas', x: 28, y: 53,
+    text: "Eyeless statues and smooth, windowless towers — a civilization older than Yoth's, built by beings with senses other than sight. Nothing here was made for eyes." },
+  { id: 'nk-temple', name: 'The Central Temple', label: 'Templo central', x: 50, y: 51.5,
+    text: 'One huge toad idol on a stepped platform, ringed by smaller toads — Tsathoggua in onyx and basalt. This is the god\'s home ground; the idols in Yoth and the idol that named Tsath all came from here.' },
+  { id: 'nk-forms', name: 'The Oozing Forms', label: 'Formas oozantes', x: 57.5, y: 69,
+    text: "Shapeless things sliding along the channels toward the temple — the living dwellers, sightless, worshipping in the dark. They will not see the team's lights. They will feel the team's steps in the channels." },
+  { id: 'nk-portal', name: 'The Hidden Portal', label: 'Portal oculto — ? — rumor', x: 50.3, y: 83.5,
+    text: 'One tall doorway in the deepest wall, marked with a question mark. No survey has confirmed it.' },
+];
+
+/**
+ * The Oklahoma map's locations aren't pins — each one swaps the board's backdrop
+ * for its own map (`aspect` is the image's width / height). A null `backdrop`
+ * shows "no map yet". mapX/mapY are unused; `pins` are the backdrop's markers.
+ */
+const OKLAHOMA_SCENES = [
+  { id: 'ok1', locationId: 'loc-ok-knyan', name: "K'n'yan", short: "K'n'yan", mapX: 50, mapY: 50, backdrop: '/oklahoma-map.jpeg' as string | null, aspect: 3 / 2, pins: KNYAN_PINS },
+  { id: 'ok2', locationId: 'loc-ok-yoth',  name: 'Yoth',    short: 'Yoth',    mapX: 50, mapY: 50, backdrop: '/yoth-map.jpeg' as string | null, aspect: 3 / 2, pins: YOTH_PINS },
+  { id: 'ok3', locationId: 'loc-ok-nkai',  name: "N'Kai",   short: "N'Kai",   mapX: 50, mapY: 50, backdrop: '/nkai-map.jpeg' as string | null, aspect: 3 / 2, pins: NKAI_PINS },
+];
+
 /** Locations whose info panel opens a first-person walkthrough, keyed by locationId. */
 const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; alt: string; cta: string; hint: string }> = {
   'loc-inn-house':  { level: HOUSE_LEVEL,  preview: '/innsmouth-house-preview.jpeg', alt: "The derelict house's front hall", cta: 'Enter the house',  hint: 'Click to go inside' },
@@ -69,13 +138,13 @@ const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; a
  * `model3d` is an optional 3D version of the map — a Summer-built .glb whose
  * `Pin_<sceneId>` nodes sit at the same spots as the 2D pins.
  * `locked` maps open for gamelord only; everyone else sees a locked chip.
- * Dunwich and Oklahoma are placeholders — no backdrop or scenes yet.
+ * Dunwich is a placeholder — no backdrop or scenes yet. Oklahoma's locations each bring their own backdrop (OKLAHOMA_SCENES).
  */
 const MAPS = [
   { id: 'default',   label: 'Default',   src: '/map-v1.jpeg',         alt: 'Campaign map',  scenes: SCENES,           model3d: null, locked: false },
   { id: 'innsmouth', label: 'Innsmouth', src: '/innsmouth-map.jpeg', alt: 'Innsmouth map', scenes: INNSMOUTH_SCENES, model3d: '/innsmouth-town.glb', locked: false },
   { id: 'dunwich',   label: 'Dunwich',   src: null,                   alt: 'Dunwich map',   scenes: [],               model3d: null, locked: true },
-  { id: 'oklahoma',  label: 'Oklahoma',  src: null,                   alt: 'Oklahoma map',  scenes: [],               model3d: null, locked: true },
+  { id: 'oklahoma',  label: 'Oklahoma',  src: null,                   alt: 'Oklahoma map',  scenes: OKLAHOMA_SCENES,  model3d: null, locked: false },
 ] as const;
 type MapId = typeof MAPS[number]['id'];
 const ALL_SCENES = MAPS.flatMap(m => m.scenes);
@@ -489,6 +558,12 @@ export default function HearthboardPage() {
   const activeMap = MAPS.find(m => m.id === activeMapId) ?? MAPS[0];
   const [mapMode, setMapMode] = useState<'2d' | '3d'>('2d');
   const show3d = mapMode === '3d' && !!activeMap.model3d;
+  // A location with its own backdrop (Oklahoma's) replaces the map image instead of zooming to a pin.
+  const currentScene = activeMap.scenes.find(s => s.id === currentSceneId);
+  const sceneBackdrop = currentScene && 'backdrop' in currentScene ? currentScene : null;
+  const mapSrc = sceneBackdrop ? sceneBackdrop.backdrop : activeMap.src;
+  const mapLabel = sceneBackdrop ? sceneBackdrop.name : activeMap.label;
+  const openPin = sceneBackdrop?.pins.find(p => p.id === mapZoomedTo);
 
   // The location carousel's arrows wrap: past the last location is the first.
   const stepScene = (dir: 1 | -1) => {
@@ -497,7 +572,7 @@ export default function HearthboardPage() {
     const i = scenes.findIndex(s => s.id === currentSceneId);
     const next = scenes[((i < 0 ? 0 : i + dir) + scenes.length) % scenes.length];
     setCurrentSceneId(next.id);
-    setMapZoomedTo(next.id);
+    setMapZoomedTo('backdrop' in next ? null : next.id);
     setSelectedTokenId(null);
   };
   // Keep the current location's chip in view as the carousel steps or opens.
@@ -1495,26 +1570,50 @@ export default function HearthboardPage() {
               <div
                 className="map-zoom-inner"
                 style={{
-                  transformOrigin: mapZoomedTo
+                  transformOrigin: openPin
+                    ? `${openPin.x}% ${openPin.y}%`
+                    : mapZoomedTo
                     ? `${ALL_SCENES.find(s => s.id === mapZoomedTo)?.mapX ?? 50}% ${ALL_SCENES.find(s => s.id === mapZoomedTo)?.mapY ?? 50}%`
                     : '50% 50%',
                   transform: mapZoomedTo ? 'scale(2.5)' : 'scale(1)',
                 }}
               >
-                {activeMap.src ? (
+                {sceneBackdrop && mapSrc ? (
+                  // Sized like object-fit: cover, so the pins stay on their spots on the image.
+                  <div className="map-cover" style={{ aspectRatio: sceneBackdrop.aspect }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={mapSrc} alt={`Map of ${sceneBackdrop.name}`} className="map-bg-img" draggable={false} />
+                    {sceneBackdrop.pins.map(p => (
+                      <button
+                        key={p.id}
+                        className={`loc-marker-btn${p.id === mapZoomedTo ? ' active' : ''}`}
+                        style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                        onClick={e => {
+                          e.stopPropagation();
+                          setMapZoomedTo(prev => prev === p.id ? null : p.id);
+                          setSelectedTokenId(null);
+                        }}
+                        title={p.name}
+                      >
+                        <div className="loc-pin" />
+                        <div className="loc-pin-label">{p.name}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : mapSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={activeMap.src}
+                    src={mapSrc}
                     alt={activeMap.alt}
                     className="map-bg-img"
                     draggable={false}
                   />
                 ) : (
                   <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'var(--ink)', color: 'var(--ink-text-2)', fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                    {activeMap.label} — no map yet
+                    {mapLabel} — no map yet
                   </div>
                 )}
-                {activeMap.scenes.map(s => (
+                {activeMap.scenes.filter(s => !('backdrop' in s)).map(s => (
                   <button
                     key={s.id}
                     className={`loc-marker-btn${s.id === currentSceneId ? ' active' : ''}`}
@@ -1548,7 +1647,7 @@ export default function HearthboardPage() {
                         className={`scene-chip${s.id === currentSceneId ? ' active' : ''}`}
                         onClick={() => {
                           setCurrentSceneId(s.id);
-                          setMapZoomedTo(prev => prev === s.id ? null : s.id);
+                          setMapZoomedTo(prev => 'backdrop' in s || prev === s.id ? null : s.id);
                           setSelectedTokenId(null);
                         }}
                       >
@@ -1566,7 +1665,21 @@ export default function HearthboardPage() {
                 </button>
               )}
             </div>
-            {mapZoomedTo && (() => {
+            {openPin && sceneBackdrop?.backdrop && (
+              <div className="loc-info-panel">
+                <button className="loc-close-btn" onClick={() => setMapZoomedTo(null)}>✕</button>
+                <div className="loc-info-name">{openPin.name}</div>
+                <div className="loc-info-sub">{openPin.label}</div>
+                <div
+                  className="loc-info-img"
+                  role="img"
+                  aria-label={`${openPin.name} on the map of ${sceneBackdrop.name}`}
+                  style={{ backgroundImage: `url(${sceneBackdrop.backdrop})`, backgroundSize: '320%', backgroundPosition: `${openPin.x}% ${openPin.y}%` }}
+                />
+                <div className="loc-info-text">{openPin.text}</div>
+              </div>
+            )}
+            {mapZoomedTo && !openPin && (() => {
               const scene = ALL_SCENES.find(s => s.id === mapZoomedTo);
               const img = scene ? locationImages[scene.locationId] ?? ('image' in scene ? scene.image : undefined) : undefined;
               const isDocks = scene?.locationId === 'loc-docks';
