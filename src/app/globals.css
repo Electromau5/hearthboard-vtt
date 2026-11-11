@@ -312,6 +312,12 @@ input, textarea, select { font-family: inherit; }
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; color: var(--ink-text-2);
   text-transform: uppercase; text-align: center; padding: 0 24px;
 }
+.town3d-canvas.victorian canvas { filter: sepia(0.38) saturate(0.7) contrast(1.1) brightness(1.05); }
+.town3d-vignette {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, transparent 38%, rgba(4,3,2,0.55) 78%, rgba(2,1,1,0.9) 100%);
+}
+.town3d-view { position: absolute; top: 10px; right: 12px; z-index: 6; }
 .town3d-hint {
   position: absolute; top: 10px; left: 50%; transform: translateX(-50%); pointer-events: none;
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px; color: var(--ink-text-2);

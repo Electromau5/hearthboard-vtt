@@ -116,9 +116,9 @@ const NKAI_PINS: BackdropPin[] = [
  * shows "no map yet". mapX/mapY are unused; `pins` are the backdrop's markers.
  */
 const OKLAHOMA_SCENES = [
-  { id: 'ok1', locationId: 'loc-ok-knyan', name: "K'n'yan", short: "K'n'yan", mapX: 50, mapY: 50, backdrop: '/oklahoma-map.jpeg' as string | null, aspect: 3 / 2, pins: KNYAN_PINS },
-  { id: 'ok2', locationId: 'loc-ok-yoth',  name: 'Yoth',    short: 'Yoth',    mapX: 50, mapY: 50, backdrop: '/yoth-map.jpeg' as string | null, aspect: 3 / 2, pins: YOTH_PINS },
-  { id: 'ok3', locationId: 'loc-ok-nkai',  name: "N'Kai",   short: "N'Kai",   mapX: 50, mapY: 50, backdrop: '/nkai-map.jpeg' as string | null, aspect: 3 / 2, pins: NKAI_PINS },
+  { id: 'ok1', locationId: 'loc-ok-knyan', name: "K'n'yan", short: "K'n'yan", mapX: 50, mapY: 50, backdrop: '/oklahoma-map.jpeg' as string | null, aspect: 3 / 2, pins: KNYAN_PINS, model3d: '/knyan-map.glb' as string | null },
+  { id: 'ok2', locationId: 'loc-ok-yoth',  name: 'Yoth',    short: 'Yoth',    mapX: 50, mapY: 50, backdrop: '/yoth-map.jpeg' as string | null, aspect: 3 / 2, pins: YOTH_PINS, model3d: null as string | null },
+  { id: 'ok3', locationId: 'loc-ok-nkai',  name: "N'Kai",   short: "N'Kai",   mapX: 50, mapY: 50, backdrop: '/nkai-map.jpeg' as string | null, aspect: 3 / 2, pins: NKAI_PINS, model3d: null as string | null },
 ];
 
 /** Locations whose info panel opens a first-person walkthrough, keyed by locationId. */
@@ -136,8 +136,9 @@ const WALKTHROUGHS: Record<string, { level: WalkthroughLevel; preview: string; a
 
 /**
  * Board backdrops, each with its own set of scenes (top-bar chips and map pins).
- * `model3d` is an optional 3D version of the map — a Summer-built .glb whose
- * `Pin_<sceneId>` nodes sit at the same spots as the 2D pins.
+ * `model3d` is an optional 3D version of the map — a built .glb whose
+ * `Pin_<sceneId>` nodes sit at the same spots as the 2D pins. A backdrop scene (K'n-yan)
+ * can carry its own `model3d`, whose `Pin_<id>` nodes match that scene's backdrop pins.
  * `locked` maps open for gamelord only; everyone else sees a locked chip.
  * Dunwich is a placeholder — no backdrop or scenes yet. Oklahoma's locations each bring their own backdrop (OKLAHOMA_SCENES).
  */
@@ -562,13 +563,15 @@ export default function HearthboardPage() {
   const [activeMapId, setActiveMapId] = useState<MapId>('default');
   const activeMap = MAPS.find(m => m.id === activeMapId) ?? MAPS[0];
   const [mapMode, setMapMode] = useState<'2d' | '3d'>('2d');
-  const show3d = mapMode === '3d' && !!activeMap.model3d;
   // A location with its own backdrop (Oklahoma's) replaces the map image instead of zooming to a pin.
   const currentScene = activeMap.scenes.find(s => s.id === currentSceneId);
   const sceneBackdrop = currentScene && 'backdrop' in currentScene ? currentScene : null;
   const mapSrc = sceneBackdrop ? sceneBackdrop.backdrop : activeMap.src;
   const mapLabel = sceneBackdrop ? sceneBackdrop.name : activeMap.label;
   const openPin = sceneBackdrop?.pins.find(p => p.id === mapZoomedTo);
+  // The 3D model for what is showing: a backdrop scene's own (K'n-yan), else the map's (Innsmouth).
+  const model3d = (currentScene && 'model3d' in currentScene ? currentScene.model3d : null) ?? activeMap.model3d;
+  const show3d = mapMode === '3d' && !!model3d;
 
   // The location carousel's arrows wrap: past the last location is the first.
   const stepScene = (dir: 1 | -1) => {
@@ -1440,8 +1443,8 @@ export default function HearthboardPage() {
                   </option>
                 ))}
               </select>
-              {activeMap.model3d && (
-                <div className="rail-chips" style={{ marginTop: 8 }} title="Flat map or 3D town">
+              {model3d && (
+                <div className="rail-chips" style={{ marginTop: 8 }} title="Flat map or 3D model">
                   {(['2d', '3d'] as const).map(mode => (
                     <button
                       key={mode}
@@ -1568,15 +1571,21 @@ export default function HearthboardPage() {
               }
             }}
           >
-            {show3d && activeMap.model3d ? (
+            {show3d && model3d ? (
               <InnsmouthTown3D
-                src={activeMap.model3d}
-                scenes={activeMap.scenes}
-                activeId={currentSceneId}
+                src={model3d}
+                preset={sceneBackdrop ? 'cavern' : 'town'}
+                // A backdrop scene's markers are its own pins; Innsmouth's are the map's scenes.
+                scenes={sceneBackdrop ? sceneBackdrop.pins.map(p => ({ id: p.id, name: p.name, short: p.name })) : activeMap.scenes}
+                activeId={sceneBackdrop ? (mapZoomedTo ?? '') : currentSceneId}
                 focusedId={mapZoomedTo}
                 onSelect={id => {
-                  setCurrentSceneId(id);
-                  setMapZoomedTo(prev => prev === id ? null : id);
+                  if (sceneBackdrop) {
+                    setMapZoomedTo(prev => prev === id ? null : id);
+                  } else {
+                    setCurrentSceneId(id);
+                    setMapZoomedTo(prev => prev === id ? null : id);
+                  }
                   setSelectedTokenId(null);
                 }}
               />

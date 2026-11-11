@@ -44,3 +44,6 @@ next-env.d.ts
 
 # user data (contains hashed passwords — never commit)
 /data/
+
+# production snapshots taken before MCP writes
+/backups/

@@ -10,8 +10,10 @@ import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
 type Scene3D = { id: string; name: string; short: string };
 
 interface Props {
-  /** The town diorama built in Summer — `~/dev/my-summer-game/tools/export_town.sh`. */
+  /** The diorama: the Innsmouth town, or K'n-yan (`~/dev/my-summer-game/tools/export_knyan.sh`). */
   src: string;
+  /** The look and camera: the harbour town at night, or K'n-yan's blue-lit cavern. Default town. */
+  preset?: 'town' | 'cavern';
   scenes: readonly Scene3D[];
   activeId: string;
   /** The scene whose info panel is open; the camera flies to it. */
@@ -19,12 +21,38 @@ interface Props {
   onSelect: (id: string) => void;
 }
 
-// Where the camera rests when no scene is focused, and how far it sits from a focused pin.
-const OVERVIEW_POS = new THREE.Vector3(0, 95, 105);
-const OVERVIEW_TARGET = new THREE.Vector3(0, 0, 4);
-const FOCUS_OFFSET = new THREE.Vector3(0, 24, 28);
-// Aim this far in front of a focused pin so it sits above the location panel.
-const FOCUS_LEAD = new THREE.Vector3(0, 0, 9);
+// Where the camera rests when no scene is focused (`overview`), looks straight down (`overhead`),
+// and how far it sits from a focused pin.
+type Look = {
+  overview: THREE.Vector3; overviewTarget: THREE.Vector3; overhead: THREE.Vector3; overheadTarget: THREE.Vector3;
+  focusOffset: THREE.Vector3;
+  /** Aim this far in front of a focused pin so it sits above the location panel. */
+  focusLead: THREE.Vector3;
+  background: number; fogDensity: number;
+  sky: number; ground: number; hemi: number;
+  key: { color: number; intensity: number; at: THREE.Vector3 };
+  /** Coloured glows at pins — the red light of the sealed gate, lamplight over a city. */
+  glows?: { pin: string; color: number; intensity: number; dy: number; reach: number }[];
+};
+const LOOKS: Record<'town' | 'cavern', Look> = {
+  town: {
+    overview: new THREE.Vector3(0, 95, 105), overviewTarget: new THREE.Vector3(0, 0, 4), overhead: new THREE.Vector3(0, 170, 4.01), overheadTarget: new THREE.Vector3(0, 0, 4),
+    focusOffset: new THREE.Vector3(0, 24, 28), focusLead: new THREE.Vector3(0, 0, 9),
+    background: 0x0a0e13, fogDensity: 0.0065, sky: 0x8a96ad, ground: 0x2a2118, hemi: 1.7,
+    key: { color: 0xc4cfe6, intensity: 2.6, at: new THREE.Vector3(-60, 90, -40) },
+  },
+  cavern: {
+    overview: new THREE.Vector3(0, 82, 82), overviewTarget: new THREE.Vector3(0, 0, -4), overhead: new THREE.Vector3(0, 138, 12.01), overheadTarget: new THREE.Vector3(0, 0, 12),
+    focusOffset: new THREE.Vector3(0, 17, 20), focusLead: new THREE.Vector3(0, 0, 6),
+    background: 0x030303, fogDensity: 0.0040, sky: 0x8a929a, ground: 0x2a211a, hemi: 1.9,
+    key: { color: 0xe2d2b4, intensity: 2.3, at: new THREE.Vector3(-30, 80, 20) },
+    glows: [
+      { pin: 'kn-gate', color: 0xff2a14, intensity: 90, dy: -4, reach: 22 },
+      { pin: 'kn-tsath', color: 0xffa855, intensity: 420, dy: 7, reach: 36 },
+      { pin: 'kn-farms', color: 0x2fb89a, intensity: 60, dy: 3, reach: 30 },
+    ],
+  },
+};
 const FLY_SECONDS = 0.9;
 
 /**
@@ -32,11 +60,13 @@ const FLY_SECONDS = 0.9;
  * which the Summer build script places at the same map percentages as the 2D
  * pins, so selecting a scene here behaves exactly like clicking it on the map.
  */
-export function InnsmouthTown3D({ src, scenes, activeId, focusedId, onSelect }: Props) {
+export function InnsmouthTown3D({ src, preset = 'town', scenes, activeId, focusedId, onSelect }: Props) {
+  const look = LOOKS[preset];
   const mountRef = useRef<HTMLDivElement>(null);
   const markerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const pinsRef = useRef<Record<string, THREE.Vector3>>({});
-  const flyRef = useRef<((to: THREE.Vector3 | null) => void) | null>(null);
+  const flyRef = useRef<((to: THREE.Vector3 | null, overhead?: boolean) => void) | null>(null);
+  const [overhead, setOverhead] = useState(false);
   const [progress, setProgress] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -57,14 +87,14 @@ export function InnsmouthTown3D({ src, scenes, activeId, focusedId, onSelect }: 
     el.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0e13);
-    scene.fog = new THREE.FogExp2(0x0a0e13, 0.0065);
+    scene.background = new THREE.Color(look.background);
+    scene.fog = new THREE.FogExp2(look.background, look.fogDensity);
 
     const camera = new THREE.PerspectiveCamera(40, (el.clientWidth || 960) / (el.clientHeight || 540), 0.5, 600);
-    camera.position.copy(OVERVIEW_POS);
+    camera.position.copy(look.overview);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.copy(OVERVIEW_TARGET);
+    controls.target.copy(look.overviewTarget);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 8;
@@ -73,10 +103,10 @@ export function InnsmouthTown3D({ src, scenes, activeId, focusedId, onSelect }: 
     controls.screenSpacePanning = false;
     controls.update();
 
-    // Overcast night over the harbour: cold moonlight, warm lamps from emissive windows.
-    scene.add(new THREE.HemisphereLight(0x8a96ad, 0x2a2118, 1.7));
-    const moon = new THREE.DirectionalLight(0xc4cfe6, 2.6);
-    moon.position.set(-60, 90, -40);
+    // Night over the harbour — or K'n-yan's blue glow: cold light from above, warm lamps from emissive windows.
+    scene.add(new THREE.HemisphereLight(look.sky, look.ground, look.hemi));
+    const moon = new THREE.DirectionalLight(look.key.color, look.key.intensity);
+    moon.position.copy(look.key.at);
     moon.castShadow = true;
     moon.shadow.mapSize.set(2048, 2048);
     const sc = moon.shadow.camera;
@@ -116,6 +146,13 @@ export function InnsmouthTown3D({ src, scenes, activeId, focusedId, onSelect }: 
           }
         });
         scene.add(gltf.scene);
+        for (const g of look.glows ?? []) {
+          const at = pinsRef.current[g.pin];
+          if (!at) continue;
+          const light = new THREE.PointLight(g.color, g.intensity, g.reach, 2);
+          light.position.copy(at).setY(g.dy);
+          scene.add(light);
+        }
         setLoaded(true);
       },
       e => { if (e.total) setProgress(Math.round((e.loaded / e.total) * 100)); },
@@ -124,13 +161,13 @@ export function InnsmouthTown3D({ src, scenes, activeId, focusedId, onSelect }: 
 
     // Camera flights between the overview and a pin.
     let flight: { t: number; fromPos: THREE.Vector3; fromTarget: THREE.Vector3; toPos: THREE.Vector3; toTarget: THREE.Vector3 } | null = null;
-    flyRef.current = to => {
-      const toTarget = to ? to.clone().setY(Math.max(0, to.y - 4)).add(FOCUS_LEAD) : OVERVIEW_TARGET.clone();
+    flyRef.current = (to, top) => {
+      const toTarget = to ? to.clone().setY(Math.max(0, to.y - 4)).add(look.focusLead) : (top ? look.overheadTarget : look.overviewTarget).clone();
       flight = {
         t: 0,
         fromPos: camera.position.clone(),
         fromTarget: controls.target.clone(),
-        toPos: to ? toTarget.clone().add(FOCUS_OFFSET) : OVERVIEW_POS.clone(),
+        toPos: to ? toTarget.clone().add(look.focusOffset) : (top ? look.overhead.clone() : look.overview.clone()),
         toTarget,
       };
     };
@@ -203,13 +240,13 @@ export function InnsmouthTown3D({ src, scenes, activeId, focusedId, onSelect }: 
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [src, webgl]);
+  }, [src, webgl, look]);
 
-  // Fly to the focused scene, or back out to the overview when it closes.
+  // Fly to the focused scene, or back out to the overview (or straight down) when it closes.
   useEffect(() => {
     if (!loaded) return;
-    flyRef.current?.(focusedId ? pinsRef.current[focusedId] ?? null : null);
-  }, [focusedId, loaded]);
+    flyRef.current?.(focusedId ? pinsRef.current[focusedId] ?? null : null, overhead);
+  }, [focusedId, loaded, overhead]);
 
   if (!webgl) {
     return (
@@ -223,7 +260,8 @@ export function InnsmouthTown3D({ src, scenes, activeId, focusedId, onSelect }: 
 
   return (
     <div className="town3d-wrap">
-      <div ref={mountRef} className="town3d-canvas" />
+      <div ref={mountRef} className={`town3d-canvas${preset === 'cavern' ? ' victorian' : ''}`} />
+      {preset === 'cavern' && <div className="town3d-vignette" />}
       {loaded && scenes.map(s => (
         <button
           key={s.id}
@@ -239,10 +277,19 @@ export function InnsmouthTown3D({ src, scenes, activeId, focusedId, onSelect }: 
       ))}
       {!loaded && (
         <div className="town3d-status">
-          {loadError ? 'The 3D map failed to load.' : `Surveying Innsmouth… ${progress}%`}
+          {loadError ? 'The 3D map failed to load.' : `${preset === 'cavern' ? 'Descending' : 'Surveying Innsmouth'}… ${progress}%`}
         </div>
       )}
       {loaded && <div className="town3d-hint">Drag to orbit · right-drag to pan · scroll to zoom</div>}
+      {loaded && (
+        <button
+          className="scene-chip town3d-view"
+          onClick={e => { e.stopPropagation(); setOverhead(v => !v); }}
+          title={overhead ? 'Tilt back to the angled view' : 'Look straight down on the whole map'}
+        >
+          {overhead ? 'Angled view' : 'Overhead view'}
+        </button>
+      )}
     </div>
   );
 }
