@@ -482,6 +482,19 @@ input, textarea, select { font-family: inherit; }
   width: 340px; flex: 0 0 auto; background: var(--surface); border-left: 1px solid var(--line);
   display: flex; flex-direction: column; min-height: 0;
 }
+/* The dashboard panel, slid over a 3D level (T) so skills, dice and chat are at hand in play. */
+.right-panel.over-game {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 100vw; z-index: 320;
+  box-shadow: -18px 0 40px -12px rgba(0,0,0,0.7);
+}
+.right-panel.over-game:not(.open) { display: none; }
+.tools-fab {
+  position: fixed; right: 16px; bottom: 16px; z-index: 310; padding: 8px 14px;
+  background: rgba(0,0,0,0.6); border: 1px solid var(--brass-dim); border-radius: var(--r-md);
+  color: var(--brass); font-family: var(--font-mono); font-size: 11px; letter-spacing: .5px;
+  text-transform: uppercase; cursor: pointer;
+}
+.tools-fab:hover { background: rgba(0,0,0,0.8); }
 .rp-tabs { display: flex; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
 .rp-tab {
   flex: 1; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -650,7 +663,7 @@ input, textarea, select { font-family: inherit; }
 .toast {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
   background: var(--surface-2); border: 1px solid var(--brass-dim); border-radius: var(--r-md);
-  padding: 11px 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 200;
+  padding: 11px 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 400;
   box-shadow: 0 14px 34px -10px rgba(0,0,0,0.6);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -1214,7 +1227,7 @@ body.eff-horror { animation: eff-horror-shake 0.11s linear infinite; }
 .all-skills-btn:active { background: rgba(201,148,79,0.18); }
 
 .skills-veil {
-  position: fixed; inset: 0; z-index: 240;
+  position: fixed; inset: 0; z-index: 330;
   background: rgba(10,12,16,0.78); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;

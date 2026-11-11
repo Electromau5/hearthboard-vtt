@@ -900,6 +900,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         if (e.key === 'Escape') setTyping(null);
         return;
       }
+      // Typing in a field outside the level (the dashboard panel's chat) is not the level's keys.
+      const field = (e as KeyboardEvent).target as HTMLElement | null;
+      if (field && (field.tagName === 'INPUT' || field.tagName === 'TEXTAREA' || field.isContentEditable)) return;
       // Asleep: E wakes; Escape still leaves the level; nothing else reaches it.
       if (asleepRef.current !== 'no') {
         if (e.code === 'KeyE' && !e.repeat && asleepRef.current !== 'waking') {
@@ -2215,7 +2218,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
     const onKeyDown = (e: KeyboardEvent) => {
       // A level with birds calling (or a hunter growling) needs sound from the start; a key press lets it begin.
       if (needsEar) ensureListener();
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+      const typingInField = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
+      if (!typingInField && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
         keys.add(e.code);
         if (e.code.startsWith('Arrow')) e.preventDefault();
       }

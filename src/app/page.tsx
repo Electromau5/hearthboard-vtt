@@ -546,6 +546,8 @@ export default function HearthboardPage() {
     setWalkthrough(next);
   }, []);
   const [allSkillsOpen, setAllSkillsOpen] = useState(false);
+  // The dashboard panel slid over a 3D level (T) — skills, dice, chat and the rest in play.
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [allResourcesOpen, setAllResourcesOpen] = useState(false);
   // Archived resources the gamelord has released to the party (shared, server-side).
   const [unlockedIds, setUnlockedIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -1104,6 +1106,25 @@ export default function HearthboardPage() {
     setChatItems(prev => [...prev, { type: 'chat', who, text }]);
     broadcast({ id, type: 'text', who, text });
   }, [broadcast]);
+
+  // T opens the dashboard panel over a 3D level and Escape closes it. Capture phase, so the
+  // level's own keys (Escape leaves the level) do not also fire.
+  useEffect(() => {
+    if (!walkthrough) { setToolsOpen(false); return; }
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if (e.code === 'KeyT' && !e.repeat && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.stopImmediatePropagation();
+        setToolsOpen(v => { if (!v) document.exitPointerLock?.(); return !v; });
+      } else if (e.key === 'Escape' && toolsOpen) {
+        e.stopImmediatePropagation();
+        setToolsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [walkthrough, toolsOpen]);
 
   const rollDie = (sides: number) => {
     const res = rollFormula('1d' + sides);
@@ -2171,7 +2192,7 @@ export default function HearthboardPage() {
           </div>
 
           {/* Right panel */}
-          <div className="right-panel">
+          <div className={`right-panel${walkthrough ? ' over-game' : ''}${walkthrough && toolsOpen ? ' open' : ''}`}>
             <div className="rp-tabs">
               {[
                 { id: 'chat', label: 'Chat', icon: (
@@ -2947,6 +2968,12 @@ export default function HearthboardPage() {
           isGM={isAdmin}
           isGamelord={isGamelord}
         />
+      )}
+
+      {walkthrough && !toolsOpen && (
+        <button className="tools-fab" onClick={() => { document.exitPointerLock?.(); setToolsOpen(true); }}>
+          Skills &amp; dice [T]
+        </button>
       )}
 
       {/* Video modal */}
