@@ -591,7 +591,8 @@ function toDocs(r: Resource): ArchiveDoc[] {
 }
 
 const section = (...sections: ResourceSection[]) => async () =>
-  allResources().filter(r => sections.includes(r.section)).flatMap(toDocs);
+  // Basecamp stashes are the investigators' own, not the warehouse's.
+  allResources().filter(r => r.status !== 'basecamp' && sections.includes(r.section)).flatMap(toDocs);
 
 const recapDocs = (): ArchiveDoc[] => SESSION_RECAPS.map(r => ({
   id: r.id, title: r.title, meta: `Session ${r.session} recap · ${RECAP_ACT}`, text: r.text,

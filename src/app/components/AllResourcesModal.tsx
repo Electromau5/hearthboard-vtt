@@ -26,10 +26,13 @@ interface Props {
   onSetUnlocked?: (id: string, unlocked: boolean) => void;
   /** Ids with a lock change in flight, so their button can show it. */
   pendingUnlocks?: ReadonlySet<string>;
+  /** The investigator looking: their Basecamp stash is listed first. */
+  mine?: string;
 }
 
 const ARCHIVE = 'Archive';
-type View = ResourceSection | typeof ARCHIVE;
+const BASECAMP = 'Basecamp';
+type View = ResourceSection | typeof ARCHIVE | typeof BASECAMP;
 
 const KIND_LABEL: Record<Resource['kind'], string> = {
   image: 'Document',
@@ -46,7 +49,7 @@ const KIND_LABEL: Record<Resource['kind'], string> = {
  */
 export function AllResourcesModal({
   resources, hidden = false, onOpenImage, onOpenVideo, onOpenAudio, onOpenModel, onClose,
-  onSetUnlocked, pendingUnlocks,
+  onSetUnlocked, pendingUnlocks, mine,
 }: Props) {
   const [query, setQuery] = useState('');
   // One page per category for what the party carries, plus the Archive —
@@ -74,10 +77,11 @@ export function AllResourcesModal({
   }, [resources, query]);
 
   const counts = useMemo(() => {
-    const c = { [ARCHIVE]: 0 } as Record<View, number>;
+    const c = { [ARCHIVE]: 0, [BASECAMP]: 0 } as Record<View, number>;
     for (const s of RESOURCE_SECTIONS) c[s] = 0;
     for (const r of matches) {
       if (r.status === 'archived') c[ARCHIVE]++;
+      else if (r.status === 'basecamp') c[BASECAMP]++;
       else c[r.section]++;
     }
     return c;
@@ -86,6 +90,13 @@ export function AllResourcesModal({
   // A category page is split into its sub-sections (titled only when the tab
   // has any); the Archive keeps its by-category grouping.
   const groups = useMemo((): { key: string; title?: string; items: Resource[] }[] => {
+    // Basecamp: one stash per investigator, the viewer's own first.
+    if (view === BASECAMP) {
+      const camp = matches.filter(r => r.status === 'basecamp');
+      const owners = [...new Set(camp.map(r => r.carriedBy ?? ''))];
+      owners.sort((a, b) => Number(b === mine) - Number(a === mine));
+      return owners.map(o => ({ key: o, title: o === mine ? `${o} (you)` : o, items: camp.filter(r => (r.carriedBy ?? '') === o) }));
+    }
     if (view !== ARCHIVE) {
       const items = matches.filter(r => r.status === 'active' && r.section === view);
       const order = RESOURCE_GROUPS[view];
@@ -100,7 +111,7 @@ export function AllResourcesModal({
     return RESOURCE_SECTIONS
       .map((section: ResourceSection) => ({ key: section, title: section, items: archived.filter(r => r.section === section) }))
       .filter(g => g.items.length > 0);
-  }, [matches, view]);
+  }, [matches, view, mine]);
 
   // Every image on the current page in display order, with paged entries
   // expanded, so ←/→ reads straight through a report and on to the next item.
@@ -139,7 +150,9 @@ export function AllResourcesModal({
             <p>
               {view === ARCHIVE
                 ? `${counts[ARCHIVE]} held at base — retrievable at any time`
-                : `${counts[view]} carried in the field`}
+                : view === BASECAMP
+                  ? `${counts[BASECAMP]} kept in each investigator's stash at basecamp`
+                  : `${counts[view]} carried in the field`}
             </p>
           </div>
           <button type="button" className="sm-close" onClick={onClose} aria-label="Close">✕</button>
@@ -165,6 +178,14 @@ export function AllResourcesModal({
           >
             Archive <span className="res-tab-count">{counts[ARCHIVE]}</span>
           </button>
+          <button
+            type="button"
+            className={`res-tab res-tab-archive${view === BASECAMP ? ' active' : ''}`}
+            aria-current={view === BASECAMP ? 'page' : undefined}
+            onClick={() => setView(BASECAMP)}
+          >
+            Basecamp <span className="res-tab-count">{counts[BASECAMP]}</span>
+          </button>
         </nav>
 
         <div className="skills-tools">
@@ -182,7 +203,7 @@ export function AllResourcesModal({
           {groups.length === 0 && (
             <p className="sm-empty">
               {query
-                ? `No ${view === ARCHIVE ? 'archived' : view.toLowerCase()} resource matches “${query}”.`
+                ? `No ${view === ARCHIVE ? 'archived' : view === BASECAMP ? 'basecamp' : view.toLowerCase()} resource matches “${query}”.`
                 : 'Nothing here.'}
             </p>
           )}
@@ -212,12 +233,12 @@ export function AllResourcesModal({
                       <span className="res-main">
                         <span className="res-name">{r.name}</span>
                         {(r.carriedBy || r.detail) && (
-                          <span className="res-sub">{r.carriedBy ?? r.detail}</span>
+                          <span className="res-sub">{view === BASECAMP ? r.detail : r.carriedBy ?? r.detail}</span>
                         )}
                         {r.note && <span className="res-note">{r.note}</span>}
                       </span>
                       <span className={`res-kind k-${r.kind}`}>
-                        {r.unlocked && 'Unlocked · '}{KIND_LABEL[r.kind]}{r.pages && ` · ${r.pages.length}`}
+                        {r.unlocked && 'Unlocked · '}{r.status === 'basecamp' ? 'Stored' : KIND_LABEL[r.kind]}{r.pages && ` · ${r.pages.length}`}
                       </span>
                     </Row>
                   );

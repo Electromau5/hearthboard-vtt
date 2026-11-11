@@ -184,6 +184,14 @@ export const MISKATONIC_LEVEL: WalkthroughLevel = {
   leaveLabel: 'Leave the library',
   examinables: EXAMINABLES,
   gazeHazards: GAZE_HAZARDS,
+  // Dr. Armitage reads at the north side of the first reading table, facing the doors.
+  // His head (public/armitage.glb, built by my-summer-game tools/build_armitage.py) lifts and
+  // follows anyone coming up the room, then goes back to his book once they leave.
+  performers: [{
+    model: '/armitage.glb',
+    at: [-3.6, -5.32],
+    watch: { node: 'Neck', near: 9, restPitchDeg: 22 },
+  }],
   // The GM sets the time of day; the dark east windows light up with it.
   weather: true,
   windowGlass: 'Dark_Glass',

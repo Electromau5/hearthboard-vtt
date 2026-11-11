@@ -1,0 +1,10 @@
+{
+  "name": "hearthboard-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server that lets Claude Code manage Hearthboard VTT content over its HTTP API.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  }
+}

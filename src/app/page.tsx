@@ -21,7 +21,7 @@ import type { WalkthroughLevel } from '@/lib/walkthrough';
 import { InnsmouthTown3D } from './components/InnsmouthTown3D';
 import { AllSkillsModal } from './components/AllSkillsModal';
 import { AllResourcesModal } from './components/AllResourcesModal';
-import { allResources } from '@/lib/resources';
+import { allResources, type Resource } from '@/lib/resources';
 import { resolveSkills, checkLevel, type CheckLevel } from '@/lib/coc-skills';
 import { InvestigationBoard } from './components/InvestigationBoard';
 import { usePoll } from './components/use-poll';
@@ -551,6 +551,8 @@ export default function HearthboardPage() {
   const [allResourcesOpen, setAllResourcesOpen] = useState(false);
   // Archived resources the gamelord has released to the party (shared, server-side).
   const [unlockedIds, setUnlockedIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Resources added live through /api/resources/custom (the MCP connection or the gamelord).
+  const [customResources, setCustomResources] = useState<Resource[]>([]);
   const [pendingUnlocks, setPendingUnlocks] = useState<ReadonlySet<string>>(() => new Set());
   const isGamelord = session?.user?.id === 'gamelord';
   const [locCarouselOpen, setLocCarouselOpen] = useState(false);
@@ -763,6 +765,10 @@ export default function HearthboardPage() {
     fetch('/api/resources/unlocked', { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
       .then((ids: string[] | null) => { if (ids && !cancelled) setUnlockedIds(new Set(ids)); })
+      .catch(() => {});
+    fetch('/api/resources/custom', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then((list: Resource[] | null) => { if (list && !cancelled) setCustomResources(list); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [allResourcesOpen]);
@@ -2913,7 +2919,8 @@ export default function HearthboardPage() {
       {/* Party resource index — documents, artifacts and carried equipment */}
       {allResourcesOpen && (
         <AllResourcesModal
-          resources={allResources(unlockedIds)}
+          resources={allResources(unlockedIds, customResources)}
+          mine={displayChar?.name}
           onSetUnlocked={isGamelord ? setResourceUnlocked : undefined}
           pendingUnlocks={pendingUnlocks}
           // Viewers open on top of the index rather than replacing it: the

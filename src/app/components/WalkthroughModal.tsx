@@ -2318,6 +2318,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       audio: { el: HTMLAudioElement; sound: THREE.PositionalAudio } | null;
       /** Its speech, once there is an ear for it; `armed` until it is said, and again once we walk off. */
       voice: { el: HTMLAudioElement; sound: THREE.PositionalAudio; armed: boolean } | null;
+      /** Its head (Performer.watch): the node, how it sat in the file, and where it is turned now. */
+      head: { node: THREE.Object3D; rest: THREE.Quaternion; yaw: number; pitch: number } | null;
     }[] = [];
     let saying: string | null = null;   // the subtitle on screen, so it is set only when it changes
     const say = (text: string | null) => { if (text !== saying) { saying = text; setSubtitle(text); } };
@@ -2379,7 +2381,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         const clip = (f.clip && gltf.animations.find(a => a.name === f.clip)) || gltf.animations[0];
         if (clip) mixer.clipAction(clip).play().time = (f.phase ?? 0) % clip.duration;
         scene.add(root);
-        performers.push({ root, mixer, spec: f, audio: null, voice: null });
+        const headNode = f.watch && root.getObjectByName(f.watch.node);
+        if (f.watch && !headNode) console.warn(`Performer watches "${f.watch.node}", which ${f.model} does not have`);
+        const head = headNode ? { node: headNode, rest: headNode.quaternion.clone(), yaw: 0, pitch: THREE.MathUtils.degToRad(f.watch?.restPitchDeg ?? 0) } : null;
+        performers.push({ root, mixer, spec: f, audio: null, voice: null, head });
       }).catch(err => console.error('Performer failed to load:', f.model, err));
     }
 
@@ -3183,6 +3188,31 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       for (const f of performers) {
         f.mixer.update(dt);
         if (f.spec.sound && !f.audio && listener) startPerformerSound(f, listener);
+        // Watching: the head turns to whoever is near and settles back over its work when they go.
+        const watch = f.spec.watch;
+        if (watch && f.head) {
+          const h = f.head;
+          f.root.getWorldPosition(performerAt);
+          const dx = camera.position.x - performerAt.x;
+          const dz = camera.position.z - performerAt.z;
+          const near = Math.hypot(dx, dz) < watch.near && Math.abs(feet.y - performerAt.y) < 1.5;
+          const limit = THREE.MathUtils.degToRad(watch.limitDeg ?? 80);
+          let yaw = 0;
+          let pitch = THREE.MathUtils.degToRad(watch.restPitchDeg ?? 0);
+          if (near) {
+            // In the figure's own frame, which faces +Z: yaw about Y, then pitch about X (positive looks down).
+            const local = f.root.worldToLocal(camera.position.clone());
+            const headY = h.node.getWorldPosition(new THREE.Vector3()).y;
+            const flat = Math.hypot(local.x, local.z) || 1;
+            yaw = THREE.MathUtils.clamp(Math.atan2(local.x, local.z), -limit, limit);
+            pitch = THREE.MathUtils.clamp(Math.atan2(headY - camera.position.y, flat), -0.6, 0.6);
+          }
+          // Quick to look up, slower to go back to the book.
+          const k = 1 - Math.exp(-dt * (near ? 5 : 1.6));
+          h.yaw += (yaw - h.yaw) * k;
+          h.pitch += (pitch - h.pitch) * k;
+          h.node.quaternion.copy(h.rest).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(h.pitch, h.yaw, 0, 'YXZ')));
+        }
         const speech = f.spec.speech;
         if (speech && !f.voice && listener) prepareVoice(f, listener);
         if (speech && f.voice) {

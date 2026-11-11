@@ -3,10 +3,10 @@ import { CHARACTERS } from '@/lib/characters';
 /**
  * The party's resource index, as shown by the All Resources modal.
  *
- * Nothing here is invented: media entries point at assets already in `public/`,
- * and every carried item is read out of `CHARACTERS[].equipment`, so editing an
- * investigator's kit on their sheet changes what this lists. `carriedBy` is
- * likewise read from the character record, so a rename propagates.
+ * Media entries point at assets already in `public/`, and every carried item is
+ * read out of `CHARACTERS[].equipment`, so editing an investigator's kit on their
+ * sheet changes what this lists. `carriedBy` is likewise read from the character
+ * record, so a rename propagates. The one invented list is BASECAMP below.
  */
 
 export type ResourceSection = 'Documents' | 'Patient Files' | 'Artifacts' | 'Weapons & Hardware' | 'Medical';
@@ -21,9 +21,10 @@ export type ResourceKind = 'image' | 'video' | 'audio' | 'model' | 'item';
 /**
  * `active` is what the party is carrying in the field. `archived` is held at
  * base — the Black Archive warehouse — and still fully listed, so nothing is
- * lost and anything can be pulled back later.
+ * lost and anything can be pulled back later. `basecamp` is each investigator's
+ * own stash at the party's basecamp: kit they own but do not carry.
  */
-export type ResourceStatus = 'active' | 'archived';
+export type ResourceStatus = 'active' | 'archived' | 'basecamp';
 
 export type Resource = {
   id: string;
@@ -376,6 +377,71 @@ const EQUIPMENT: Record<string, Placement> = {
     note: 'Off-roster flavour item; archived at base.' },
 };
 
+/**
+ * What each investigator keeps at basecamp, by character slug: their own stash,
+ * different for each player. SUGGESTED stock for the GM to adjust — it is not on
+ * anyone's sheet, so editing a sheet does not change it. Edit the lists here.
+ */
+type BasecampItem = { name: string; section: ResourceSection; detail?: string };
+const BASECAMP: Record<string, BasecampItem[]> = {
+  'dr-alistair-finch': [
+    { name: 'Colt .45', section: 'Weapons & Hardware', detail: '1' },
+    { name: 'Sniper rifle', section: 'Weapons & Hardware', detail: '1' },
+    { name: 'Rations', section: 'Weapons & Hardware', detail: 'Food for multiple weeks, for multiple players' },
+    { name: 'Wheeled cart', section: 'Weapons & Hardware', detail: 'To haul the gear' },
+    { name: 'Rope', section: 'Weapons & Hardware' },
+    { name: 'Grappling hooks', section: 'Weapons & Hardware' },
+    { name: 'Flashlights', section: 'Weapons & Hardware' },
+    { name: 'Tents', section: 'Weapons & Hardware' },
+    { name: 'Campfire equipment', section: 'Weapons & Hardware' },
+    { name: 'Pickaxe', section: 'Weapons & Hardware' },
+    { name: 'Walkie-talkies', section: 'Weapons & Hardware' },
+    { name: 'Camera', section: 'Weapons & Hardware' },
+    { name: 'Signal flares', section: 'Weapons & Hardware', detail: 'Various colours, to shoot up' },
+    { name: 'Remote detonators', section: 'Weapons & Hardware', detail: '5' },
+    { name: 'Body armour', section: 'Weapons & Hardware', detail: 'For all players' },
+    { name: 'First aid', section: 'Medical' },
+    { name: 'Flashbangs', section: 'Weapons & Hardware' },
+    { name: 'Smoke grenades', section: 'Weapons & Hardware' },
+  ],
+  'silas-vance': [
+    { name: 'Stage trunk with a false bottom', section: 'Weapons & Hardware', detail: 'Hides a man, or a good deal of contraband.' },
+    { name: 'Skeleton-key roll', section: 'Weapons & Hardware', detail: 'Forty keys and a set of tension wrenches.' },
+    { name: 'Box of flash pellets', section: 'Weapons & Hardware', detail: 'Twenty magnesium-phosphorus pellets, packed in sawdust.' },
+    { name: 'Escape-act handcuffs and chain', section: 'Weapons & Hardware', detail: 'Rigged to open to a thumbnail.' },
+  ],
+  'julian-sterling': [
+    { name: 'Spare 35mm film stock', section: 'Weapons & Hardware', detail: 'Twelve raw nitrate rolls, kept cool and dark.' },
+    { name: 'Portable darkroom tent', section: 'Weapons & Hardware', detail: 'Light-proof canvas with trays, safelight and clips.' },
+    { name: 'Magnesium flash powder tin', section: 'Weapons & Hardware', detail: 'A pound, for the flash gun.' },
+    { name: 'Hand-cranked newsreel projector', section: 'Weapons & Hardware', detail: 'For viewing developed reels on a bare wall.' },
+  ],
+  'thomas-callahan': [
+    { name: 'Dynamite', section: 'Weapons & Hardware', detail: '10' },
+    { name: 'Flashlights', section: 'Weapons & Hardware', detail: '10' },
+    { name: 'AK-47', section: 'Weapons & Hardware' },
+    { name: 'Blowtorch', section: 'Weapons & Hardware' },
+  ],
+  'richard-graves': [
+    { name: 'Easel and prepared canvases', section: 'Weapons & Hardware', detail: 'Folding field easel with six stretched canvases.' },
+    { name: 'Box of charcoal and conté', section: 'Weapons & Hardware', detail: 'Enough to fill a dozen sketchbooks.' },
+    { name: 'Folio of finished studies', section: 'Documents', detail: 'Ink and oil studies of vaults, tunnels and graveyards.' },
+    { name: 'Plaster and modelling wax', section: 'Weapons & Hardware', detail: 'For casting impressions of carvings and footprints.' },
+  ],
+  'arthur-wright': [
+    { name: "Surveyor's chain and ranging rods", section: 'Weapons & Hardware', detail: 'Sixty-six feet of steel chain, six painted rods.' },
+    { name: 'Carbide mining lamps', section: 'Weapons & Hardware', detail: 'Two helmet lamps with a tin of carbide.' },
+    { name: 'Blueprint tube', section: 'Documents', detail: "Survey sheets and the Boston Metropolitan Commission's sewer and tunnel maps." },
+    { name: 'Shoring timbers and pickaxe', section: 'Weapons & Hardware', detail: 'Enough to prop a short tunnel.' },
+  ],
+  'percival-winthrop': [
+    { name: 'Cash box', section: 'Artifacts', detail: 'Four hundred dollars in small bills, for bribes and fares.' },
+    { name: 'Letters of credit', section: 'Documents', detail: 'Drawn on two Boston banks, in a name not quite his own.' },
+    { name: 'Evening wear', section: 'Weapons & Hardware', detail: 'Dinner jacket, white tie and patent shoes, for the right rooms.' },
+    { name: "Appraiser's loupe and scales", section: 'Artifacts', detail: 'For pricing gold, jewellery and relics on the spot.' },
+  ],
+};
+
 const DEFAULT_PLACEMENT: Placement = { section: 'Weapons & Hardware', status: 'active' };
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -403,6 +469,20 @@ function carriedResources(): Resource[] {
   );
 }
 
+function basecampResources(): Resource[] {
+  return CHARACTERS.flatMap(c =>
+    (BASECAMP[c.slug] ?? []).map(item => ({
+      id: `camp-${c.slug}-${slug(item.name)}`,
+      name: item.name,
+      section: item.section,
+      kind: 'item' as ResourceKind,
+      status: 'basecamp' as ResourceStatus,
+      carriedBy: c.name,
+      detail: item.detail,
+    }))
+  );
+}
+
 /** Shared kit that is on no investigator's sheet — held in the party pool. */
 const PARTY_KIT: Resource[] = [
   {
@@ -417,13 +497,47 @@ const PARTY_KIT: Resource[] = [
   },
 ];
 
+const CUSTOM_KINDS: ResourceKind[] = ['item', 'image', 'video', 'audio'];
+const CUSTOM_STATUSES: ResourceStatus[] = ['active', 'archived', 'basecamp'];
+
+/**
+ * Checks a custom resource (see /api/resources/custom) and keeps only the
+ * fields a Resource has. `src` is required for the kinds that open a viewer.
+ */
+export function parseCustomResource(input: unknown): { value: Omit<Resource, 'id'> } | { error: string } {
+  if (!input || typeof input !== 'object') return { error: 'Expected a JSON object' };
+  const o = input as Record<string, unknown>;
+  const text = (k: string) => (typeof o[k] === 'string' && (o[k] as string).trim() ? (o[k] as string).trim() : undefined);
+  const name = text('name');
+  if (!name) return { error: 'name is required' };
+  const section = o.section as ResourceSection;
+  if (!RESOURCE_SECTIONS.includes(section)) return { error: `section must be one of: ${RESOURCE_SECTIONS.join(', ')}` };
+  const kind = (o.kind ?? 'item') as ResourceKind;
+  if (!CUSTOM_KINDS.includes(kind)) return { error: `kind must be one of: ${CUSTOM_KINDS.join(', ')}` };
+  const status = (o.status ?? 'active') as ResourceStatus;
+  if (!CUSTOM_STATUSES.includes(status)) return { error: `status must be one of: ${CUSTOM_STATUSES.join(', ')}` };
+  const src = text('src');
+  if (kind !== 'item' && !src) return { error: `src is required for kind "${kind}"` };
+  let pages: string[] | undefined;
+  if (o.pages !== undefined) {
+    if (!Array.isArray(o.pages) || o.pages.some((p) => typeof p !== 'string')) return { error: 'pages must be an array of strings' };
+    pages = o.pages as string[];
+  }
+  return {
+    value: {
+      name, section, kind, status, src, pages,
+      carriedBy: text('carriedBy'), detail: text('detail'), note: text('note'), group: text('group'),
+    },
+  };
+}
+
 /**
  * The full index, rebuilt from the current character data on each call.
  * `unlocked` holds the ids of archived items the gamelord has released (see
  * /api/resources/unlocked); they list as active, under their own category.
  */
-export function allResources(unlocked: ReadonlySet<string> = new Set()): Resource[] {
-  return [...MEDIA, ...PATIENT_FILES, ...carriedResources(), ...PARTY_KIT].map(r =>
+export function allResources(unlocked: ReadonlySet<string> = new Set(), custom: Resource[] = []): Resource[] {
+  return [...MEDIA, ...PATIENT_FILES, ...carriedResources(), ...PARTY_KIT, ...basecampResources(), ...custom].map(r =>
     r.status === 'archived' && unlocked.has(r.id) ? { ...r, status: 'active', unlocked: true } : r);
 }
 

@@ -669,6 +669,12 @@ export type Performer = {
    * come back to hear it again.
    */
   speech?: { src: string; near: number; volume?: number; at?: Vec3; lines: { t: number; text: string }[] };
+  /**
+   * Turns the model's `node` (a head on a neck pivot) to look at the investigator
+   * when they come within `near` metres on the same floor, and back to its resting
+   * pose — head bowed `restPitchDeg` over its work — when they leave. The body stays put.
+   */
+  watch?: { node: string; near: number; restPitchDeg?: number; limitDeg?: number };
 };
 
 /**
