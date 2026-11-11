@@ -3644,7 +3644,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const hint = !webgl ? '3D unavailable' : !loaded
     ? loadError ? level.errorText : `${level.loadingText} ${Math.round(progress * 100)}%`
     : locked
-      ? `WASD move · Shift run · Space jump · C crouch · Mouse look · ${fires ? 'E examine · click fire · right-click aim · R reload · V inspect' : `E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}`}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · Esc release`
+      ? `WASD move · Shift run · Space jump · C crouch · Mouse look · ${fires ? 'E examine · click fire · right-click aim · R reload · V inspect' : `E / click examine${carriedPickup?.view.reload ? ' · R reload' : canCheck ? ' · R use a skill' : ''}`}${heldItem ? ' · U use item' : ''} · I inventory · F ${lampOut ? 'lamp switch' : 'torch'}${hasLamp ? " · Q Wood's lamp" : ''} · Tab markers · T skills & dice · Esc release`
       : 'Click the view to look around · arrow keys also move and turn';
 
   return (
