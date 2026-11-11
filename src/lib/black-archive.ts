@@ -804,7 +804,7 @@ export const ARCHIVE_LEVEL: WalkthroughLevel = {
   radios: RADIOS,
   typewriters: TYPEWRITERS,
   builders: { rlyeh_model: RLYEH_MODEL },
-  pinboard: { size: [5.1, 1.95], load: boardPins, refreshSec: 8 },
+  pinboard: { size: [5.1, 1.95], load: boardPins, refreshSec: 15 },
   // The wall chart is 5 m wide at the image's 1024 × 559 aspect (build_archive_cli.gd).
   mapPins: { size: [5.0, 5.0 * 559 / 1024], pins: MAP_PINS },
   credit: '"Deep One" by coremort — CC BY 4.0',

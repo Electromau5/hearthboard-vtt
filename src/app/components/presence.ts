@@ -32,11 +32,14 @@ export type Peer = { id: number; userId: string; name: string; slug: string | nu
 export type HunterHit = { type: 'hunter-hit'; to: number };
 /** A shot that struck the hunter, sent by whoever fired it; whoever leads it takes the wound. */
 export type HunterShot = { type: 'hunter-shot'; by: number };
-/** gamelord changed the level's set dressing: everyone reads /api/dressing again. */
-export type DressingChanged = { type: 'dressing' };
-/** The level's doors (or its ambush, kept with them) changed: everyone reads /api/doors again now, not at the next poll. */
-export type DoorsChanged = { type: 'doors' };
-type LevelEvent = HunterHit | HunterShot | DressingChanged | DoorsChanged;
+/**
+ * Shared level state someone just saved — the set dressing, the doors (and the ambush kept
+ * with them), the lights, the weather: everyone reads its route again now, not at the next poll.
+ */
+export type SharedState = 'dressing' | 'doors' | 'lights' | 'weather';
+export type StateChanged = { type: SharedState };
+const SHARED_STATES: readonly string[] = ['dressing', 'doors', 'lights', 'weather'] satisfies SharedState[];
+type LevelEvent = HunterHit | HunterShot | StateChanged;
 
 type Presence = { pose: Pose | null; prey?: Pose | null; hunter?: HunterSnapshot | null; hr?: boolean };
 type UserMeta = { id: string; info: { name: string; slug: string | null } };
@@ -62,10 +65,8 @@ export type LevelPresence = {
   sendHit: (to: number) => void;
   /** Tells the room this client's shot struck the hunter. */
   sendShot: () => void;
-  /** Tells the room the level's set dressing has changed. */
-  sendDressing: () => void;
-  /** Tells the room the level's doors have changed. */
-  sendDoors: () => void;
+  /** Tells the room this client has saved a change to the level's `what`. */
+  sendChanged: (what: SharedState) => void;
   leave: () => void;
 };
 
@@ -93,7 +94,7 @@ function presenceEnabled() {
  * Joins the level's room if presence is set up. Until (or unless) it connects,
  * setPose is a no-op and onPeers is never called.
  */
-export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onHit?: () => void, onShot?: (by: number) => void, onDressing?: () => void, onDoors?: () => void): LevelPresence {
+export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onHit?: () => void, onShot?: (by: number) => void, onChanged?: (what: SharedState) => void): LevelPresence {
   let live: { room: Room; leave: () => void; unsub: () => void } | null = null;
   let left = false;
   let last = '';
@@ -107,8 +108,7 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
     const unsubEvents = room.subscribe('event', ({ event }) => {
       if (event?.type === 'hunter-hit' && event.to === room.getSelf()?.connectionId) onHit?.();
       if (event?.type === 'hunter-shot') onShot?.(event.by);
-      if (event?.type === 'dressing') onDressing?.();
-      if (event?.type === 'doors') onDoors?.();
+      if (event && SHARED_STATES.includes(event.type)) onChanged?.(event.type as SharedState);
     });
     live = { room, leave, unsub: () => { unsubOthers(); unsubEvents(); } };
   });
@@ -153,11 +153,8 @@ export function joinLevel(levelId: string, onPeers: (peers: Peer[]) => void, onH
       const by = live?.room.getSelf()?.connectionId;
       if (by !== undefined) live?.room.broadcastEvent({ type: 'hunter-shot', by });
     },
-    sendDressing() {
-      live?.room.broadcastEvent({ type: 'dressing' });
-    },
-    sendDoors() {
-      live?.room.broadcastEvent({ type: 'doors' });
+    sendChanged(what) {
+      live?.room.broadcastEvent({ type: what });
     },
     leave() {
       left = true;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { readJSON, writeJSON } from "@/lib/redis-storage";
+import { readJSON, readJSONs, writeJSON } from "@/lib/redis-storage";
 
 export type ChatEvent = {
   id: string;
@@ -44,11 +44,6 @@ async function getFeed(): Promise<ChatEvent[]> {
   return readJSON<ChatEvent[]>(STATE_PATH, []);
 }
 
-async function getClearedAt(): Promise<number> {
-  const v = await readJSON<{ at: number }>(CLEARED_PATH, { at: 0 });
-  return typeof v?.at === "number" ? v.at : 0;
-}
-
 export type ChatFeed = { events: ChatEvent[]; clearedAt: number };
 
 export async function GET() {
@@ -56,7 +51,12 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ events: [], clearedAt: 0 }, { status: 401 });
   }
-  const [events, clearedAt] = await Promise.all([getFeed(), getClearedAt()]);
+  // One MGET: this is polled by every open board, so each command counts against the quota.
+  const [events, cleared] = await readJSONs<[ChatEvent[], { at: number }]>([
+    [STATE_PATH, []],
+    [CLEARED_PATH, { at: 0 }],
+  ]);
+  const clearedAt = typeof cleared?.at === "number" ? cleared.at : 0;
   return NextResponse.json({ events, clearedAt } satisfies ChatFeed);
 }
 

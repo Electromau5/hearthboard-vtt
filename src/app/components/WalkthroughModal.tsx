@@ -30,7 +30,7 @@ import { createDoor, type DoorModel } from './level-door';
 import { SkillCheckPane, type Attempt, type Investigator } from './SkillCheckPane';
 import type { CheckLevel } from '@/lib/coc-skills';
 import { createAvatar, type Gait, type RemoteAvatar } from './avatars';
-import { joinLevel, leadsHunter, type Peer } from './presence';
+import { joinLevel, leadsHunter, type Peer, type SharedState } from './presence';
 import { createWoodsLamp } from './woods-lamp';
 import { BAND, createTuner, stationAt, STEP as DIAL_STEP, type Tuner } from './radio-tuner';
 import { createHeldViewmodel, prepareHeldModel, SCOPE_IN } from './held-viewmodel';
@@ -92,6 +92,30 @@ const LAMP_POOL = 6;       // ceiling lamps lit at once, nearest first (each cos
 /** Whether the level has anything for gamelord's door buttons: a door of his (not one a lock keeps), the grate, an ambush, a summoning. */
 function hasGmDoors(level: WalkthroughLevel) {
   return Object.values(level.doors ?? {}).some(d => !d.lock) || !!level.sewer?.grate || !!level.ambush || !!level.summon;
+}
+
+/** How often shared state is still read while the level's room is connected: only as a backstop for a missed event. */
+const ROOM_BACKSTOP_MS = 60_000;
+
+/**
+ * Reads shared level state (lights, doors, weather) without spending the Redis
+ * quota on polls: at once, again whenever the tab comes back, every `ms` while
+ * the room is not connected — but while it is, whoever saves a change says so
+ * over the room (`now`), and the timer only reads once a minute. Never while
+ * the tab is hidden.
+ */
+function pollShared(read: () => void, ms: number, live: () => boolean) {
+  let last = 0;
+  const now = () => {
+    if (document.hidden) return;
+    last = performance.now();
+    read();
+  };
+  const tick = () => { if (!live() || performance.now() - last >= ROOM_BACKSTOP_MS) now(); };
+  now();
+  const timer = window.setInterval(tick, ms);
+  document.addEventListener('visibilitychange', now);
+  return { now, stop: () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', now); } };
 }
 
 function pickGodot(level: WalkthroughLevel): string | null {
@@ -235,9 +259,6 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   const doorSetAt = useRef(0);
   // The same doors in full: when each was last set (the ambush, kept with them, plays from then).
   const doorsStateRef = useRef<DoorsState>({});
-  // Read the doors again now (the room says they changed), and tell the room we changed them.
-  const pollDoorsRef = useRef<(() => void) | null>(null);
-  const sendDoorsRef = useRef<(() => void) | null>(null);
   // gamelord's private run of the level's ambush (see Ambush): when he pressed Preview, 0 when none.
   // Nothing is saved or sent: only his own screen plays it, held and turned like an investigator.
   const ambushPreviewRef = useRef(0);
@@ -256,8 +277,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   // The scene's side of it, and its hooks into the view and the room (set by the scene effect).
   const dressRef = useRef<Dressing | null>(null);
   const lookRef = useRef<((dx: number, dy: number) => void) | null>(null);
-  const sendDressingRef = useRef<(() => void) | null>(null);
-  const refetchDressingRef = useRef<(() => void) | null>(null);
+  // Shared state the room can say changed (dressing, doors, lights, weather): each one's
+  // re-read, set by its effect; the call that tells the room we changed one, and whether
+  // the room is connected — both set by the scene effect.
+  const rereadRef = useRef<Partial<Record<SharedState, () => void>>>({});
+  const announceRef = useRef<((what: SharedState) => void) | null>(null);
+  const liveRef = useRef<() => boolean>(() => false);
   // A pickup carried from where it lay (a gun off the armory bench), by id. Not inventory: it stays in the level.
   const [carried, setCarried] = useState<string | null>(null);
   const carriedRef = useRef<string | null>(null);
@@ -643,13 +668,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, [onShare]);
 
   // ── Lights ────────────────────────────────────────────────────────
-  // Polled every 10 s while the tab is showing — every 5 s in a level with
-  // room switches, which anyone in the party may be flipping.
+  // Read when they change (see pollShared) — and polled every 10 s while the room is
+  // not connected, every 5 s in a level with room switches, which anyone may be flipping.
   useEffect(() => {
     if (!level.lamps) return;
     let cancelled = false;
     const poll = () => {
-      if (document.hidden) return;
       const sent = performance.now();
       fetch(`/api/lights?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
         .then(r => (r.ok ? r.json() : null))
@@ -665,10 +689,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         })
         .catch(() => {});
     };
-    poll();
-    const timer = window.setInterval(poll, level.lightSwitches?.length ? 5_000 : 10_000);
-    document.addEventListener('visibilitychange', poll);
-    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
+    const polling = pollShared(poll, level.lightSwitches?.length ? 5_000 : 10_000, () => liveRef.current());
+    rereadRef.current.lights = polling.now;
+    return () => { cancelled = true; delete rereadRef.current.lights; polling.stop(); };
   }, [level]);
 
   // gamelord throws the mains: it applies here at once, and reverts if it could not be saved.
@@ -685,6 +708,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         body: JSON.stringify({ level: level.id, on: next }),
       });
       if (!r.ok) throw new Error(String(r.status));
+      announceRef.current?.('lights');
     } catch (err) {
       console.error('Could not set the lights:', err);
       powerRef.current = !next;
@@ -694,12 +718,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, [level]);
 
   // ── Doors ─────────────────────────────────────────────────────────
-  // Polled every 5 s: a door is the way on, so the party should not wait long for it.
+  // Read when they change (see pollShared), or every 5 s while the room is not
+  // connected: a door is the way on, so the party should not wait long for it.
   useEffect(() => {
     if (!hasGmDoors(level)) return;
     let cancelled = false;
     const poll = () => {
-      if (document.hidden) return;
       const sent = performance.now();
       fetch(`/api/doors?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
         .then(r => (r.ok ? r.json() : null))
@@ -712,11 +736,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         })
         .catch(() => {});
     };
-    poll();
-    pollDoorsRef.current = poll;
-    const timer = window.setInterval(poll, 5_000);
-    document.addEventListener('visibilitychange', poll);
-    return () => { cancelled = true; pollDoorsRef.current = null; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
+    const polling = pollShared(poll, 5_000, () => liveRef.current());
+    rereadRef.current.doors = polling.now;
+    return () => { cancelled = true; delete rereadRef.current.doors; polling.stop(); };
   }, [level]);
 
   // gamelord opens or shuts a door: it moves here at once, and goes back if it could not be saved.
@@ -737,7 +759,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         body: JSON.stringify({ level: level.id, id, open: next }),
       });
       if (!r.ok) throw new Error(String(r.status));
-      sendDoorsRef.current?.();
+      announceRef.current?.('doors');
     } catch (err) {
       console.error('Could not set the door:', err);
       apply(!next);
@@ -766,7 +788,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         doorsOpenRef.current = { ...doorsOpenRef.current, [summon.id]: false };
         doorsStateRef.current = { ...doorsStateRef.current, [summon.id]: { open: false, setAt: 0, setBy: 'gamelord' } };
         setDoorsOpen(doorsOpenRef.current);
-        return sendDown(false).then(r => { if (r.ok) sendDoorsRef.current?.(); });
+        return sendDown(false).then(r => { if (r.ok) announceRef.current?.('doors'); });
       })
       .catch(err => console.error('Could not send the summoning down:', err));
     return () => {
@@ -792,8 +814,8 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         .catch(() => {});
     };
     fetchDressing();
-    refetchDressingRef.current = fetchDressing;
-    return () => { cancelled = true; refetchDressingRef.current = null; };
+    rereadRef.current.dressing = fetchDressing;
+    return () => { cancelled = true; delete rereadRef.current.dressing; };
   }, [level]);
   useEffect(() => { dressRef.current?.show(dressItems); }, [dressItems]);
 
@@ -808,7 +830,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       });
       if (!r.ok) throw new Error(String(r.status));
       setDressError(false);
-      sendDressingRef.current?.();
+      announceRef.current?.('dressing');
     } catch (err) {
       console.error('Could not save the set dressing:', err);
       setDressError(true);
@@ -974,13 +996,12 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
   }, [onClose, openTarget, openReading, closeReading, closeBrowsing, canUseSkillOn, level, hasLamp, items, holdItem, applyItem, openInventory, closeInventory, closeInspect, onShare, isGamelord, togglePower, godot, toggleDressing, toggleDoor]);
 
   // ── Weather ───────────────────────────────────────────────────────
-  // Every 10 s while the level is open and the tab is showing — gentle on the
-  // shared store's request quota; the GM's own change applies at once.
+  // Read when the GM changes it (see pollShared), or every 10 s while the room is
+  // not connected; the GM's own change applies at once.
   useEffect(() => {
     if (!level.weather) return;
     let cancelled = false;
     const poll = () => {
-      if (document.hidden) return;
       fetch(`/api/weather?level=${encodeURIComponent(level.id)}`, { cache: 'no-store' })
         .then(r => (r.ok ? r.json() : null))
         .then((w: { time?: unknown; rain?: unknown } | null) => {
@@ -990,10 +1011,9 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         })
         .catch(() => {});
     };
-    poll();
-    const timer = window.setInterval(poll, 10_000);
-    document.addEventListener('visibilitychange', poll);
-    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', poll); };
+    const polling = pollShared(poll, 10_000, () => liveRef.current());
+    rereadRef.current.weather = polling.now;
+    return () => { cancelled = true; delete rereadRef.current.weather; polling.stop(); };
   }, [level]);
 
   // The GM changes the time of day or the rain; the other stays as it is.
@@ -1009,6 +1029,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         body: JSON.stringify({ level: level.id, ...change }),
       });
       if (!r.ok) throw new Error(String(r.status));
+      announceRef.current?.('weather');
     } catch (err) {
       console.error('Could not set the weather:', err);
       setWeatherTime(before.time);
@@ -1790,7 +1811,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
             cfg.load().then(d => { if (!disposed) pb.update(d.notes, d.threads); }).catch(() => {});
           };
           refresh();
-          pinTimer = window.setInterval(refresh, cfg.refreshSec * 1000);
+          pinTimer = window.setInterval(() => { if (!document.hidden) refresh(); }, cfg.refreshSec * 1000);
           refreshPinsRef.current = refresh;
         }
 
@@ -2158,7 +2179,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ level: level.id, switch: id, on }),
       })
-        .then(r => { if (!r.ok) throw new Error(String(r.status)); })
+        .then(r => { if (!r.ok) throw new Error(String(r.status)); announceRef.current?.('lights'); })
         .catch(err => console.error('Could not save the light switch:', err));
     };
     const showRadio = (id: string, on: boolean) => setRadiosOn(prev => {
@@ -2399,7 +2420,7 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
           const open = Object.fromEntries(Object.entries(s).map(([id, d]) => [id, d.open]));
           doorsOpenRef.current = open;
           setDoorsOpen(open);
-          sendDoorsRef.current?.();
+          announceRef.current?.('doors');
         })
         // 409: the box is still in its safe. The next time up asks again.
         .catch(() => { ambushAsked = false; });
@@ -2825,10 +2846,10 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       setCompanions(peers.filter(p => p.pose).map(p => p.name));
     };
     // A shot that struck the hunter: whoever leads it takes the wound.
-    const presence = joinLevel(level.id, onPeers, () => hunter?.hit(), by => { if (hunterLeads) hunter?.wound(by, null); }, () => refetchDressingRef.current?.(), () => pollDoorsRef.current?.());
-    sendDoorsRef.current = () => presence.sendDoors();
-    owned.push({ dispose: () => { sendDoorsRef.current = null; } });
-    sendDressingRef.current = () => presence.sendDressing();
+    const presence = joinLevel(level.id, onPeers, () => hunter?.hit(), by => { if (hunterLeads) hunter?.wound(by, null); }, what => rereadRef.current[what]?.());
+    announceRef.current = what => presence.sendChanged(what);
+    liveRef.current = () => presence.selfId() !== null;
+    owned.push({ dispose: () => { announceRef.current = null; liveRef.current = () => false; } });
     const lastFeet = new THREE.Vector3().copy(feet);
     const tmpFeet = new THREE.Vector3();
     let gaitHold = 0;
@@ -3595,7 +3616,6 @@ export function WalkthroughModal({ level, onClose, onShare, author, investigator
       dressing?.dispose();
       dressRef.current = null;
       lookRef.current = null;
-      sendDressingRef.current = null;
       // The library's models, shared by every copy of them in the level.
       for (const p of propModels.values()) {
         p.then(t => t.traverse((o) => {

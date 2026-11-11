@@ -394,6 +394,94 @@ const EXAMINABLES: Record<string, Examinable> = {
     title: 'Bedroom Window',
     text: 'A sash window behind the boards, like every window in the house. The boards are nailed fast from inside — but through the gaps the brass sash lock catches your light, and it has been thrown shut.',
   },
+  // Upstairs (build_house.gd ROOMS2). PLACEHOLDER text for the GM to vet: the Skill Matrix
+  // sheet has no tabs for these yet.
+  master_bed: {
+    title: 'Master Bed',
+    text: 'A wide bedstead, made up tight: blanket smoothed, two pillows squared against the headboard. It is the only thing in the house anyone took the trouble to leave tidy.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Turn back the blanket',
+        success: 'One side of the mattress has never been slept in. The other is worn into a hollow, and the sheet there is stiff and grey with dried salt, in the shape of someone lying on their side, facing the window.',
+        failure: 'Musty linen and a sagging mattress. Nothing more.',
+      },
+    ],
+  },
+  master_wardrobe: {
+    title: 'Wardrobe',
+    text: 'A heavy wardrobe, both doors shut. A woman\'s dresses hang on one side; the other side is bare rail.',
+    checks: [
+      {
+        skill: 'Psychology', action: 'Consider what was taken',
+        success: 'His side was cleared down to the last hanger, neatly, without haste. Hers was not touched. He packed to leave. She did not expect to need clothes.',
+        failure: 'Clothes, mothballs and an empty rail.',
+      },
+    ],
+  },
+  master_dresser: {
+    title: 'Dresser',
+    text: 'A chest of drawers under the front window, its top bare but for a ring of dust where a mirror once stood.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Search the drawers',
+        success: 'Under the liner paper of the top drawer, a tortoiseshell comb, its teeth clotted with long dark hair — and caught among the hair, small, translucent, a few scales.',
+        failure: 'Gloves, handkerchiefs, a sewing kit. Nothing of note.',
+      },
+    ],
+  },
+  child_bed: {
+    title: 'Child\'s Bed',
+    text: 'A narrow bed with a painted headboard, the paint flaking: boats on a blue sea. The blanket is tucked in at the sides, as if for a child who will be back tonight.',
+  },
+  toy_chest: {
+    title: 'Toy Chest',
+    text: 'A red-painted toy chest, its lid propped half open. Inside: a spinning top, a rag doll with button eyes, tin soldiers. The bottom of the chest is damp.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Empty the chest',
+        success: 'Under the toys the floor of the chest is gritty with sand, and someone has scratched into the wood with a nail, over and over, in a child\'s hand: a house, and waves, and a figure in the waves much larger than the house.',
+        failure: 'Old toys and a smell of damp.',
+      },
+    ],
+  },
+  sewing_machine: {
+    title: 'Sewing Machine',
+    text: 'A black treadle machine under the window, a length of grey cloth still under its foot, the needle down. Whoever was sewing stopped in the middle of a seam.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Look at the work',
+        success: 'The cloth is heavy oilskin, cut for a coat. The pattern pinned to it is for a coat far too long in the body and far too wide in the shoulder for any man in the family photographs downstairs.',
+        failure: 'Grey cloth, half-stitched. Nothing more.',
+      },
+    ],
+  },
+  dress_form: {
+    title: 'Dress Form',
+    text: 'A dressmaker\'s form on an iron stand by the window, a half-made dress pinned to it. In the dark, from the doorway, it is very like someone standing still.',
+  },
+  bathtub: {
+    title: 'Bathtub',
+    text: 'A claw-foot tub against the back wall, full to a hand below the rim with black, still water. It smells of the harbour at low tide.',
+    checks: [
+      {
+        skill: 'Spot Hidden', action: 'Look into the water',
+        success: 'The water is brine, not rain. A grey tide-line rings the enamel well above the waterline, and below it the sides are furred with fine scales — the tub was used, often, by someone who lay in it a long time.',
+        failure: 'Black water. You cannot see the bottom.',
+        fumble: 'You lean too close. Something brushes your fingers below the surface — weed, perhaps — and you snatch your hand back, soaked to the wrist.',
+      },
+    ],
+  },
+  medicine_cabinet: {
+    title: 'Medicine Cabinet',
+    text: 'A mirrored cabinet over the washstand, its glass gone black with age.',
+    checks: [
+      {
+        skill: 'Medicine', action: 'Go through the bottles',
+        success: 'Laudanum, empty. A tin of zinc ointment scraped clean to the metal. And a pharmacist\'s jar of coarse salt, labelled in pencil "for the skin — morning & night", three-quarters gone.',
+        failure: 'Old bottles, mostly empty. Nothing you can make sense of.',
+      },
+    ],
+  },
   // Hidden things, brought out from their containers (see INSPECTABLES).
   mirror_newspaper: {
     title: 'Newspaper Lining',

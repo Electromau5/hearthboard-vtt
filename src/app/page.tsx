@@ -24,6 +24,7 @@ import { AllResourcesModal } from './components/AllResourcesModal';
 import { allResources } from '@/lib/resources';
 import { resolveSkills, checkLevel, type CheckLevel } from '@/lib/coc-skills';
 import { InvestigationBoard } from './components/InvestigationBoard';
+import { usePoll } from './components/use-poll';
 
 // ── Constants ────────────────────────────────────────────────────────
 const TOKEN_COLORS = ['#c9944f', '#4f9b92', '#b1483f', '#8a72c9', '#5f8fc9', '#c9b04f'];
@@ -741,19 +742,16 @@ export default function HearthboardPage() {
     if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
   }, [chatItems]);
 
-  // Poll sticky notes for all players — skip update while a note is open for editing
-  useEffect(() => {
-    const load = () =>
-      fetch('/api/notes', { cache: 'no-store' })
-        .then(r => r.ok ? r.json() : [])
-        .then((notes: StickyNote[]) => {
-          if (!editingNoteIdRef.current) setStickyNotes(notes);
-        })
-        .catch(() => {});
-    load();
-    const iv = setInterval(load, 5000);
-    return () => clearInterval(iv);
-  }, []);
+  // Poll sticky notes for all players — skip update while a note is open for editing,
+  // and while a walkthrough covers the board.
+  usePoll(() => {
+    fetch('/api/notes', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then((notes: StickyNote[]) => {
+        if (!editingNoteIdRef.current) setStickyNotes(notes);
+      })
+      .catch(() => {});
+  }, 8000, !walkthrough);
 
   // Refetch the released list each time All Resources opens, so a release
   // made by the gamelord shows on the next open.
@@ -894,73 +892,63 @@ export default function HearthboardPage() {
   };
 
   // Poll for admin-triggered screen effects (non-admin players only)
-  useEffect(() => {
-    if (session?.user?.role === 'admin') return;
-    const poll = async () => {
-      try {
-        const res = await fetch('/api/effects');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data && shownEffectsRef.current.has(data.triggeredAt)) return;
-        setScreenEffect(data);
-      } catch {}
-    };
-    poll();
-    const iv = setInterval(poll, 3000);
-    return () => clearInterval(iv);
-  }, [session]);
+  usePoll(async () => {
+    try {
+      const res = await fetch('/api/effects');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && shownEffectsRef.current.has(data.triggeredAt)) return;
+      setScreenEffect(data);
+    } catch {}
+  }, 4000, !!session && session.user?.role !== 'admin');
 
-  // Poll the shared feed for rolls and messages from everyone else.
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const r = await fetch('/api/chat', { cache: 'no-store' });
-        if (!r.ok) return;
-        const payload = await r.json();
-        const events: ChatEventWire[] = Array.isArray(payload) ? payload : payload.events ?? [];
-        const clearedAt: number = Array.isArray(payload) ? 0 : payload.clearedAt ?? 0;
+  // Poll the shared feed for rolls and messages from everyone else — not while
+  // a walkthrough covers the chat; it catches up the moment the level closes.
+  usePoll(async () => {
+    try {
+      const r = await fetch('/api/chat', { cache: 'no-store' });
+      if (!r.ok) return;
+      const payload = await r.json();
+      const events: ChatEventWire[] = Array.isArray(payload) ? payload : payload.events ?? [];
+      const clearedAt: number = Array.isArray(payload) ? 0 : payload.clearedAt ?? 0;
 
-        // The GM cleared the log: drop everyone's local copy so all clients
-        // agree, and say so rather than letting messages silently vanish.
-        if (chatPrimed.current && clearedAt > chatClearedAt.current) {
-          chatClearedAt.current = clearedAt;
-          seenChatIds.current.clear();
-          events.forEach(e => seenChatIds.current.add(e.id));
+      // The GM cleared the log: drop everyone's local copy so all clients
+      // agree, and say so rather than letting messages silently vanish.
+      if (chatPrimed.current && clearedAt > chatClearedAt.current) {
+        chatClearedAt.current = clearedAt;
+        seenChatIds.current.clear();
+        events.forEach(e => seenChatIds.current.add(e.id));
+        setChatItems([
+          { type: 'system', text: 'The Keeper cleared the log.' },
+          ...events.map(toChatItem),
+        ]);
+        return;
+      }
+
+      // First poll restores the session so far. The feed is the durable
+      // record — rendering it here is what makes a refresh keep the log
+      // instead of opening on an empty one.
+      if (!chatPrimed.current) {
+        chatPrimed.current = true;
+        chatClearedAt.current = clearedAt;
+        events.forEach(e => seenChatIds.current.add(e.id));
+        if (events.length > 0) {
           setChatItems([
-            { type: 'system', text: 'The Keeper cleared the log.' },
+            { type: 'system', text: `Session resumed · ${events.length} earlier ${events.length === 1 ? 'entry' : 'entries'}.` },
             ...events.map(toChatItem),
           ]);
-          return;
         }
+        return;
+      }
 
-        // First poll restores the session so far. The feed is the durable
-        // record — rendering it here is what makes a refresh keep the log
-        // instead of opening on an empty one.
-        if (!chatPrimed.current) {
-          chatPrimed.current = true;
-          chatClearedAt.current = clearedAt;
-          events.forEach(e => seenChatIds.current.add(e.id));
-          if (events.length > 0) {
-            setChatItems([
-              { type: 'system', text: `Session resumed · ${events.length} earlier ${events.length === 1 ? 'entry' : 'entries'}.` },
-              ...events.map(toChatItem),
-            ]);
-          }
-          return;
-        }
+      const fresh = events.filter(e => !seenChatIds.current.has(e.id));
+      if (fresh.length === 0) return;
+      fresh.forEach(e => seenChatIds.current.add(e.id));
 
-        const fresh = events.filter(e => !seenChatIds.current.has(e.id));
-        if (fresh.length === 0) return;
-        fresh.forEach(e => seenChatIds.current.add(e.id));
-
-        setChatItems(prev => [...prev, ...fresh.map(toChatItem)]);
-        setRollCount(c => c + fresh.filter(e => e.type === 'roll').length);
-      } catch {}
-    };
-    poll();
-    const iv = setInterval(poll, 3000);
-    return () => clearInterval(iv);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      setChatItems(prev => [...prev, ...fresh.map(toChatItem)]);
+      setRollCount(c => c + fresh.filter(e => e.type === 'roll').length);
+    } catch {}
+  }, 4000, !walkthrough);
 
   // Music player drag
   useEffect(() => {

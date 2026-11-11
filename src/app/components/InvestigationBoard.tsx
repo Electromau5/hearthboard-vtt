@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { usePoll } from './use-poll';
 
 // ── Types ─────────────────────────────────────────────────────────────
 interface BoardItem {
@@ -55,18 +56,14 @@ export function InvestigationBoard({ username }: { username: string }) {
   useEffect(() => { drawColorRef.current = drawColor; }, [drawColor]);
 
   // ── Polling ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    const load = () =>
-      fetch('/api/board', { cache: 'no-store' })
-        .then(r => r.ok ? r.json() : null)
-        .then((state: BoardState | null) => {
-          if (state && !editingIdRef.current) setBoard(state);
-        })
-        .catch(() => {});
-    load();
-    const iv = setInterval(load, 5000);
-    return () => clearInterval(iv);
-  }, []);
+  usePoll(() => {
+    fetch('/api/board', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then((state: BoardState | null) => {
+        if (state && !editingIdRef.current) setBoard(state);
+      })
+      .catch(() => {});
+  }, 6000);
 
   // ── Global drag handlers ──────────────────────────────────────────────
   useEffect(() => {

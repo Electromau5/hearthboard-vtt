@@ -41,6 +41,17 @@ export async function readJSON<T>(statePath: string, fallback: T): Promise<T> {
   return fallback;
 }
 
+/** Several reads in one Redis command (MGET) — one request against the quota instead of one each. */
+export async function readJSONs<T extends unknown[]>(
+  entries: { [K in keyof T]: [statePath: string, fallback: T[K]] },
+): Promise<T> {
+  if (redis) {
+    const values = await redis.mget<unknown[]>(...entries.map(([p]) => redisKey(p)));
+    return entries.map(([, fallback], i) => values[i] ?? fallback) as T;
+  }
+  return Promise.all(entries.map(([p, fallback]) => readJSON(p, fallback))) as Promise<T>;
+}
+
 export async function writeJSON(statePath: string, data: unknown): Promise<void> {
   if (redis) {
     await redis.set(redisKey(statePath), data);
